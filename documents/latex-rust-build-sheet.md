@@ -2,7 +2,7 @@
 **Version:** 0.1.0-plan  
 **Date:** 2026-09-01  
 **License:** MIT OR Apache-2.0  
-**Status:** Milestone 5 symbol coverage green (`golds/symbols.toml`, catalog corpus)  
+**Status:** Milestone 6 accents and decorations green (`golds/accents.toml`)  
 
 > Pure Rust LaTeX math renderer. No JavaScript. No webview. No runtime dependencies.  
 > Surpasses MathJax and KaTeX in correctness, performance, and platform coverage.
@@ -198,16 +198,19 @@ Font metrics are stored as zenith-float `Dim` values — no hardware float in th
 
 | Capability | Status | Notes |
 |---|---|---|
-| `\hat \check \breve \acute \grave` | ⬜ | Single char |
-| `\tilde \bar \vec \dot \ddot` | ⬜ | Single char |
-| `\widehat \widetilde` | ⬜ | Extensible |
-| `\overline \underline` | ⬜ | Extensible |
-| `\overbrace \underbrace` | ⬜ | With annotation |
-| `\overleftarrow \overrightarrow` | ⬜ | Extensible |
-| `\overset \underset` | ⬜ | |
-| `\stackrel` | ⬜ | |
-| `\cancel \bcancel \xcancel` | ⬜ | |
-| `\boxed` | ⬜ | |
+| `\hat \check \breve \acute \grave` | ✅ | TeX placement, MATH attachment |
+| `\tilde \bar \vec \dot \ddot` | ✅ | `\vec` right-aligned |
+| `\dddot \ddddot \mathring` | ✅ | Combining triple/quad dots from STIX |
+| `\widehat \widetilde` | ✅ | Horizontal variants then assembly |
+| `\overline \underline` | ✅ | Rule at exact base width |
+| `\overbrace \underbrace` | ✅ | STIX brace glyphs + assembly; `^`/`_` as limits |
+| `\overleftarrow \overrightarrow` | ✅ | Extensible; under-arrows too |
+| `\overleftrightarrow` and under form | ✅ | Extensible |
+| `\xrightarrow` / `\xleftarrow` | ✅ | Optional `[under]{over}` labels |
+| `\overset \underset` | ✅ | Script-style, centered |
+| `\stackrel` | ✅ | Alias for `\overset` |
+| `\cancel \bcancel \xcancel \cancelto` | ✅ | SVG `<line>` diagonals |
+| `\boxed` / `\fbox` | ✅ | Stroked frame, 3mu pad |
 
 ### 4.4 Text and Font Styles
 
@@ -412,11 +415,11 @@ Each milestone ends with a full gold suite pass before the next begins.
 - [x] Gold tests for every symbol category
 
 ### Milestone 6 — Accents and Decorations
-- [ ] All single-char accents
-- [ ] Extensible accents
-- [ ] Overbrace / underbrace
-- [ ] Overline / underline
-- [ ] Gold tests for all accent types
+- [x] All single-char accents
+- [x] Extensible accents
+- [x] Overbrace / underbrace
+- [x] Overline / underline
+- [x] Gold tests for all accent types
 
 ### Milestone 7 — Advanced Structures
 - [ ] Multiline environments (align, gather, multline)

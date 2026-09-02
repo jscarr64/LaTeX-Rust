@@ -147,6 +147,7 @@ impl Engine<'_> {
                 self.attach_limits(b, over.as_deref(), under.as_deref(), style, true)
             }
             MathNode::Accent(base, kind) => self.accent(base, *kind, style),
+            MathNode::CancelTo(value, expr) => self.cancelto(value, expr, style),
             MathNode::Matrix(ms, rows) => self.matrix(*ms, rows, style),
             MathNode::Color(c, body) | MathNode::TextColor(c, body) => {
                 let inner = self.layout(body, style)?;
@@ -600,7 +601,75 @@ impl Engine<'_> {
                 best = cand;
             }
         }
+        if best_w.cmp(needed).is_some_and(|o| o != Ordering::Less) {
+            return Ok(best);
+        }
+        if let Some(asm) = self.assemble_h(ch, glyph_id, needed, style) {
+            if asm
+                .width
+                .cmp(&best_w)
+                .is_some_and(|o| o == Ordering::Greater)
+            {
+                return Ok(asm);
+            }
+        }
         Ok(best)
+    }
+
+    fn assemble_h(&self, ch: char, gid: u16, needed: &Dim, style: MathStyle) -> Option<MathBox> {
+        let parts = self.font.horizontal_assembly_parts(gid);
+        if parts.is_empty() {
+            return None;
+        }
+        let s = self.params.scale(style);
+        let fu = |n: u16| Dim::from_font_units(i64::from(n), self.params.units_per_em) * &s;
+        let sequence = |copies: u32| {
+            let mut v = Vec::new();
+            for &(id, start, end, adv, ext) in &parts {
+                if ext {
+                    for _ in 0..copies {
+                        v.push((id, start, end, adv));
+                    }
+                } else {
+                    v.push((id, start, end, adv));
+                }
+            }
+            v
+        };
+        let width_of = |seq: &[(u16, u16, u16, u16)]| {
+            if seq.is_empty() {
+                return Dim::zero();
+            }
+            let mut w = fu(seq[0].3);
+            for i in 1..seq.len() {
+                let overlap = seq[i - 1].2.min(seq[i].1);
+                w = &w + &fu(seq[i].3) - &fu(overlap);
+            }
+            w
+        };
+        let mut copies = 0u32;
+        while copies < 64 {
+            if width_of(&sequence(copies))
+                .cmp(needed)
+                .is_some_and(|o| o != Ordering::Less)
+            {
+                break;
+            }
+            copies += 1;
+        }
+        let seq = sequence(copies);
+        if seq.is_empty() {
+            return None;
+        }
+        let mut kids = Vec::new();
+        for (i, &(id, start, _, _)) in seq.iter().enumerate() {
+            if i > 0 {
+                let overlap = seq[i - 1].2.min(start);
+                kids.push(MathBox::kern(-(fu(overlap))));
+            }
+            kids.push(self.glyph_id(ch, id, style).ok()?);
+        }
+        Some(MathBox::hpack(kids))
     }
 
     fn large_op(
@@ -635,26 +704,36 @@ impl Engine<'_> {
         let s = self.params.scale(style);
         let op_h = op.height.clone();
         let op_d = op.depth.clone();
+        let over_b = match over {
+            Some(o) => Some(self.layout(o, style.into_script())?),
+            None => None,
+        };
+        let under_b = match under {
+            Some(u) => Some(self.layout(u, style.into_script())?),
+            None => None,
+        };
         let mut width = op.width.clone();
+        if let Some(ref o) = over_b {
+            width = width.max(&o.width);
+        }
+        if let Some(ref u) = under_b {
+            width = width.max(&u.width);
+        }
         let mut height = op_h.clone();
         let mut depth = op_d.clone();
-        let mut kids = vec![op];
-        if let Some(o) = over {
-            let ob = self.layout(o, style.into_script())?;
+        let mut kids = vec![center_in(op, &width)];
+        if let Some(ob) = over_b {
             let gap = self.params.upper_limit_gap_min.clone() * &s;
             let rise = self.params.upper_limit_baseline_rise_min.clone() * &s;
             let extra = gap.max(&rise);
-            width = width.max(&ob.width);
             height = &height + &ob.height + &ob.depth + &extra;
             let sh = &op_h + &extra + &ob.depth;
             kids.push(center_in(ob, &width).with_shift(sh));
         }
-        if let Some(u) = under {
-            let ub = self.layout(u, style.into_script())?;
+        if let Some(ub) = under_b {
             let gap = self.params.lower_limit_gap_min.clone() * &s;
             let drop = self.params.lower_limit_baseline_drop_min.clone() * &s;
             let extra = gap.max(&drop);
-            width = width.max(&ub.width);
             depth = &depth + &ub.height + &ub.depth + &extra;
             let sh = -(&op_d + &extra + &ub.height);
             kids.push(center_in(ub, &width).with_shift(sh));
@@ -701,76 +780,239 @@ impl Engine<'_> {
     }
 
     fn accent(&self, base: &MathNode, kind: AccentKind, style: MathStyle) -> Result<Item, Error> {
-        let b = self.layout(base, style)?;
+        let nucleus_style = if is_tex_accent(kind) {
+            style.cramp()
+        } else {
+            style
+        };
+        let b = self.layout(base, nucleus_style)?;
         if kind == AccentKind::Not {
             return self.not_overlay(base, b, style);
         }
+        if kind == AccentKind::Boxed {
+            return Ok(Item {
+                class: Some(AtomKind::Ord),
+                bx: self.boxed_frame(b, style),
+            });
+        }
         if matches!(
             kind,
-            AccentKind::Overline
-                | AccentKind::Underline
-                | AccentKind::Overbrace
-                | AccentKind::Underbrace
-                | AccentKind::Boxed
-                | AccentKind::Cancel
-                | AccentKind::BCancel
-                | AccentKind::XCancel
+            AccentKind::Cancel | AccentKind::BCancel | AccentKind::XCancel
         ) {
-            let s = self.params.scale(style);
-            let gap = self.params.overbar_vertical_gap.clone() * &s;
-            let thick = self.params.overbar_rule_thickness.clone() * &s;
-            let extra = self.params.overbar_extra_ascender.clone() * &s;
-            let mut height = b.height.clone();
-            let mut depth = b.depth.clone();
-            if matches!(kind, AccentKind::Underline | AccentKind::Underbrace) {
-                depth = &depth + &gap + &thick + &self.params.underbar_extra_descender * &s;
-            } else {
-                height = &height + &gap + &thick + &extra;
-            }
-            if matches!(kind, AccentKind::Boxed) {
-                let pad = self.params.mu(style) * Dim::from_i64(3);
-                return Ok(Item {
-                    class: Some(AtomKind::Ord),
-                    bx: pad_box(b, &pad),
-                });
-            }
-            let bar = if matches!(kind, AccentKind::Underline | AccentKind::Underbrace) {
-                MathBox::rule(b.width.clone(), thick, Dim::zero()).with_shift(-(&b.depth + &gap))
-            } else {
-                MathBox::rule(b.width.clone(), thick, Dim::zero()).with_shift(&b.height + &gap)
-            };
+            let mut kids = vec![b.clone()];
+            kids.extend(self.cancel_lines(&b, kind, style));
             return Ok(Item {
                 class: Some(AtomKind::Ord),
                 bx: MathBox {
                     width: b.width.clone(),
-                    height,
-                    depth,
+                    height: b.height.clone(),
+                    depth: b.depth.clone(),
                     italic: Dim::zero(),
                     shift: Dim::zero(),
-                    content: BoxContent::Overlap(vec![b, bar]),
+                    content: BoxContent::Overlap(kids),
                 },
             });
         }
-        let ch = accent_char(kind);
-        let acc = self.glyph(ch, style)?;
-        let s = self.params.scale(style);
-        let raise = b.height.max(&(&self.params.accent_base_height * &s));
-        let width = b.width.max(&acc.width);
-        let acc_h = &acc.height + &raise;
+        if matches!(kind, AccentKind::Overline | AccentKind::Underline) {
+            return self.bar_rule(b, kind == AccentKind::Underline, style);
+        }
+        let mut acc = self.accent_glyph(kind, style)?;
+        let stretchy = is_stretchy_accent(kind);
+        if stretchy {
+            acc = self.stretch_h(acc, &b.width, style)?;
+        }
+        if is_under_accent(kind) {
+            return Ok(Item {
+                class: Some(AtomKind::Ord),
+                bx: self.place_under(b, acc, style),
+            });
+        }
+        let x_off = if stretchy {
+            let extra = &b.width - &acc.width;
+            &extra / &Dim::from_i64(2)
+        } else {
+            self.accent_x_off(&b, &acc, kind)
+        };
+        let raise = self.accent_raise(&b, &acc, style);
+        Ok(Item {
+            class: Some(AtomKind::Ord),
+            bx: overlay_accent(b, acc, x_off, raise),
+        })
+    }
+
+    fn accent_glyph(&self, kind: AccentKind, style: MathStyle) -> Result<MathBox, Error> {
+        for &ch in accent_candidates(kind) {
+            if let Ok(bx) = self.glyph(ch, style) {
+                return Ok(bx);
+            }
+        }
+        Err(Error::Unsupported {
+            what: format!("accent {}", kind.gold()),
+        })
+    }
+
+    fn cancelto(&self, value: &MathNode, expr: &MathNode, style: MathStyle) -> Result<Item, Error> {
+        let b = self.layout(expr, style)?;
+        let val = self.layout(value, style.into_script())?;
+        let mut kids = vec![b.clone()];
+        kids.extend(self.cancel_lines(&b, AccentKind::Cancel, style));
+        let gap = self.params.space_after_script.clone() * self.params.scale(style);
+        let val_x = &b.width + &gap;
+        let val_shift = &b.height + &val.depth;
+        let val_w = val.width.clone();
+        let val_h = val.height.clone();
+        kids.push(shift_x(val, val_x.clone()).with_shift(val_shift.clone()));
+        let width = &val_x + &val_w;
+        let height = b.height.max(&(&val_shift + &val_h));
         Ok(Item {
             class: Some(AtomKind::Ord),
             bx: MathBox {
-                width: width.clone(),
-                height: acc_h.max(&b.height),
+                width,
+                height,
                 depth: b.depth.clone(),
                 italic: Dim::zero(),
                 shift: Dim::zero(),
-                content: BoxContent::Overlap(vec![
-                    center_in(b, &width),
-                    center_in(acc, &width).with_shift(raise),
-                ]),
+                content: BoxContent::Overlap(kids),
             },
         })
+    }
+
+    fn boxed_frame(&self, inner: MathBox, style: MathStyle) -> MathBox {
+        let pad = self.params.mu(style) * Dim::from_i64(3);
+        let thick = self.params.fraction_rule_thickness.clone() * self.params.scale(style);
+        let padded = pad_box(inner, &pad);
+        MathBox {
+            width: padded.width.clone(),
+            height: padded.height.clone(),
+            depth: padded.depth.clone(),
+            italic: Dim::zero(),
+            shift: Dim::zero(),
+            content: BoxContent::Frame {
+                thickness: thick,
+                inner: Box::new(padded),
+            },
+        }
+    }
+
+    fn bar_rule(&self, b: MathBox, under: bool, style: MathStyle) -> Result<Item, Error> {
+        let s = self.params.scale(style);
+        let gap = if under {
+            self.params.underbar_vertical_gap.clone() * &s
+        } else {
+            self.params.overbar_vertical_gap.clone() * &s
+        };
+        let thick = if under {
+            self.params.underbar_rule_thickness.clone() * &s
+        } else {
+            self.params.overbar_rule_thickness.clone() * &s
+        };
+        let extra = if under {
+            self.params.underbar_extra_descender.clone() * &s
+        } else {
+            self.params.overbar_extra_ascender.clone() * &s
+        };
+        let mut height = b.height.clone();
+        let mut depth = b.depth.clone();
+        let bar = if under {
+            depth = &depth + &gap + &thick + &extra;
+            MathBox::rule(b.width.clone(), thick, Dim::zero()).with_shift(-(&b.depth + &gap))
+        } else {
+            height = &height + &gap + &thick + &extra;
+            MathBox::rule(b.width.clone(), thick, Dim::zero()).with_shift(&b.height + &gap)
+        };
+        Ok(Item {
+            class: Some(AtomKind::Ord),
+            bx: MathBox {
+                width: b.width.clone(),
+                height,
+                depth,
+                italic: Dim::zero(),
+                shift: Dim::zero(),
+                content: BoxContent::Overlap(vec![b, bar]),
+            },
+        })
+    }
+
+    fn cancel_lines(&self, b: &MathBox, kind: AccentKind, style: MathStyle) -> Vec<MathBox> {
+        let t = self.params.fraction_rule_thickness.clone() * self.params.scale(style);
+        let w = b.width.clone();
+        let h = b.height.clone();
+        let d = b.depth.clone();
+        let mk = |x1: Dim, y1: Dim, x2: Dim, y2: Dim| MathBox {
+            width: w.clone(),
+            height: h.clone(),
+            depth: d.clone(),
+            italic: Dim::zero(),
+            shift: Dim::zero(),
+            content: BoxContent::Line {
+                x1,
+                y1,
+                x2,
+                y2,
+                thickness: t.clone(),
+            },
+        };
+        match kind {
+            AccentKind::Cancel => vec![mk(Dim::zero(), -d.clone(), w.clone(), h.clone())],
+            AccentKind::BCancel => vec![mk(Dim::zero(), h.clone(), w.clone(), -d.clone())],
+            AccentKind::XCancel => vec![
+                mk(Dim::zero(), -d.clone(), w.clone(), h.clone()),
+                mk(Dim::zero(), h.clone(), w.clone(), -d.clone()),
+            ],
+            _ => Vec::new(),
+        }
+    }
+
+    fn accent_x_off(&self, base: &MathBox, acc: &MathBox, kind: AccentKind) -> Dim {
+        let two = Dim::from_i64(2);
+        let base_att = first_glyph_id(base)
+            .and_then(|id| self.font.top_accent_attachment(id))
+            .unwrap_or_else(|| (&base.width + &base.italic) / &two);
+        let acc_att = first_glyph_id(acc)
+            .and_then(|id| self.font.top_accent_attachment(id))
+            .unwrap_or_else(|| &acc.width / &two);
+        match kind {
+            AccentKind::Vec | AccentKind::Overrightarrow | AccentKind::Underrightarrow => {
+                &base.width + &base.italic - &acc.width
+            }
+            AccentKind::Acute => &base_att - &acc_att + &(&acc.width / &Dim::from_i64(4)),
+            AccentKind::Grave => &base_att - &acc_att - &(&acc.width / &Dim::from_i64(4)),
+            _ => &base_att - &acc_att,
+        }
+    }
+
+    fn accent_raise(&self, base: &MathBox, acc: &MathBox, style: MathStyle) -> Dim {
+        let s = self.params.scale(style);
+        let abh = if style.is_cramped() {
+            &self.params.flattened_accent_base_height * &s
+        } else {
+            &self.params.accent_base_height * &s
+        };
+        if acc.width.is_zero() {
+            (&base.height - &abh).clamp_nonneg()
+        } else {
+            base.height.max(&abh)
+        }
+    }
+
+    fn place_under(&self, base: MathBox, acc: MathBox, style: MathStyle) -> MathBox {
+        let s = self.params.scale(style);
+        let gap = self.params.underbar_vertical_gap.clone() * &s;
+        let extra = self.params.underbar_extra_descender.clone() * &s;
+        let raise = -(&base.depth + &gap + &acc.height);
+        let width = base.width.max(&acc.width);
+        let depth = &base.depth + &gap + &acc.height + &acc.depth + &extra;
+        MathBox {
+            width: width.clone(),
+            height: base.height.clone(),
+            depth,
+            italic: Dim::zero(),
+            shift: Dim::zero(),
+            content: BoxContent::Overlap(vec![
+                center_in(base, &width),
+                center_in(acc, &width).with_shift(raise),
+            ]),
+        }
     }
 
     fn matrix(
@@ -908,6 +1150,143 @@ fn center_in(inner: MathBox, width: &Dim) -> MathBox {
     }
 }
 
+fn shift_x(inner: MathBox, x: Dim) -> MathBox {
+    if x.is_zero() {
+        return inner;
+    }
+    let h = inner.height.clone();
+    let d = inner.depth.clone();
+    let packed = MathBox::hpack(vec![MathBox::kern(x), inner]);
+    MathBox {
+        width: packed.width,
+        height: h,
+        depth: d,
+        italic: Dim::zero(),
+        shift: Dim::zero(),
+        content: packed.content,
+    }
+}
+
+fn overlay_accent(base: MathBox, acc: MathBox, x_off: Dim, raise: Dim) -> MathBox {
+    let origin = (-x_off.clone()).clamp_nonneg();
+    let base_x = origin.clone();
+    let acc_x = &origin + &x_off;
+    let width = (&base_x + &base.width).max(&(&acc_x + &acc.width));
+    let acc_top = &acc.height + &raise;
+    let acc_bot = &raise - &acc.depth;
+    let height = base.height.max(&acc_top);
+    let depth = base.depth.max(&(-acc_bot).clamp_nonneg());
+    MathBox {
+        width,
+        height,
+        depth,
+        italic: Dim::zero(),
+        shift: Dim::zero(),
+        content: BoxContent::Overlap(vec![
+            shift_x(base, base_x),
+            shift_x(acc, acc_x).with_shift(raise),
+        ]),
+    }
+}
+
+fn first_glyph_id(b: &MathBox) -> Option<u16> {
+    match &b.content {
+        BoxContent::Glyph { glyph_id, .. } => Some(*glyph_id),
+        BoxContent::HList(v) | BoxContent::VList(v) | BoxContent::Overlap(v) => {
+            v.iter().find_map(first_glyph_id)
+        }
+        BoxContent::Color(_, inner)
+        | BoxContent::BackColor(_, inner)
+        | BoxContent::Frame { inner, .. } => first_glyph_id(inner),
+        _ => None,
+    }
+}
+
+fn is_tex_accent(kind: AccentKind) -> bool {
+    matches!(
+        kind,
+        AccentKind::Hat
+            | AccentKind::Check
+            | AccentKind::Breve
+            | AccentKind::Acute
+            | AccentKind::Grave
+            | AccentKind::Tilde
+            | AccentKind::Bar
+            | AccentKind::Vec
+            | AccentKind::Dot
+            | AccentKind::Ddot
+            | AccentKind::Dddot
+            | AccentKind::Ddddot
+            | AccentKind::Ring
+            | AccentKind::WideHat
+            | AccentKind::WideTilde
+            | AccentKind::Overleftarrow
+            | AccentKind::Overrightarrow
+            | AccentKind::Overleftrightarrow
+            | AccentKind::Underleftarrow
+            | AccentKind::Underrightarrow
+            | AccentKind::Underleftrightarrow
+            | AccentKind::Overbrace
+            | AccentKind::Underbrace
+    )
+}
+
+fn is_stretchy_accent(kind: AccentKind) -> bool {
+    matches!(
+        kind,
+        AccentKind::WideHat
+            | AccentKind::WideTilde
+            | AccentKind::Overleftarrow
+            | AccentKind::Overrightarrow
+            | AccentKind::Overleftrightarrow
+            | AccentKind::Underleftarrow
+            | AccentKind::Underrightarrow
+            | AccentKind::Underleftrightarrow
+            | AccentKind::Overbrace
+            | AccentKind::Underbrace
+    )
+}
+
+fn is_under_accent(kind: AccentKind) -> bool {
+    matches!(
+        kind,
+        AccentKind::Underleftarrow
+            | AccentKind::Underrightarrow
+            | AccentKind::Underleftrightarrow
+            | AccentKind::Underbrace
+    )
+}
+
+fn accent_candidates(kind: AccentKind) -> &'static [char] {
+    match kind {
+        AccentKind::Hat | AccentKind::WideHat => &['ˆ', '\u{0302}'],
+        AccentKind::Check => &['ˇ', '\u{030C}'],
+        AccentKind::Breve => &['˘', '\u{0306}'],
+        AccentKind::Acute => &['´', '\u{0301}'],
+        AccentKind::Grave => &['`', '\u{0300}'],
+        AccentKind::Tilde | AccentKind::WideTilde => &['˜', '\u{0303}'],
+        AccentKind::Bar => &['¯', '\u{0304}'],
+        AccentKind::Vec => &['→', '\u{20D7}'],
+        AccentKind::Dot => &['˙', '\u{0307}'],
+        AccentKind::Ddot => &['¨', '\u{0308}'],
+        AccentKind::Dddot => &['\u{20DB}'],
+        AccentKind::Ddddot => &['\u{20DC}'],
+        AccentKind::Ring => &['˚', '\u{030A}'],
+        AccentKind::Overleftarrow | AccentKind::Underleftarrow => &['←', '\u{27F5}'],
+        AccentKind::Overrightarrow | AccentKind::Underrightarrow => &['→', '\u{27F6}'],
+        AccentKind::Overleftrightarrow | AccentKind::Underleftrightarrow => &['↔', '\u{27F7}'],
+        AccentKind::Overbrace => &['⏞'],
+        AccentKind::Underbrace => &['⏟'],
+        AccentKind::Not
+        | AccentKind::Overline
+        | AccentKind::Underline
+        | AccentKind::Cancel
+        | AccentKind::BCancel
+        | AccentKind::XCancel
+        | AccentKind::Boxed => &[],
+    }
+}
+
 fn class_of(n: &MathNode) -> Option<AtomKind> {
     match n {
         MathNode::Atom(_, k) => Some(*k),
@@ -926,7 +1305,8 @@ fn class_of(n: &MathNode) -> Option<AtomKind> {
         | MathNode::Subscript(b, _)
         | MathNode::SubSup(b, _, _)
         | MathNode::Accent(b, _)
-        | MathNode::OverUnder(b, _, _) => class_of(b),
+        | MathNode::OverUnder(b, _, _)
+        | MathNode::CancelTo(_, b) => class_of(b),
         MathNode::Text(_, _) => Some(AtomKind::Ord),
         MathNode::Color(_, b)
         | MathNode::TextColor(_, b)
@@ -984,32 +1364,6 @@ fn named_delim(n: &str) -> Result<char, Error> {
         }
     };
     Ok(c)
-}
-
-fn accent_char(kind: AccentKind) -> char {
-    match kind {
-        AccentKind::Hat | AccentKind::WideHat => 'ˆ',
-        AccentKind::Check => 'ˇ',
-        AccentKind::Breve => '˘',
-        AccentKind::Acute => '´',
-        AccentKind::Grave => '`',
-        AccentKind::Tilde | AccentKind::WideTilde => '˜',
-        AccentKind::Bar | AccentKind::Overline => '¯',
-        AccentKind::Vec | AccentKind::Overrightarrow => '→',
-        AccentKind::Overleftarrow => '←',
-        AccentKind::Dot => '˙',
-        AccentKind::Ddot => '¨',
-        AccentKind::Dddot => '…',
-        AccentKind::Ring => '˚',
-        AccentKind::Not => '/',
-        AccentKind::Underline
-        | AccentKind::Overbrace
-        | AccentKind::Underbrace
-        | AccentKind::Cancel
-        | AccentKind::BCancel
-        | AccentKind::XCancel
-        | AccentKind::Boxed => '^',
-    }
 }
 
 fn matrix_delims(s: MatrixStyle) -> (Option<char>, Option<char>) {

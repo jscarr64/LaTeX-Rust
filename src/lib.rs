@@ -1,5 +1,7 @@
 //! LaTeX-Rust: pure Rust LaTeX math renderer.
 //!
+//! Milestone 6 covers TeX-exact accent placement, extensible decorations from
+//! MATH variants and glyph assembly, cancel diagonals, and boxed frames.
 //! Milestone 5 covers the math-symbol catalog, TeX atom classes, and Unicode
 //! math alphabets (`\mathbb`, `\mathcal`, …) through STIX Two Math. Milestone 4
 //! renders a [`MathBox`] to SVG. Unsupported constructs return [`Error`] — never

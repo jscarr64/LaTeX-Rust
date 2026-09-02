@@ -16,6 +16,8 @@ pub struct MathParams {
     pub axis_height: Dim,
     /// Accent base height.
     pub accent_base_height: Dim,
+    /// Flattened accent base height (cramped / tall bases).
+    pub flattened_accent_base_height: Dim,
     /// σ8: default rule thickness (fraction / radical bar).
     pub fraction_rule_thickness: Dim,
     /// σ10 analogue: numerator shift (text).
@@ -110,6 +112,7 @@ impl MathParams {
             quad: Dim::one(),
             axis_height: fu(c.axis_height().value),
             accent_base_height: fu(c.accent_base_height().value),
+            flattened_accent_base_height: fu(c.flattened_accent_base_height().value),
             fraction_rule_thickness: fu(c.fraction_rule_thickness().value),
             fraction_numerator_shift_up: fu(c.fraction_numerator_shift_up().value),
             fraction_numerator_display_style_shift_up: fu(c

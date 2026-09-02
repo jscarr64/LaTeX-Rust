@@ -207,5 +207,55 @@ fn emit(
             )?;
             Ok(())
         }
+        BoxContent::Line {
+            x1,
+            y1,
+            x2,
+            y2,
+            thickness,
+        } => {
+            let x1p = origin_x + &(x1.clone() * em_pt);
+            let y1p = &baseline - &(y1.clone() * em_pt);
+            let x2p = origin_x + &(x2.clone() * em_pt);
+            let y2p = &baseline - &(y2.clone() * em_pt);
+            let sw = thickness.clone() * em_pt;
+            out.push_str(&format!(
+                r#"<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="{}" stroke-width="{}"/>"#,
+                x1p.to_svg_string(),
+                y1p.to_svg_string(),
+                x2p.to_svg_string(),
+                y2p.to_svg_string(),
+                fill.css_hex(),
+                sw.to_svg_string(),
+            ));
+            out.push('\n');
+            Ok(())
+        }
+        BoxContent::Frame { thickness, inner } => {
+            let w = &bx.width * em_pt;
+            let h_ink = (&bx.height + &bx.depth) * em_pt;
+            let t = thickness.clone() * em_pt;
+            let half = &t / &Dim::from_i64(2);
+            let x = origin_x + &half;
+            let y = &(&baseline - &(bx.height.clone() * em_pt)) + &half;
+            let rw = (&w - &t).max(&Dim::zero());
+            let rh = (&h_ink - &t).max(&Dim::zero());
+            if !rw.is_zero() && !rh.is_zero() {
+                out.push_str(&format!(
+                    r#"<rect x="{}" y="{}" width="{}" height="{}" fill="none" stroke="{}" stroke-width="{}"/>"#,
+                    x.to_svg_string(),
+                    y.to_svg_string(),
+                    rw.to_svg_string(),
+                    rh.to_svg_string(),
+                    fill.css_hex(),
+                    t.to_svg_string(),
+                ));
+                out.push('\n');
+            }
+            emit(
+                inner, font, em_pt, fu_pt, origin_x, &baseline, fill, cache, out,
+            )?;
+            Ok(())
+        }
     }
 }

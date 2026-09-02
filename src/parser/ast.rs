@@ -64,6 +64,8 @@ pub enum AccentKind {
     Ddot,
     /// `\dddot`
     Dddot,
+    /// `\ddddot`
+    Ddddot,
     /// `\widehat`
     WideHat,
     /// `\widetilde`
@@ -80,6 +82,14 @@ pub enum AccentKind {
     Overleftarrow,
     /// `\overrightarrow`
     Overrightarrow,
+    /// `\overleftrightarrow`
+    Overleftrightarrow,
+    /// `\underleftarrow`
+    Underleftarrow,
+    /// `\underrightarrow`
+    Underrightarrow,
+    /// `\underleftrightarrow`
+    Underleftrightarrow,
     /// `\cancel`
     Cancel,
     /// `\bcancel`
@@ -95,7 +105,7 @@ pub enum AccentKind {
 }
 
 impl AccentKind {
-    fn gold(self) -> &'static str {
+    pub(crate) fn gold(self) -> &'static str {
         match self {
             Self::Hat => "hat",
             Self::Check => "check",
@@ -108,6 +118,7 @@ impl AccentKind {
             Self::Dot => "dot",
             Self::Ddot => "ddot",
             Self::Dddot => "dddot",
+            Self::Ddddot => "ddddot",
             Self::WideHat => "widehat",
             Self::WideTilde => "widetilde",
             Self::Overline => "overline",
@@ -116,6 +127,10 @@ impl AccentKind {
             Self::Underbrace => "underbrace",
             Self::Overleftarrow => "overleftarrow",
             Self::Overrightarrow => "overrightarrow",
+            Self::Overleftrightarrow => "overleftrightarrow",
+            Self::Underleftarrow => "underleftarrow",
+            Self::Underrightarrow => "underrightarrow",
+            Self::Underleftrightarrow => "underleftrightarrow",
             Self::Cancel => "cancel",
             Self::BCancel => "bcancel",
             Self::XCancel => "xcancel",
@@ -406,6 +421,8 @@ pub enum MathNode {
     OverUnder(Box<MathNode>, Option<Box<MathNode>>, Option<Box<MathNode>>),
     /// Accent or decoration on a nucleus.
     Accent(Box<MathNode>, AccentKind),
+    /// `\cancelto{value}{expr}`
+    CancelTo(Box<MathNode>, Box<MathNode>),
     /// Styled character run (`\mathrm`, `\text`, …).
     Text(String, TextStyle),
     /// Explicit math skip.
@@ -485,6 +502,7 @@ impl MathNode {
                 format!("(overunder {} {} {})", b.gold(), opt(over), opt(under))
             }
             Self::Accent(b, a) => format!("(accent {} {})", a.gold(), b.gold()),
+            Self::CancelTo(v, e) => format!("(cancelto {} {})", v.gold(), e.gold()),
             Self::Text(t, st) => format!("(text {} {})", st.gold(), quote_text(t)),
             Self::Space(SpaceKind::Thin) => "(space thin)".into(),
             Self::Space(SpaceKind::Medium) => "(space medium)".into(),

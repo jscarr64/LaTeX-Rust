@@ -1,6 +1,8 @@
-//! Gold runner: `golds/svg.toml` is the SVG renderer contract.
+//! Gold runner: `golds/accents.toml` is the accent/decoration contract.
 
-use latex_rust::{latex_to_svg, MathFont, SvgOptions};
+use latex_rust::{
+    latex_to_svg, layout, parse, BoxContent, MathBox, MathFont, MathStyle, ParseError, SvgOptions,
+};
 
 struct Rec {
     name: String,
@@ -11,8 +13,7 @@ struct Rec {
     paths: String,
     rects: String,
     lines: String,
-    fill: String,
-    contains: String,
+    error: String,
 }
 
 impl Default for Rec {
@@ -26,8 +27,7 @@ impl Default for Rec {
             paths: String::new(),
             rects: String::new(),
             lines: String::new(),
-            fill: String::new(),
-            contains: String::new(),
+            error: String::new(),
         }
     }
 }
@@ -62,8 +62,8 @@ fn parse_value(raw: &str) -> String {
 }
 
 fn load_golds() -> Vec<Rec> {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/golds/svg.toml");
-    let text = std::fs::read_to_string(path).expect("svg.toml");
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/golds/accents.toml");
+    let text = std::fs::read_to_string(path).expect("accents.toml");
     let mut recs = Vec::new();
     let mut rec = Rec::default();
     for line in text.lines() {
@@ -92,8 +92,7 @@ fn load_golds() -> Vec<Rec> {
             "paths" => rec.paths = v,
             "rects" => rec.rects = v,
             "lines" => rec.lines = v,
-            "fill" => rec.fill = v,
-            "contains" => rec.contains = v,
+            "error" => rec.error = v,
             _ => panic!("unknown gold field {k}"),
         }
     }
@@ -103,32 +102,91 @@ fn load_golds() -> Vec<Rec> {
     recs
 }
 
+fn parse_style(s: &str) -> MathStyle {
+    match s {
+        "" | "text" => MathStyle::Text,
+        "display" => MathStyle::Display,
+        "text-cramped" => MathStyle::TextCramped,
+        other => panic!("unknown style {other}"),
+    }
+}
+
 fn count_tag(svg: &str, tag: &str) -> usize {
     let open = format!("<{tag} ");
     let open2 = format!("<{tag}>");
     svg.matches(&open).count() + svg.matches(&open2).count()
 }
 
-fn svg_for(font: &MathFont, rec: &Rec) -> String {
-    let mut opt = SvgOptions::new();
-    opt.display = rec.style == "display";
-    latex_to_svg(&rec.input, font, &opt).unwrap_or_else(|e| panic!("{}: {e}", rec.name))
+fn collect_lines(b: &MathBox, out: &mut Vec<String>) {
+    match &b.content {
+        BoxContent::Line {
+            x1,
+            y1,
+            x2,
+            y2,
+            thickness,
+        } => out.push(format!(
+            "x1={} y1={} x2={} y2={} t={}",
+            x1.to_dec_string(),
+            y1.to_dec_string(),
+            x2.to_dec_string(),
+            y2.to_dec_string(),
+            thickness.to_dec_string()
+        )),
+        BoxContent::HList(v) | BoxContent::VList(v) | BoxContent::Overlap(v) => {
+            for k in v {
+                collect_lines(k, out);
+            }
+        }
+        BoxContent::Color(_, inner)
+        | BoxContent::BackColor(_, inner)
+        | BoxContent::Frame { inner, .. } => collect_lines(inner, out),
+        _ => {}
+    }
+}
+
+fn variant_name(err: &ParseError) -> &'static str {
+    match err {
+        ParseError::TrailingBackslash => "TrailingBackslash",
+        ParseError::Unsupported(_) => "Unsupported",
+        ParseError::Unknown(_) => "Unknown",
+        ParseError::Malformed(_) => "Malformed",
+        ParseError::UnmatchedDelimiter => "UnmatchedDelimiter",
+    }
+}
+
+fn lay(font: &MathFont, rec: &Rec) -> MathBox {
+    let ast = parse(&rec.input).unwrap_or_else(|e| panic!("{}: parse {e}", rec.name));
+    layout(&ast, font, parse_style(&rec.style))
+        .unwrap_or_else(|e| panic!("{}: layout {e}", rec.name))
 }
 
 #[test]
-fn svg_golds() {
+fn accent_golds() {
     let recs = load_golds();
-    assert!(!recs.is_empty(), "no svg golds loaded");
+    assert!(!recs.is_empty(), "no accent golds loaded");
     let font = MathFont::stix_two_math().expect("STIX Two Math");
     for rec in recs {
         match rec.kind.as_str() {
+            "ast" => {
+                let got = parse(&rec.input).unwrap_or_else(|e| panic!("{}: {e}", rec.name));
+                assert_eq!(got.gold(), rec.expect, "{}", rec.name);
+            }
+            "dims" => {
+                let bx = lay(&font, &rec);
+                assert_eq!(bx.dim_gold(), rec.expect, "{}", rec.name);
+            }
+            "lines" => {
+                let bx = lay(&font, &rec);
+                let mut got = Vec::new();
+                collect_lines(&bx, &mut got);
+                assert_eq!(got.join(" | "), rec.expect, "{}", rec.name);
+            }
             "svg" => {
-                let svg = svg_for(&font, &rec);
-                assert!(
-                    svg.contains("xmlns=\"http://www.w3.org/2000/svg\""),
-                    "{}: missing xmlns",
-                    rec.name
-                );
+                let mut opt = SvgOptions::new();
+                opt.display = rec.style == "display";
+                let svg = latex_to_svg(&rec.input, &font, &opt)
+                    .unwrap_or_else(|e| panic!("{}: {e}", rec.name));
                 if !rec.paths.is_empty() {
                     assert_eq!(
                         count_tag(&svg, "path").to_string(),
@@ -153,57 +211,13 @@ fn svg_golds() {
                         rec.name
                     );
                 }
-                if !rec.fill.is_empty() {
-                    assert!(
-                        svg.contains(&rec.fill),
-                        "{}: missing fill {}\n{svg}",
-                        rec.name,
-                        rec.fill
-                    );
-                }
-                if !rec.contains.is_empty() {
-                    assert!(
-                        svg.contains(&rec.contains),
-                        "{}: missing {}\n{svg}",
-                        rec.name,
-                        rec.contains
-                    );
-                }
-                if !rec.expect.is_empty() {
-                    assert!(
-                        svg.contains(&rec.expect),
-                        "{}: missing expect {}\n{svg}",
-                        rec.name,
-                        rec.expect
-                    );
-                }
             }
             "err" => {
-                let mut opt = SvgOptions::new();
-                opt.display = rec.style == "display";
-                let err = latex_to_svg(&rec.input, &font, &opt).expect_err(&rec.name);
-                assert!(err.to_string().contains(&rec.expect), "{}: {err}", rec.name);
+                let err = parse(&rec.input).expect_err(&rec.name);
+                assert_eq!(variant_name(&err), rec.error, "{}: {err}", rec.name);
+                assert_eq!(err.to_string(), rec.expect, "{}", rec.name);
             }
             other => panic!("{}: unknown kind {other}", rec.name),
         }
     }
-}
-
-#[test]
-fn missing_glyph_id_is_err() {
-    use latex_rust::{render_svg, BoxContent, Dim, MathBox, MathFont, SvgOptions};
-    let font = MathFont::stix_two_math().expect("STIX Two Math");
-    let bx = MathBox {
-        width: Dim::one(),
-        height: Dim::one(),
-        depth: Dim::zero(),
-        italic: Dim::zero(),
-        shift: Dim::zero(),
-        content: BoxContent::Glyph {
-            ch: 'x',
-            glyph_id: 65535,
-        },
-    };
-    let err = render_svg(&bx, &font, &SvgOptions::new()).expect_err("missing");
-    assert!(err.to_string().contains("missing glyph"), "{err}");
 }

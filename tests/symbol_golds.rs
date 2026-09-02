@@ -112,7 +112,9 @@ fn glyphs(b: &MathBox) -> Vec<char> {
         BoxContent::HList(v) | BoxContent::VList(v) | BoxContent::Overlap(v) => {
             v.iter().flat_map(glyphs).collect()
         }
-        BoxContent::Color(_, inner) | BoxContent::BackColor(_, inner) => glyphs(inner),
+        BoxContent::Color(_, inner)
+        | BoxContent::BackColor(_, inner)
+        | BoxContent::Frame { inner, .. } => glyphs(inner),
         _ => vec![],
     }
 }

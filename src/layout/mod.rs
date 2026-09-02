@@ -40,6 +40,26 @@ pub enum BoxContent {
     BackColor(Color, Box<MathBox>),
     /// Children share the left edge; each child's [`MathBox::shift`] is its baseline.
     Overlap(Vec<MathBox>),
+    /// Diagonal or free line in em, relative to the box left and baseline (`y` up).
+    Line {
+        /// Start x (em from left).
+        x1: Dim,
+        /// Start y (em above baseline).
+        y1: Dim,
+        /// End x.
+        x2: Dim,
+        /// End y.
+        y2: Dim,
+        /// Stroke thickness (em).
+        thickness: Dim,
+    },
+    /// Stroked rectangle around the inner box. Inner is laid out at the same origin.
+    Frame {
+        /// Rule thickness (em).
+        thickness: Dim,
+        /// Contents inside the frame.
+        inner: Box<MathBox>,
+    },
 }
 
 /// TeX-style box: width, height above baseline, depth below, italic correction.

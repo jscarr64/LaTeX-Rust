@@ -18,6 +18,11 @@ are out of scope and return `Err` — never a fake render.
 
 ## Status
 
+**Milestone 6** (accents and decorations): TeX accent placement in `Dim`,
+extensible hats/arrows/braces from MATH variants and glyph assembly, cancel
+diagonals as SVG `<line>`, `\boxed` as a stroked frame. Golds in
+`golds/accents.toml`. Empty bases and unknown `wide*` commands are `Err`.
+
 **Milestone 5** (symbol coverage): every catalog glyph, TeX atom class, and math
 alphabet (`\mathbb`, `\mathcal`, `\mathfrak`, …) renders through STIX Two Math.
 Golds in `golds/symbols.toml`. Missing glyphs are `Err`, never a substitute.

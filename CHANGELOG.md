@@ -2,6 +2,20 @@
 
 ## 0.1.0 (unreleased)
 
+### Milestone 6 — Accents and decorations
+
+- Single-character accents use TeX placement: cramped nucleus, italic / MATH
+  `top_accent_attachment` skew, `accent_base_height` (flattened when already
+  cramped). `\vec` is right-aligned; `\acute` / `\grave` sit off center.
+- Extensible `\widehat` / `\widetilde` / over- and under-arrows / over- and
+  underbrace stretch with MATH horizontal variants, then glyph assembly
+  (connectors as negative kern). `\overline` / `\underline` remain rules at
+  exact base width.
+- `\cancel` / `\bcancel` / `\xcancel` / `\cancelto` emit `BoxContent::Line`.
+  `\boxed` / `\fbox` emit a stroked `BoxContent::Frame`.
+- Golds in `golds/accents.toml`. Empty `\hat{}` is `Malformed`; `\widebox{x}` is
+  `Unsupported`.
+
 ### Milestone 5 — Symbol coverage
 
 - Catalog grew to every TeX/AMS math glyph STIX Two Math can draw. Fake keyboard placeholders (`[ ]` for `\square`, ASCII `F` for `\mathbb{F}`) are real Unicode now.

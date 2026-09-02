@@ -166,6 +166,52 @@ impl MathFont {
         }
     }
 
+    /// MATH top-accent attachment (em from glyph left), if present.
+    pub fn top_accent_attachment(&self, glyph_id: u16) -> Option<Dim> {
+        let face = self.face().ok()?;
+        let math = face.tables().math?;
+        let info = math.glyph_info?;
+        let table = info.top_accent_attachments?;
+        let v = table.get(ttf_parser::GlyphId(glyph_id))?;
+        Some(Dim::from_font_units(i64::from(v.value), self.units_per_em))
+    }
+
+    /// Horizontal glyph-assembly parts: `(gid, start_connector, end_connector, advance, extender)`.
+    /// Lengths are font units.
+    pub fn horizontal_assembly_parts(&self, glyph_id: u16) -> Vec<(u16, u16, u16, u16, bool)> {
+        let mut out = Vec::new();
+        let Ok(face) = self.face() else {
+            return out;
+        };
+        let Some(math) = face.tables().math else {
+            return out;
+        };
+        let Some(variants) = math.variants else {
+            return out;
+        };
+        let Some(cons) = variants
+            .horizontal_constructions
+            .get(ttf_parser::GlyphId(glyph_id))
+        else {
+            return out;
+        };
+        let Some(assembly) = cons.assembly else {
+            return out;
+        };
+        for i in 0..assembly.parts.len() {
+            if let Some(p) = assembly.parts.get(i) {
+                out.push((
+                    p.glyph_id.0,
+                    p.start_connector_length,
+                    p.end_connector_length,
+                    p.full_advance,
+                    p.part_flags.extender(),
+                ));
+            }
+        }
+        out
+    }
+
     /// Horizontal MATH variants of `glyph_id`, including the base glyph first.
     pub fn horizontal_variants(&self, glyph_id: u16) -> Vec<u16> {
         let mut out = vec![glyph_id];

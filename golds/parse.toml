@@ -1024,3 +1024,83 @@ kind = "ast"
 input = ":"
 expect = "(atom Punct \":\")"
 
+[[gold]]
+name = "accent_ddddot"
+kind = "ast"
+input = "\\ddddot{x}"
+expect = "(accent ddddot (atom Ord \"x\"))"
+
+[[gold]]
+name = "accent_overleftrightarrow"
+kind = "ast"
+input = "\\overleftrightarrow{x}"
+expect = "(accent overleftrightarrow (atom Ord \"x\"))"
+
+[[gold]]
+name = "accent_underleftarrow"
+kind = "ast"
+input = "\\underleftarrow{x}"
+expect = "(accent underleftarrow (atom Ord \"x\"))"
+
+[[gold]]
+name = "accent_underrightarrow"
+kind = "ast"
+input = "\\underrightarrow{x}"
+expect = "(accent underrightarrow (atom Ord \"x\"))"
+
+[[gold]]
+name = "accent_underleftrightarrow"
+kind = "ast"
+input = "\\underleftrightarrow{x}"
+expect = "(accent underleftrightarrow (atom Ord \"x\"))"
+
+[[gold]]
+name = "accent_fbox"
+kind = "ast"
+input = "\\fbox{x}"
+expect = "(accent boxed (atom Ord \"x\"))"
+
+[[gold]]
+name = "cancelto"
+kind = "ast"
+input = "\\cancelto{0}{x}"
+expect = "(cancelto (atom Ord \"0\") (atom Ord \"x\"))"
+
+[[gold]]
+name = "overbrace_annotation"
+kind = "ast"
+input = "\\overbrace{a+b+c}^{n}"
+expect = "(overunder (accent overbrace (row (atom Ord \"a\") (atom Bin \"+\") (atom Ord \"b\") (atom Bin \"+\") (atom Ord \"c\"))) (atom Ord \"n\") _)"
+
+[[gold]]
+name = "underbrace_annotation"
+kind = "ast"
+input = "\\underbrace{x_1 + x_2}_{n=2}"
+expect = "(overunder (accent underbrace (row (sub (atom Ord \"x\") (atom Ord \"1\")) (atom Bin \"+\") (sub (atom Ord \"x\") (atom Ord \"2\")))) _ (row (atom Ord \"n\") (atom Rel \"=\") (atom Ord \"2\")))"
+
+[[gold]]
+name = "xleftarrow"
+kind = "ast"
+input = "\\xleftarrow{n \\to \\infty}"
+expect = "(overunder (symbol longleftarrow) (row (atom Ord \"n\") (symbol to) (symbol infty)) _)"
+
+[[gold]]
+name = "xrightarrow_optional"
+kind = "ast"
+input = "\\xrightarrow[b]{a}"
+expect = "(overunder (symbol longrightarrow) (atom Ord \"a\") (atom Ord \"b\"))"
+
+[[gold]]
+name = "empty_hat"
+kind = "err"
+error = "Malformed"
+input = "\\hat{}"
+expect = "malformed: empty accent base"
+
+[[gold]]
+name = "unknown_widebox"
+kind = "err"
+error = "Unsupported"
+input = "\\widebox{x}"
+expect = "unsupported: accent widebox"
+

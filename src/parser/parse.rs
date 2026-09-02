@@ -344,6 +344,7 @@ impl Parser {
             "dot" => self.accent(AccentKind::Dot),
             "ddot" => self.accent(AccentKind::Ddot),
             "dddot" => self.accent(AccentKind::Dddot),
+            "ddddot" => self.accent(AccentKind::Ddddot),
             "widehat" => self.accent(AccentKind::WideHat),
             "widetilde" => self.accent(AccentKind::WideTilde),
             "overline" => self.accent(AccentKind::Overline),
@@ -352,11 +353,23 @@ impl Parser {
             "underbrace" => self.accent(AccentKind::Underbrace),
             "overleftarrow" => self.accent(AccentKind::Overleftarrow),
             "overrightarrow" => self.accent(AccentKind::Overrightarrow),
+            "overleftrightarrow" => self.accent(AccentKind::Overleftrightarrow),
+            "underleftarrow" => self.accent(AccentKind::Underleftarrow),
+            "underrightarrow" => self.accent(AccentKind::Underrightarrow),
+            "underleftrightarrow" => self.accent(AccentKind::Underleftrightarrow),
             "cancel" => self.accent(AccentKind::Cancel),
             "bcancel" => self.accent(AccentKind::BCancel),
             "xcancel" => self.accent(AccentKind::XCancel),
-            "boxed" => self.accent(AccentKind::Boxed),
+            "boxed" | "fbox" => self.accent(AccentKind::Boxed),
             "mathring" => self.accent(AccentKind::Ring),
+            "cancelto" => {
+                let value = self.parse_arg()?;
+                let expr = self.parse_arg()?;
+                if is_empty_node(&expr) {
+                    return Err(ParseError::Malformed("empty accent base".into()));
+                }
+                Ok(MathNode::CancelTo(Box::new(value), Box::new(expr)))
+            }
             "not" => {
                 let body = self.parse_nucleus()?;
                 Ok(MathNode::Accent(Box::new(body), AccentKind::Not))
@@ -399,22 +412,8 @@ impl Parser {
             "mathscr" => self.font(TextStyle::Scr),
             "boldsymbol" => self.font(TextStyle::Boldsymbol),
             "pmb" => self.font(TextStyle::Pmb),
-            "xrightarrow" => {
-                let over = self.parse_arg()?;
-                Ok(MathNode::OverUnder(
-                    Box::new(MathNode::Symbol("longrightarrow".into())),
-                    Some(Box::new(over)),
-                    None,
-                ))
-            }
-            "xleftarrow" => {
-                let over = self.parse_arg()?;
-                Ok(MathNode::OverUnder(
-                    Box::new(MathNode::Symbol("longleftarrow".into())),
-                    Some(Box::new(over)),
-                    None,
-                ))
-            }
+            "xrightarrow" => self.parse_xarrow("longrightarrow"),
+            "xleftarrow" => self.parse_xarrow("longleftarrow"),
             "text" | "mbox" => self.parse_text(TextStyle::Text),
             "operatorname" => {
                 let name = self.collect_group_text()?;
@@ -506,6 +505,9 @@ impl Parser {
                 {
                     return Err(ParseError::Unsupported(format!("font style {name}")));
                 }
+                if name.starts_with("wide") {
+                    return Err(ParseError::Unsupported(format!("accent {name}")));
+                }
                 self.parse_symbol_or_unknown(name)
             }
         }
@@ -513,7 +515,33 @@ impl Parser {
 
     fn accent(&mut self, kind: AccentKind) -> Result<MathNode, ParseError> {
         let body = self.parse_arg()?;
+        if is_empty_node(&body) {
+            return Err(ParseError::Malformed("empty accent base".into()));
+        }
         Ok(MathNode::Accent(Box::new(body), kind))
+    }
+
+    fn parse_xarrow(&mut self, arrow: &str) -> Result<MathNode, ParseError> {
+        let under = if matches!(self.peek_ws(), Some(Token::Char('['))) {
+            self.bump();
+            let u = self.parse_list(Stop::index())?;
+            match self.bump() {
+                Some(Token::Char(']')) => Some(Box::new(u)),
+                _ => {
+                    return Err(ParseError::Malformed(
+                        "expected ']' after x-arrow optional argument".into(),
+                    ))
+                }
+            }
+        } else {
+            None
+        };
+        let over = self.parse_arg()?;
+        Ok(MathNode::OverUnder(
+            Box::new(MathNode::Symbol(arrow.to_string())),
+            Some(Box::new(over)),
+            under,
+        ))
     }
 
     fn font(&mut self, style: TextStyle) -> Result<MathNode, ParseError> {
@@ -845,6 +873,14 @@ fn wrap_row(mut items: Vec<MathNode>) -> MathNode {
     }
 }
 
+fn is_empty_node(n: &MathNode) -> bool {
+    match n {
+        MathNode::Row(v) => v.is_empty() || v.iter().all(is_empty_node),
+        MathNode::Space(_) => true,
+        _ => false,
+    }
+}
+
 fn apply_scripts(nucleus: MathNode, sub: Option<MathNode>, sup: Option<MathNode>) -> MathNode {
     match nucleus {
         MathNode::Sum(None, None) => MathNode::Sum(sub.map(Box::new), sup.map(Box::new)),
@@ -857,6 +893,16 @@ fn apply_scripts(nucleus: MathNode, sub: Option<MathNode>, sup: Option<MathNode>
             match sup {
                 Some(s) => MathNode::Superscript(Box::new(lim), Box::new(s)),
                 None => lim,
+            }
+        }
+        MathNode::Accent(b, k @ (AccentKind::Overbrace | AccentKind::Underbrace)) => {
+            match (sub, sup) {
+                (None, None) => MathNode::Accent(b, k),
+                (s, e) => MathNode::OverUnder(
+                    Box::new(MathNode::Accent(b, k)),
+                    e.map(Box::new),
+                    s.map(Box::new),
+                ),
             }
         }
         other => match (sub, sup) {

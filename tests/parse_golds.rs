@@ -131,10 +131,39 @@ fn catalog_sample(latex: &str, name: &str, kind: SymbolKind) -> String {
         "begin" => r"\begin{matrix}a&b\\c&d\end{matrix}".into(),
         "left" => r"\left(x\right)".into(),
         "sum" | "int" | "lim" => format!("\\{name}"),
-        "bar" | "hat" | "tilde" | "vec" | "dot" | "ddot" | "check" | "breve" | "widehat"
-        | "widetilde" | "underbrace" | "overbrace" | "mathring" => {
+        "bar"
+        | "hat"
+        | "tilde"
+        | "vec"
+        | "dot"
+        | "ddot"
+        | "dddot"
+        | "ddddot"
+        | "check"
+        | "breve"
+        | "acute"
+        | "grave"
+        | "widehat"
+        | "widetilde"
+        | "underbrace"
+        | "overbrace"
+        | "mathring"
+        | "overline"
+        | "underline"
+        | "overleftarrow"
+        | "overrightarrow"
+        | "overleftrightarrow"
+        | "underleftarrow"
+        | "underrightarrow"
+        | "underleftrightarrow"
+        | "cancel"
+        | "bcancel"
+        | "xcancel"
+        | "boxed"
+        | "fbox" => {
             format!("\\{name}{{x}}")
         }
+        "cancelto" => r"\cancelto{0}{x}".into(),
         "text" => r"\text{a}".into(),
         "mathcal" | "mathbb" => format!("\\{name}{{X}}"),
         "not" => r"\not\equiv".into(),
