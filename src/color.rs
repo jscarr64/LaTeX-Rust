@@ -1,7 +1,9 @@
 //! Color models for math mode. Channel arithmetic is [`Dim`](crate::Dim) only.
 //!
-//! SVG `fill` / `stroke`, PNG, and egui emission are Milestone 8 render work.
-//! This module resolves a color to 8-bit sRGB so those backends have a contract.
+//! SVG `fill` / `stroke` are emitted in Milestone 8. PNG (`tiny-skia`) and egui
+//! (`Color32`) convert [`Color::to_rgba8`] once those backends land (Milestones 9
+//! and 10). This module resolves a color to 8-bit sRGB so every backend shares
+//! one contract.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -34,6 +36,12 @@ impl Color {
     #[must_use]
     pub fn css_hex(self) -> String {
         format!("#{:02x}{:02x}{:02x}", self.r, self.g, self.b)
+    }
+
+    /// Opaque sRGB bytes for PNG (`tiny-skia`) and egui (`Color32`) backends.
+    #[must_use]
+    pub const fn to_rgba8(self) -> [u8; 4] {
+        [self.r, self.g, self.b, 255]
     }
 }
 
@@ -153,6 +161,14 @@ pub fn parse_color_spec(
                 unit_to_u8(&v[2])?,
             ))
         }
+        "RGB" => {
+            let v = unit_components(spec, 3)?;
+            Ok(Color::rgb(
+                byte_channel(&v[0])?,
+                byte_channel(&v[1])?,
+                byte_channel(&v[2])?,
+            ))
+        }
         "HTML" => parse_html(spec),
         "cmyk" => {
             let v = unit_components(spec, 4)?;
@@ -191,13 +207,9 @@ pub fn named_color(name: &str) -> Result<Color, Error> {
 fn parse_html(spec: &str) -> Result<Color, Error> {
     let s = spec.trim().trim_start_matches('#');
     if s.len() != 6 || !s.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return Err(Error::Unsupported {
-            what: format!("HTML color {spec}"),
-        });
+        return Err(malformed(format!("HTML color {spec}")));
     }
-    let n = u32::from_str_radix(s, 16).map_err(|_| Error::Unsupported {
-        what: format!("HTML color {spec}"),
-    })?;
+    let n = u32::from_str_radix(s, 16).map_err(|_| malformed(format!("HTML color {spec}")))?;
     Ok(Color::rgb(
         ((n >> 16) & 0xff) as u8,
         ((n >> 8) & 0xff) as u8,
@@ -212,9 +224,9 @@ fn unit_components(spec: &str, n: usize) -> Result<Vec<Dim>, Error> {
         .filter(|p| !p.is_empty())
         .collect();
     if parts.len() != n {
-        return Err(Error::Unsupported {
-            what: format!("color spec `{spec}` (need {n} components)"),
-        });
+        return Err(malformed(format!(
+            "color spec `{spec}` (need {n} components)"
+        )));
     }
     Ok(parts.iter().map(|p| Dim::parse(p)).collect())
 }
@@ -233,9 +245,7 @@ fn cmyk_to_rgb(c: &Dim, m: &Dim, y: &Dim, k: &Dim) -> Result<Color, Error> {
 
 fn unit_to_u8(d: &Dim) -> Result<u8, Error> {
     if d.is_nan() {
-        return Err(Error::Unsupported {
-            what: "color component NaN".into(),
-        });
+        return Err(malformed("color component NaN"));
     }
     let zero = Dim::zero();
     let one = Dim::one();
@@ -249,6 +259,25 @@ fn unit_to_u8(d: &Dim) -> Result<u8, Error> {
     let scaled = clamped * Dim::from_i64(255);
     let rounded = &scaled + &Dim::ratio(1, 2);
     Ok(floor_u8(&rounded))
+}
+
+fn byte_channel(d: &Dim) -> Result<u8, Error> {
+    if d.is_nan() {
+        return Err(malformed("RGB component NaN"));
+    }
+    let zero = Dim::zero();
+    let max = Dim::from_i64(255);
+    if matches!(d.cmp(&zero), Some(core::cmp::Ordering::Less))
+        || matches!(d.cmp(&max), Some(core::cmp::Ordering::Greater))
+    {
+        return Err(malformed("RGB component out of 0..255"));
+    }
+    let rounded = d + &Dim::ratio(1, 2);
+    Ok(floor_u8(&rounded))
+}
+
+fn malformed(what: impl Into<String>) -> Error {
+    Error::Malformed { what: what.into() }
 }
 
 fn floor_u8(d: &Dim) -> u8 {

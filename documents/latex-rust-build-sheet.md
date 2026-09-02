@@ -2,7 +2,7 @@
 **Version:** 0.1.0-plan  
 **Date:** 2026-09-01  
 **License:** MIT OR Apache-2.0  
-**Status:** Milestone 7 advanced structures green (`golds/envs.toml`)  
+**Status:** Milestone 8 color support green (SVG `fill`/`stroke`; PNG/egui paint wait on M9/M10)  
 
 > Pure Rust LaTeX math renderer. No JavaScript. No webview. No runtime dependencies.  
 > Surpasses MathJax and KaTeX in correctness, performance, and platform coverage.
@@ -280,21 +280,22 @@ Color is in scope for v1.0 (Milestone 8). Channel math uses `Dim` — never hard
 
 | Capability | Status | Notes |
 |---|---|---|
-| `\color{name}` | ⬜ | Named color — affects all following content in scope |
-| `\textcolor{name}{expr}` | ⬜ | Color applied to expression only |
-| `\colorbox{name}{expr}` | ⬜ | Background color box around expression |
-| `\fcolorbox{border}{bg}{expr}` | ⬜ | Framed color box |
-| `\definecolor{name}{model}{spec}` | ⬜ | Custom color definition |
-| Named colors (standard LaTeX set) | ⬜ | black white red green blue cyan magenta yellow + dvipsnames set |
-| RGB color model `{rgb}{r,g,b}` | ⬜ | Values 0.0–1.0 via `Dim` |
-| HTML hex color model `{HTML}{RRGGBB}` | ⬜ | 6-digit hex |
-| CMYK color model `{cmyk}{c,m,y,k}` | ⬜ | Values 0.0–1.0 via `Dim`; naive `(1-c)(1-k)` to sRGB |
-| Gray model `{gray}{g}` | ⬜ | Value 0.0–1.0 via `Dim` |
-| Color inheritance / scope | ⬜ | Color scoped to current group `{}` |
-| SVG fill / stroke emission | ⬜ | `fill` and `stroke` attributes on path elements |
-| PNG color pass-through | ⬜ | tiny-skia color support |
-| egui color pass-through | ⬜ | egui `Color32` emission |
-| Unsupported color model | ⬜ | Returns `Err(Unsupported)` — never a fake color |
+| `\color{name}` | ✅ | Named color — affects all following content in scope |
+| `\textcolor{name}{expr}` | ✅ | Color applied to expression only |
+| `\colorbox{name}{expr}` | ✅ | Background color box around expression |
+| `\fcolorbox{border}{bg}{expr}` | ✅ | Framed color box (fill + border stroke) |
+| `\definecolor{name}{model}{spec}` | ✅ | Custom color definition; forward refs are `Err` |
+| Named colors (standard LaTeX set) | ✅ | black white red green blue cyan magenta yellow + dvipsnames set |
+| RGB color model `{rgb}{r,g,b}` | ✅ | Values 0.0–1.0 via `Dim` |
+| RGB integer model `{RGB}{R,G,B}` | ✅ | Values 0–255 via `Dim` |
+| HTML hex color model `{HTML}{RRGGBB}` | ✅ | 6-digit hex |
+| CMYK color model `{cmyk}{c,m,y,k}` | ✅ | Values 0.0–1.0 via `Dim`; naive `(1-c)(1-k)` to sRGB |
+| Gray model `{gray}{g}` | ✅ | Value 0.0–1.0 via `Dim` |
+| Color inheritance / scope | ✅ | Color scoped to current group `{}` |
+| SVG fill / stroke emission | ✅ | `fill` and `stroke` on `<g>`; boxes as `<rect>` |
+| PNG color pass-through | ⬜ | tiny-skia color support (Milestone 9) |
+| egui color pass-through | ⬜ | egui `Color32` emission (Milestone 10) |
+| Unsupported color model | ✅ | Returns `Err(Unsupported)` — never a fake color |
 
 ---
 
@@ -439,16 +440,16 @@ Each milestone ends with a full gold suite pass before the next begins.
 - [x] Gold tests for all environments
 
 ### Milestone 8 — Color Support
-- [x] Color model parser — named, rgb, HTML hex, cmyk, gray (`parse_color_spec`, golds)
+- [x] Color model parser — named, rgb, RGB 0–255, HTML hex, cmyk, gray (`parse_color_spec`, golds)
 - [x] Standard named color table — 8 LaTeX names + 68 dvipsnames (`data/dvipsnames.tsv`)
 - [x] `\definecolor` custom color registration (`ColorTable::define`)
 - [x] Color AST nodes — `Color`, `TextColor`, `ColorBox`, `FColorBox` (`golds/parse.toml`)
 - [x] Color scope propagation through layout engine
 - [x] SVG renderer — `fill` and `stroke` attribute emission on colored glyphs
-- [ ] PNG renderer — tiny-skia color pass-through
-- [ ] egui renderer — `Color32` emission
-- [~] Gold tests for every color capability (hex / tokenize / parse AST / layout color boxes / SVG `fill` locked; PNG and egui wait on later milestones)
-- [ ] Full corpus pass before Milestone 9
+- [ ] PNG renderer — tiny-skia color pass-through (Milestone 9; `Color::to_rgba8` is the contract)
+- [ ] egui renderer — `Color32` emission (Milestone 10; `Color::to_rgba8` is the contract)
+- [x] Gold tests for every color capability (hex / tokenize / parse AST / layout color boxes / SVG `fill`/`stroke` locked; PNG and egui wait on later milestones)
+- [x] Full corpus pass before Milestone 9
 
 ### Milestone 9 — PNG Renderer (feature = "png")
 - [ ] tiny-skia integration

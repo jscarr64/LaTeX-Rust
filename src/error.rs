@@ -16,6 +16,12 @@ pub enum Error {
         /// Human-readable name of the missing feature or construct.
         what: String,
     },
+    /// Syntactically invalid value (for example a color spec with the wrong
+    /// number of components). Distinct from [`Self::Unsupported`].
+    Malformed {
+        /// Human-readable description of what was malformed.
+        what: String,
+    },
 }
 
 /// Tokenizer / parser failure.
@@ -51,6 +57,7 @@ impl fmt::Display for Error {
             Self::Parse(e) => write!(f, "{e}"),
             Self::Font(e) => write!(f, "{e}"),
             Self::Unsupported { what } => write!(f, "unsupported: {what}"),
+            Self::Malformed { what } => write!(f, "malformed: {what}"),
         }
     }
 }

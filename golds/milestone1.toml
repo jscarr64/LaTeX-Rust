@@ -315,3 +315,48 @@ lhs = "mygreen"
 model = "rgb"
 input = "0.0,0.6,0.0"
 expect = "#009900"
+
+[[gold]]
+name = "color_RGB"
+kind = "color"
+op = "model"
+model = "RGB"
+input = "0,153,0"
+expect = "#009900"
+
+[[gold]]
+name = "color_cmyk_orange"
+kind = "color"
+op = "model"
+model = "cmyk"
+input = "0,0.4,1,0"
+expect = "#ff9900"
+
+[[gold]]
+name = "color_cerulean"
+kind = "color"
+op = "named"
+input = "Cerulean"
+expect = "#0fe3ff"
+
+[[gold]]
+name = "color_black"
+kind = "color"
+op = "named"
+input = "black"
+expect = "#000000"
+
+[[gold]]
+name = "color_white"
+kind = "color"
+op = "named"
+input = "white"
+expect = "#ffffff"
+
+[[gold]]
+name = "color_malformed_rgb"
+kind = "color"
+op = "error_malformed"
+model = "rgb"
+input = "0.5"
+expect = "malformed"

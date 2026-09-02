@@ -2,6 +2,7 @@
 //!
 //! Emits UI shapes directly (no SVG intermediate) once the backend lands.
 //! Until then every entry point is [`Error::Unsupported`](crate::Error::Unsupported).
+//! Color channels are already resolved as [`Color::to_rgba8`](crate::Color::to_rgba8).
 
 use crate::error::Error;
 use crate::font::MathFont;

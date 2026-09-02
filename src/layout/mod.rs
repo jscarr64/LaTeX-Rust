@@ -59,6 +59,8 @@ pub enum BoxContent {
     Frame {
         /// Rule thickness (em).
         thickness: Dim,
+        /// Border color. `None` inherits the current fill (`\boxed`).
+        stroke: Option<Color>,
         /// Contents inside the frame.
         inner: Box<MathBox>,
     },

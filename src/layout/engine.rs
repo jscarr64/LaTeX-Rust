@@ -200,12 +200,16 @@ impl Engine<'_> {
                     bx: back_color_wrap(*c, pad_box(inner, &pad)),
                 })
             }
-            MathNode::FColorBox(_border, fill, body) => {
+            MathNode::FColorBox(border, fill, body) => {
                 let inner = self.layout(body, style)?;
                 let pad = self.params.mu(style) * Dim::from_i64(3);
+                let thick = self.params.fraction_rule_thickness.clone() * self.params.scale(style);
                 Ok(Item {
                     class: Some(AtomKind::Inner),
-                    bx: back_color_wrap(*fill, pad_box(inner, &pad)),
+                    bx: back_color_wrap(
+                        *fill,
+                        frame_wrap(thick, Some(*border), pad_box(inner, &pad)),
+                    ),
                 })
             }
         }
@@ -916,18 +920,7 @@ impl Engine<'_> {
     fn boxed_frame(&self, inner: MathBox, style: MathStyle) -> MathBox {
         let pad = self.params.mu(style) * Dim::from_i64(3);
         let thick = self.params.fraction_rule_thickness.clone() * self.params.scale(style);
-        let padded = pad_box(inner, &pad);
-        MathBox {
-            width: padded.width.clone(),
-            height: padded.height.clone(),
-            depth: padded.depth.clone(),
-            italic: Dim::zero(),
-            shift: Dim::zero(),
-            content: BoxContent::Frame {
-                thickness: thick,
-                inner: Box::new(padded),
-            },
-        }
+        frame_wrap(thick, None, pad_box(inner, &pad))
     }
 
     fn bar_rule(&self, b: MathBox, under: bool, style: MathStyle) -> Result<Item, Error> {
@@ -1710,6 +1703,21 @@ fn back_color_wrap(c: Color, inner: MathBox) -> MathBox {
         italic: inner.italic.clone(),
         shift: inner.shift.clone(),
         content: BoxContent::BackColor(c, Box::new(inner)),
+    }
+}
+
+fn frame_wrap(thickness: Dim, stroke: Option<Color>, inner: MathBox) -> MathBox {
+    MathBox {
+        width: inner.width.clone(),
+        height: inner.height.clone(),
+        depth: inner.depth.clone(),
+        italic: Dim::zero(),
+        shift: Dim::zero(),
+        content: BoxContent::Frame {
+            thickness,
+            stroke,
+            inner: Box::new(inner),
+        },
     }
 }
 

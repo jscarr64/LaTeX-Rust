@@ -181,7 +181,10 @@ fn emit(
             Ok(())
         }
         BoxContent::Color(c, inner) => {
-            out.push_str(&format!(r#"<g fill="{}">"#, c.css_hex()));
+            out.push_str(&format!(
+                r#"<g fill="{hex}" stroke="{hex}">"#,
+                hex = c.css_hex()
+            ));
             out.push('\n');
             emit(
                 inner, font, em_pt, fu_pt, origin_x, &baseline, *c, cache, out,
@@ -231,7 +234,11 @@ fn emit(
             out.push('\n');
             Ok(())
         }
-        BoxContent::Frame { thickness, inner } => {
+        BoxContent::Frame {
+            thickness,
+            stroke,
+            inner,
+        } => {
             let w = &bx.width * em_pt;
             let h_ink = (&bx.height + &bx.depth) * em_pt;
             let t = thickness.clone() * em_pt;
@@ -240,6 +247,7 @@ fn emit(
             let y = &(&baseline - &(bx.height.clone() * em_pt)) + &half;
             let rw = (&w - &t).max(&Dim::zero());
             let rh = (&h_ink - &t).max(&Dim::zero());
+            let stroke_css = stroke.unwrap_or(fill).css_hex();
             if !rw.is_zero() && !rh.is_zero() {
                 out.push_str(&format!(
                     r#"<rect x="{}" y="{}" width="{}" height="{}" fill="none" stroke="{}" stroke-width="{}"/>"#,
@@ -247,7 +255,7 @@ fn emit(
                     y.to_svg_string(),
                     rw.to_svg_string(),
                     rh.to_svg_string(),
-                    fill.css_hex(),
+                    stroke_css,
                     t.to_svg_string(),
                 ));
                 out.push('\n');

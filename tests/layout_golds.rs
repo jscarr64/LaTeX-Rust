@@ -113,6 +113,28 @@ fn first_color(b: &MathBox) -> Option<Color> {
     }
 }
 
+fn first_back_color(b: &MathBox) -> Option<Color> {
+    match &b.content {
+        BoxContent::BackColor(c, _) => Some(*c),
+        BoxContent::Color(_, inner) | BoxContent::Frame { inner, .. } => first_back_color(inner),
+        BoxContent::HList(v) | BoxContent::VList(v) | BoxContent::Overlap(v) => {
+            v.iter().find_map(first_back_color)
+        }
+        _ => None,
+    }
+}
+
+fn first_frame_stroke(b: &MathBox) -> Option<Color> {
+    match &b.content {
+        BoxContent::Frame { stroke, inner, .. } => stroke.or_else(|| first_frame_stroke(inner)),
+        BoxContent::Color(_, inner) | BoxContent::BackColor(_, inner) => first_frame_stroke(inner),
+        BoxContent::HList(v) | BoxContent::VList(v) | BoxContent::Overlap(v) => {
+            v.iter().find_map(first_frame_stroke)
+        }
+        _ => None,
+    }
+}
+
 fn has_nested_color(b: &MathBox, outer: Color, inner: Color) -> bool {
     match &b.content {
         BoxContent::Color(c, body) if *c == outer => first_color(body) == Some(inner),
@@ -151,6 +173,18 @@ fn layout_golds() {
             "color" => {
                 let bx = lay(&font, &rec);
                 let c = first_color(&bx).unwrap_or_else(|| panic!("{}: no color box", rec.name));
+                assert_eq!(c.css_hex(), rec.expect, "{}", rec.name);
+            }
+            "back_color" => {
+                let bx = lay(&font, &rec);
+                let c = first_back_color(&bx)
+                    .unwrap_or_else(|| panic!("{}: no background color", rec.name));
+                assert_eq!(c.css_hex(), rec.expect, "{}", rec.name);
+            }
+            "frame_stroke" => {
+                let bx = lay(&font, &rec);
+                let c = first_frame_stroke(&bx)
+                    .unwrap_or_else(|| panic!("{}: no frame stroke", rec.name));
                 assert_eq!(c.css_hex(), rec.expect, "{}", rec.name);
             }
             "color_nested" => {

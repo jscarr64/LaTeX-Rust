@@ -1173,6 +1173,7 @@ fn color_err(e: Error) -> ParseError {
     match e {
         Error::Unsupported { what } => ParseError::Unsupported(what),
         Error::Parse(p) => p,
+        Error::Malformed { what } => ParseError::Malformed(what),
         other => ParseError::Malformed(other.to_string()),
     }
 }

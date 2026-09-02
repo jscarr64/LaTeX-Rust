@@ -1104,3 +1104,48 @@ error = "Unsupported"
 input = "\\widebox{x}"
 expect = "unsupported: accent widebox"
 
+[[gold]]
+name = "define_RGB"
+kind = "ast"
+input = "\\definecolor{mygreen}{RGB}{0,153,0}\\textcolor{mygreen}{x}"
+expect = "(textcolor #009900 (atom Ord \"x\"))"
+
+[[gold]]
+name = "textcolor_RGB"
+kind = "ast"
+input = "\\textcolor[RGB]{0,153,0}{x}"
+expect = "(textcolor #009900 (atom Ord \"x\"))"
+
+[[gold]]
+name = "define_cmyk_orange"
+kind = "ast"
+input = "\\definecolor{myorange}{cmyk}{0,0.4,1,0}\\textcolor{myorange}{x}"
+expect = "(textcolor #ff9900 (atom Ord \"x\"))"
+
+[[gold]]
+name = "color_nested_group"
+kind = "ast"
+input = "{\\color{red} x + {\\color{blue} y} + z}"
+expect = "(color #ff0000 (row (atom Ord \"x\") (atom Bin \"+\") (color #0000ff (atom Ord \"y\")) (atom Bin \"+\") (atom Ord \"z\")))"
+
+[[gold]]
+name = "unsupported_color_model"
+kind = "err"
+error = "Unsupported"
+input = "\\definecolor{x}{spot}{0.5}"
+expect = "unsupported: color model spot"
+
+[[gold]]
+name = "definecolor_forward_ref"
+kind = "err"
+error = "Unsupported"
+input = "\\textcolor{later}{x}\\definecolor{later}{rgb}{0,0,1}"
+expect = "unsupported: named color later"
+
+[[gold]]
+name = "malformed_color_spec"
+kind = "err"
+error = "Malformed"
+input = "\\textcolor[rgb]{0.5}{x}"
+expect = "malformed: color spec `0.5` (need 3 components)"
+

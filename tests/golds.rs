@@ -322,6 +322,19 @@ fn milestone1_golds() {
                         rec.name
                     );
                 }
+                "error_malformed" => {
+                    let err = parse_color_spec(&rec.model, &rec.input, None).expect_err(&rec.name);
+                    assert!(
+                        matches!(err, Error::Malformed { .. }),
+                        "{}: {err}",
+                        rec.name
+                    );
+                    assert!(
+                        err.to_string().to_ascii_lowercase().contains(&rec.expect),
+                        "{}: {err}",
+                        rec.name
+                    );
+                }
                 other => panic!("{}: unknown color op {other}", rec.name),
             },
             other => panic!("{}: unknown kind {other}", rec.name),

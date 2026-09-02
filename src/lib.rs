@@ -3,10 +3,13 @@
 //! Crate layout follows the build-sheet architecture:
 //! [`parser`], [`mod@layout`], [`font`], [`render`] (`svg` / `png` / `egui`).
 //!
-//! Milestone 7 covers multiline environments, equation numbering, `{array}`
-//! column specs, `\substack`, and `\intertext`. Milestone 6 covers TeX-exact
-//! accent placement, extensible decorations from MATH variants and glyph
-//! assembly, cancel diagonals, and boxed frames.
+//! Milestone 8 covers math-mode color: named / rgb / RGB / HTML / cmyk / gray,
+//! `\definecolor`, group scope, and SVG `fill` / `stroke`. PNG and egui color
+//! paint wait on those renderers (Milestones 9 and 10). Milestone 7 covers
+//! multiline environments, equation numbering, `{array}` column specs,
+//! `\substack`, and `\intertext`. Milestone 6 covers TeX-exact accent placement,
+//! extensible decorations from MATH variants and glyph assembly, cancel
+//! diagonals, and boxed frames.
 //! Milestone 5 covers the math-symbol catalog, TeX atom classes, and Unicode
 //! math alphabets (`\mathbb`, `\mathcal`, …) through STIX Two Math. Milestone 4
 //! renders a [`MathBox`] to SVG. Unsupported constructs return [`Error`] — never

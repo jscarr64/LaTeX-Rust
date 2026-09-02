@@ -1,6 +1,7 @@
 //! PNG raster backend. Milestone 9; optional feature `png` will pull in `tiny-skia`.
 //!
 //! Until that milestone, every entry point is [`Error::Unsupported`](crate::Error::Unsupported).
+//! Color channels are already resolved as [`Color::to_rgba8`](crate::Color::to_rgba8).
 
 use crate::color::Color;
 use crate::dim::Dim;

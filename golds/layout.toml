@@ -323,3 +323,45 @@ kind = "color_nested"
 style = "text"
 input = "\\textcolor{red}{\\textcolor{blue}{x}}"
 expect = "red-then-blue"
+
+[[gold]]
+name = "color-scope-restore"
+kind = "color_nested"
+style = "text"
+input = "{\\color{red} x + {\\color{blue} y} + z}"
+expect = "red-then-blue"
+
+[[gold]]
+name = "color-green-following"
+kind = "color"
+style = "text"
+input = "\\color{green} a"
+expect = "#00ff00"
+
+[[gold]]
+name = "colorbox-yellow"
+kind = "back_color"
+style = "text"
+input = "\\colorbox{yellow}{x}"
+expect = "#ffff00"
+
+[[gold]]
+name = "colorbox-cyan-frac"
+kind = "back_color"
+style = "text"
+input = "\\colorbox{cyan}{\\frac{a}{b}}"
+expect = "#00ffff"
+
+[[gold]]
+name = "fcolorbox-red-yellow-fill"
+kind = "back_color"
+style = "text"
+input = "\\fcolorbox{red}{yellow}{x}"
+expect = "#ffff00"
+
+[[gold]]
+name = "fcolorbox-red-yellow-stroke"
+kind = "frame_stroke"
+style = "text"
+input = "\\fcolorbox{red}{yellow}{x}"
+expect = "#ff0000"
