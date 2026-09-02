@@ -1,10 +1,20 @@
-//! Horizontal and vertical box composition. TeX-faithful style rules come later.
+//! TeX-faithful math box model. Dimensions are [`Dim`](crate::Dim) from zenith-float 1.0.
 
+mod engine;
+mod metrics;
+mod space;
+mod style;
+
+pub use engine::layout;
+pub use metrics::MathParams;
+pub use style::MathStyle;
+
+use crate::color::Color;
 use crate::dim::Dim;
 use crate::error::Error;
 use crate::font::MathFont;
 
-/// What a box contains. Milestone 1 is composition only; glyphs are metric boxes.
+/// What a box contains.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BoxContent {
     /// Empty box (strut or placeholder).
@@ -22,6 +32,10 @@ pub enum BoxContent {
     HList(Vec<MathBox>),
     /// Vertical list. Height/depth stack on the baseline of the first box.
     VList(Vec<MathBox>),
+    /// Horizontal kern (atom spacing, `\hspace`).
+    Kern(Dim),
+    /// Color wrapper. Dimensions match the inner box.
+    Color(Color, Box<MathBox>),
 }
 
 /// TeX-style box: width, height above baseline, depth below, italic correction.
@@ -64,6 +78,18 @@ impl MathBox {
         }
     }
 
+    /// Horizontal kern of `width` (zero height and depth).
+    #[must_use]
+    pub fn kern(width: Dim) -> Self {
+        Self {
+            width: width.clone(),
+            height: Dim::zero(),
+            depth: Dim::zero(),
+            italic: Dim::zero(),
+            content: BoxContent::Kern(width),
+        }
+    }
+
     /// Box from a font glyph. Errors if the face has no glyph for `ch`.
     pub fn from_glyph(font: &MathFont, ch: char) -> Result<Self, Error> {
         let g = font.glyph(ch)?;
@@ -71,7 +97,7 @@ impl MathBox {
             width: g.advance,
             height: g.height,
             depth: g.depth,
-            italic: Dim::zero(),
+            italic: font.italic_correction(g.glyph_id),
             content: BoxContent::Glyph {
                 ch,
                 glyph_id: g.glyph_id,
@@ -123,5 +149,16 @@ impl MathBox {
             italic: Dim::zero(),
             content: BoxContent::VList(children),
         }
+    }
+
+    /// Gold-stable width/height/depth decimal string.
+    #[must_use]
+    pub fn dim_gold(&self) -> String {
+        format!(
+            "w={} h={} d={}",
+            self.width.to_dec_string(),
+            self.height.to_dec_string(),
+            self.depth.to_dec_string()
+        )
     }
 }

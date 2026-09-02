@@ -63,7 +63,7 @@ impl MathFont {
         })
     }
 
-    fn face(&self) -> Result<Face<'_>, Error> {
+    pub(crate) fn face(&self) -> Result<Face<'_>, Error> {
         Face::parse(self.raw, 0).map_err(|_| FontError::InvalidFace.into())
     }
 
@@ -120,6 +120,76 @@ impl MathFont {
             height: Dim::from_font_units(height_fu, upem),
             depth: Dim::from_font_units(depth_fu, upem),
         })
+    }
+
+    /// Metrics for OpenType glyph id `gid`, tagged with `ch` for the box payload.
+    pub fn glyph_id(&self, ch: char, gid: u16) -> Result<GlyphMetrics, Error> {
+        let face = self.face()?;
+        let gid = ttf_parser::GlyphId(gid);
+        let advance_fu = face
+            .glyph_hor_advance(gid)
+            .ok_or(FontError::MissingGlyph { ch })?;
+        let mut height_fu = 0i64;
+        let mut depth_fu = 0i64;
+        if let Some(bbox) = face.glyph_bounding_box(gid) {
+            height_fu = i64::from(bbox.y_max).max(0);
+            depth_fu = i64::from(-bbox.y_min).max(0);
+        }
+        let upem = self.units_per_em;
+        Ok(GlyphMetrics {
+            ch,
+            glyph_id: gid.0,
+            advance_fu,
+            advance: Dim::from_font_units(i64::from(advance_fu), upem),
+            height: Dim::from_font_units(height_fu, upem),
+            depth: Dim::from_font_units(depth_fu, upem),
+        })
+    }
+
+    /// MATH italic correction for `glyph_id`, or zero.
+    pub fn italic_correction(&self, glyph_id: u16) -> Dim {
+        let Ok(face) = self.face() else {
+            return Dim::zero();
+        };
+        let Some(math) = face.tables().math else {
+            return Dim::zero();
+        };
+        let Some(info) = math.glyph_info else {
+            return Dim::zero();
+        };
+        let Some(table) = info.italic_corrections else {
+            return Dim::zero();
+        };
+        match table.get(ttf_parser::GlyphId(glyph_id)) {
+            Some(v) => Dim::from_font_units(i64::from(v.value), self.units_per_em),
+            None => Dim::zero(),
+        }
+    }
+
+    /// Vertical MATH variants of `glyph_id`, including the base glyph first.
+    pub fn vertical_variants(&self, glyph_id: u16) -> Vec<u16> {
+        let mut out = vec![glyph_id];
+        let Ok(face) = self.face() else {
+            return out;
+        };
+        let Some(math) = face.tables().math else {
+            return out;
+        };
+        let Some(variants) = math.variants else {
+            return out;
+        };
+        let Some(cons) = variants
+            .vertical_constructions
+            .get(ttf_parser::GlyphId(glyph_id))
+        else {
+            return out;
+        };
+        for i in 0..cons.variants.len() {
+            if let Some(v) = cons.variants.get(i) {
+                out.push(v.variant_glyph.0);
+            }
+        }
+        out
     }
 
     /// SHA-256 hex of the raw face bytes (zenith-float SHA-256).

@@ -35,7 +35,7 @@ std = ["zenith-float/std"]
 
 [dependencies]
 ttf-parser = "0.25"
-zenith-float = { version = "1.0.0", path = "../mathlibraries/zenith-float" }
+zenith-float = "1.0"
 
 [package.metadata.docs.rs]
 all-features = true

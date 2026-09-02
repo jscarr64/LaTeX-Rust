@@ -1,7 +1,8 @@
-//! Layout dimension wrapping zenith-float `ExactNum`.
+//! Layout dimension wrapping [zenith-float](https://crates.io/crates/zenith-float) 1.0 `ExactNum`.
 //!
-//! Every arithmetic path uses software limbs. Hardware `f32` / `f64` never
-//! appear as calculation terminals.
+//! This crate depends on the published `zenith-float` crate, not on its internal
+//! kernel package. Every arithmetic path uses software limbs. Hardware `f32` /
+//! `f64` never appear as calculation terminals.
 
 use core::cmp::Ordering;
 use core::fmt;
@@ -102,6 +103,21 @@ impl Dim {
         }
     }
 
+    /// Minimum of two dimensions.
+    #[must_use]
+    pub fn min(&self, other: &Self) -> Self {
+        match self.cmp(other) {
+            Some(Ordering::Greater) => other.clone(),
+            _ => self.clone(),
+        }
+    }
+
+    /// `max(self, 0)`.
+    #[must_use]
+    pub fn clamp_nonneg(&self) -> Self {
+        self.max(&Self::zero())
+    }
+
     /// True when the value is NaN.
     #[must_use]
     pub fn is_nan(&self) -> bool {
@@ -185,66 +201,36 @@ impl Neg for Dim {
     }
 }
 
-impl Add for Dim {
-    type Output = Self;
-
-    fn add(self, rhs: Self) -> Self {
-        wrap(add_e(self.inner.as_ref(), rhs.inner.as_ref()))
-    }
+macro_rules! impl_dim_op {
+    ($Trait:ident, $method:ident, $helper:ident) => {
+        impl $Trait for Dim {
+            type Output = Dim;
+            fn $method(self, rhs: Dim) -> Dim {
+                wrap($helper(self.inner.as_ref(), rhs.inner.as_ref()))
+            }
+        }
+        impl $Trait<&Dim> for Dim {
+            type Output = Dim;
+            fn $method(self, rhs: &Dim) -> Dim {
+                wrap($helper(self.inner.as_ref(), rhs.inner.as_ref()))
+            }
+        }
+        impl $Trait<Dim> for &Dim {
+            type Output = Dim;
+            fn $method(self, rhs: Dim) -> Dim {
+                wrap($helper(self.inner.as_ref(), rhs.inner.as_ref()))
+            }
+        }
+        impl $Trait for &Dim {
+            type Output = Dim;
+            fn $method(self, rhs: &Dim) -> Dim {
+                wrap($helper(self.inner.as_ref(), rhs.inner.as_ref()))
+            }
+        }
+    };
 }
 
-impl Sub for Dim {
-    type Output = Self;
-
-    fn sub(self, rhs: Self) -> Self {
-        wrap(sub_e(self.inner.as_ref(), rhs.inner.as_ref()))
-    }
-}
-
-impl Mul for Dim {
-    type Output = Self;
-
-    fn mul(self, rhs: Self) -> Self {
-        wrap(mul_e(self.inner.as_ref(), rhs.inner.as_ref()))
-    }
-}
-
-impl Div for Dim {
-    type Output = Self;
-
-    fn div(self, rhs: Self) -> Self {
-        wrap(div_e(self.inner.as_ref(), rhs.inner.as_ref()))
-    }
-}
-
-impl Add for &Dim {
-    type Output = Dim;
-
-    fn add(self, rhs: Self) -> Dim {
-        wrap(add_e(self.inner.as_ref(), rhs.inner.as_ref()))
-    }
-}
-
-impl Sub for &Dim {
-    type Output = Dim;
-
-    fn sub(self, rhs: Self) -> Dim {
-        wrap(sub_e(self.inner.as_ref(), rhs.inner.as_ref()))
-    }
-}
-
-impl Mul for &Dim {
-    type Output = Dim;
-
-    fn mul(self, rhs: Self) -> Dim {
-        wrap(mul_e(self.inner.as_ref(), rhs.inner.as_ref()))
-    }
-}
-
-impl Div for &Dim {
-    type Output = Dim;
-
-    fn div(self, rhs: Self) -> Dim {
-        wrap(div_e(self.inner.as_ref(), rhs.inner.as_ref()))
-    }
-}
+impl_dim_op!(Add, add, add_e);
+impl_dim_op!(Sub, sub, sub_e);
+impl_dim_op!(Mul, mul, mul_e);
+impl_dim_op!(Div, div, div_e);

@@ -2,7 +2,7 @@
 **Version:** 0.1.0-plan  
 **Date:** 2026-09-01  
 **License:** MIT OR Apache-2.0  
-**Status:** Pre-implementation build plan  
+**Status:** Milestone 3 layout engine green (`golds/layout.toml`)  
 
 > Pure Rust LaTeX math renderer. No JavaScript. No webview. No runtime dependencies.  
 > Surpasses MathJax and KaTeX in correctness, performance, and platform coverage.
@@ -162,16 +162,16 @@ Font metrics are stored as zenith-float `Dim` values — no hardware float in th
 
 | Capability | Status | Notes |
 |---|---|---|
-| Fractions `\frac` | ⬜ | Display and text style |
-| Binomial `\binom` | ⬜ | Via \genfrac |
-| Radicals `\sqrt` `\sqrt[n]` | ⬜ | Vinculum extends to content width |
-| Superscript / subscript | ⬜ | Stacking, cramped style |
-| Sub+superscript simultaneous | ⬜ | x_a^b |
-| Limits on operators | ⬜ | Display vs inline position |
-| Delimiters `\left \right` | ⬜ | All sizes, extensible |
-| Fixed-size delimiters | ⬜ | `\big \Big \bigg \Bigg` |
-| Matrices | ⬜ | pmatrix bmatrix vmatrix Vmatrix |
-| Cases `\begin{cases}` | ⬜ | |
+| Fractions `\frac` | ✅ | Display and text style (`golds/layout.toml`) |
+| Binomial `\binom` | ⬜ | Parsed; layout via delimited fraction |
+| Radicals `\sqrt` `\sqrt[n]` | ✅ | Vinculum + optional degree |
+| Superscript / subscript | ✅ | Stacking, cramped style |
+| Sub+superscript simultaneous | ✅ | `x_a^b` |
+| Limits on operators | ✅ | Display vs inline position |
+| Delimiters `\left \right` | ✅ | Sized to content; extensible variants |
+| Fixed-size delimiters | ✅ | `\big \Big \bigg \Bigg` |
+| Matrices | ✅ | pmatrix (and siblings) |
+| Cases `\begin{cases}` | ✅ | Left brace sized to rows |
 | Arrays `\begin{array}` | ⬜ | Column alignment l c r |
 | Aligned equations | ⬜ | `\begin{aligned}` |
 
@@ -387,15 +387,15 @@ Each milestone ends with a full gold suite pass before the next begins.
 - [x] Gold tests for every node type
 
 ### Milestone 3 — Layout Engine
-- [ ] Style machine (display / text / script / scriptscript / cramped)
-- [ ] Atom spacing table (TeX Appendix G)
-- [ ] Fraction layout
-- [ ] Radical layout (vinculum)
-- [ ] Sub/superscript layout
-- [ ] Delimiter sizing
-- [ ] Operator limits placement
-- [ ] Matrix layout
-- [ ] Gold tests for layout dimensions on every node type
+- [x] Style machine (display / text / script / scriptscript / cramped)
+- [x] Atom spacing table (TeX Appendix G)
+- [x] Fraction layout
+- [x] Radical layout (vinculum)
+- [x] Sub/superscript layout
+- [x] Delimiter sizing
+- [x] Operator limits placement
+- [x] Matrix layout
+- [x] Gold tests for layout dimensions on every node type
 
 ### Milestone 4 — SVG Renderer
 - [ ] Glyph path extraction from TrueType
@@ -429,11 +429,11 @@ Each milestone ends with a full gold suite pass before the next begins.
 - [x] Standard named color table — 8 LaTeX names + 68 dvipsnames (`data/dvipsnames.tsv`)
 - [x] `\definecolor` custom color registration (`ColorTable::define`)
 - [x] Color AST nodes — `Color`, `TextColor`, `ColorBox`, `FColorBox` (`golds/parse.toml`)
-- [ ] Color scope propagation through layout engine
+- [x] Color scope propagation through layout engine
 - [ ] SVG renderer — `fill` and `stroke` attribute emission on colored glyphs
 - [ ] PNG renderer — tiny-skia color pass-through
 - [ ] egui renderer — `Color32` emission
-- [~] Gold tests for every color capability (hex / tokenize / parse AST locked; SVG `fill` golds wait on Milestone 4+8 render)
+- [~] Gold tests for every color capability (hex / tokenize / parse AST / layout color boxes locked; SVG `fill` golds wait on Milestone 4+8 render)
 - [ ] Full corpus pass before Milestone 9
 
 ### Milestone 9 — PNG Renderer (feature = "png")

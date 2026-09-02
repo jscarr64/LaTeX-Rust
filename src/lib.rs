@@ -1,14 +1,15 @@
 //! LaTeX-Rust: pure Rust LaTeX math renderer.
 //!
-//! Milestone 2 parses LaTeX math into a typed [`MathNode`] AST. Milestone 1
-//! still provides layout dimensions, box composition, STIX Two Math metrics,
-//! the tokenizer, the math symbol catalog, and color-model resolution.
+//! Milestone 3 lays out a [`MathNode`] into a [`MathBox`] tree. Milestone 2
+//! parses LaTeX math into that AST. Milestone 1 still provides layout
+//! dimensions, STIX Two Math metrics, the tokenizer, the symbol catalog, and
+//! color-model resolution.
 //! Unsupported constructs return [`Error`] — never a fake render.
 //!
 //! No hardware `f32` / `f64` is used in layout arithmetic.
 //!
 //! ```
-//! use latex_rust::{parse, tokenize, lookup, MathFont, Dim, MathBox};
+//! use latex_rust::{parse, layout, tokenize, lookup, MathFont, MathStyle, Dim, MathBox};
 //!
 //! let ast = parse(r"\frac{1}{2}").expect("parse");
 //! assert_eq!(ast.gold(), r#"(frac (atom Ord "1") (atom Ord "2"))"#);
@@ -19,6 +20,9 @@
 //!
 //! let font = MathFont::stix_two_math().expect("STIX Two Math");
 //! assert_eq!(font.units_per_em(), 1000);
+//!
+//! let boxed = layout(&ast, &font, MathStyle::Text).expect("layout");
+//! assert!(!boxed.width.is_zero());
 //!
 //! let packed = MathBox::hpack(vec![
 //!     MathBox::rule(Dim::one(), Dim::zero(), Dim::zero()),
@@ -45,9 +49,9 @@ pub use error::{Error, FontError, ParseError};
 pub use font::{
     GlyphMetrics, MathFont, STIX_TWO_MATH_NAME, STIX_TWO_MATH_OTF, STIX_TWO_MATH_SHA256,
 };
-pub use layout::{BoxContent, MathBox};
+pub use layout::{layout, BoxContent, MathBox, MathParams, MathStyle};
 pub use parser::{
-    format_tokens, parse, parse_with_colors, preprocess, tokenize, AccentKind, AtomKind, Delimiter,
-    IntegralKind, MathNode, MatrixStyle, PhantomKind, SpaceKind, TextStyle, Token,
+    format_tokens, parse, parse_with_colors, preprocess, tokenize, AccentKind, AtomKind, DelimSize,
+    Delimiter, IntegralKind, MathNode, MatrixStyle, PhantomKind, SpaceKind, TextStyle, Token,
 };
 pub use symbols::{category_count, lookup, symbols, SymbolEntry, SymbolKind};

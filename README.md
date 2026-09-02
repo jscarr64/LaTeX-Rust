@@ -18,11 +18,10 @@ are out of scope and return `Err` — never a fake render.
 
 ## Status
 
-**Milestone 2** (parser complete): LaTeX math → typed `MathNode` AST, gold-locked in
-`golds/parse.toml`. Unknown commands and unmatched delimiters return `Err`.
-**Milestone 1** still covers `Dim`, `MathBox`, STIX Two Math metrics, the tokenizer,
-and color-model resolution. Layout and SVG follow the build sheet in
-`documents/latex-rust-build-sheet.md`.
+**Milestone 3** (layout engine): `MathNode` → `MathBox` with TeX Appendix G rules.
+Every size is a [zenith-float](https://crates.io/crates/zenith-float) **1.0** `Dim`.
+Parser golds stay in `golds/parse.toml`; layout golds in `golds/layout.toml`.
+Unknown constructs return `Err`. SVG is Milestone 4.
 
 ## Install
 
@@ -38,14 +37,14 @@ Until the crate is on crates.io:
 latex-rust = { git = "https://github.com/jscarr64/LaTeX-Rust" }
 ```
 
-Layout math uses [zenith-float](https://github.com/jscarr64/zenith-float) 1.0 via
-a path dependency (`../mathlibraries/zenith-float`) in this workspace. Clone
-that crate next to this one, or point Cargo at your checkout with `[patch]`.
+Layout math uses the published [zenith-float](https://crates.io/crates/zenith-float)
+**1.0** crate (`ExactNum` software floats, no hardware `f32`/`f64`). This crate
+depends on `zenith-float` only — not on its inner kernel package.
 
 ## Quick start
 
 ```rust
-use latex_rust::{parse, tokenize, MathFont, Dim, MathBox};
+use latex_rust::{parse, layout, tokenize, MathFont, MathStyle, Dim, MathBox};
 
 let ast = parse(r"\frac{1}{2}").expect("parse");
 assert_eq!(ast.gold(), r#"(frac (atom Ord "1") (atom Ord "2"))"#);
@@ -53,6 +52,9 @@ assert_eq!(ast.gold(), r#"(frac (atom Ord "1") (atom Ord "2"))"#);
 let tokens = tokenize(r"\frac{1}{2}").expect("tokens");
 let font = MathFont::stix_two_math().expect("STIX Two Math");
 assert_eq!(font.units_per_em(), 1000);
+
+let boxed = layout(&ast, &font, MathStyle::Text).expect("layout");
+assert!(!boxed.width.is_zero());
 
 let em = Dim::one();
 let half = Dim::ratio(1, 2);

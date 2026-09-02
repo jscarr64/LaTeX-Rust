@@ -2,6 +2,12 @@
 
 ## 0.1.0 (unreleased)
 
+### Milestone 3 — Layout engine
+
+- `layout(&MathNode, &MathFont, MathStyle) -> MathBox` with TeX Appendix G style, Table 18 spacing, fractions, radicals, scripts, `\left\right` / `\big` sizes, operator limits, matrices, and color wrappers.
+- Every dimension is [zenith-float](https://crates.io/crates/zenith-float) 1.0 `Dim`. This crate depends on that published crate, not on its inner kernel package.
+- Golds in `golds/layout.toml`.
+
 ### Milestone 2 — Parser complete
 
 - `src/parser/`: preprocess, tokenize, Pratt-style scripts, TeX math-list parse to `MathNode`.

@@ -321,6 +321,56 @@ impl Delimiter {
     }
 }
 
+/// `\big` / `\Big` / `\bigg` / `\Bigg` (and `l`/`r`/`m` siblings).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DelimSize {
+    /// `\big` — about 1.2 em.
+    Big,
+    /// `\Big` — about 1.8 em.
+    Big2,
+    /// `\bigg` — about 2.4 em.
+    Bigg,
+    /// `\Bigg` — about 3.0 em.
+    Bigg2,
+}
+
+impl DelimSize {
+    fn gold(self) -> &'static str {
+        match self {
+            Self::Big => "big",
+            Self::Big2 => "Big",
+            Self::Bigg => "bigg",
+            Self::Bigg2 => "Bigg",
+        }
+    }
+
+    /// Map a control sequence to a size. `None` if it is not a `\big` family command.
+    #[must_use]
+    pub fn from_command(name: &str) -> Option<Self> {
+        match name {
+            "big" | "bigl" | "bigr" | "bigm" => Some(Self::Big),
+            "Big" | "Bigl" | "Bigr" | "Bigm" => Some(Self::Big2),
+            "bigg" | "biggl" | "biggr" | "biggm" => Some(Self::Bigg),
+            "Bigg" | "Biggl" | "Biggr" | "Biggm" => Some(Self::Bigg2),
+            _ => None,
+        }
+    }
+
+    /// Open / Close / Rel from the `l` / `r` / `m` suffix; `None` for unsuffixed `\big`.
+    #[must_use]
+    pub fn class_from_command(name: &str) -> Option<AtomKind> {
+        if name.ends_with('l') {
+            Some(AtomKind::Open)
+        } else if name.ends_with('r') {
+            Some(AtomKind::Close)
+        } else if name.ends_with('m') {
+            Some(AtomKind::Rel)
+        } else {
+            None
+        }
+    }
+}
+
 /// Typed math-mode syntax tree.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MathNode {
@@ -338,6 +388,8 @@ pub enum MathNode {
     SubSup(Box<MathNode>, Box<MathNode>, Box<MathNode>),
     /// `\left ... \right`
     Delimited(Delimiter, Box<MathNode>, Delimiter),
+    /// `\big` / `\Big` / `\bigg` / `\Bigg` (and `l`/`r`/`m` forms).
+    SizedDelim(Delimiter, DelimSize, AtomKind),
     /// Horizontal list of nodes.
     Row(Vec<MathNode>),
     /// Matrix or multiline environment.
@@ -390,6 +442,9 @@ impl MathNode {
             Self::SubSup(b, s, e) => format!("(subsup {} {} {})", b.gold(), s.gold(), e.gold()),
             Self::Delimited(l, b, r) => {
                 format!("(delim {} {} {})", l.gold(), b.gold(), r.gold())
+            }
+            Self::SizedDelim(d, sz, k) => {
+                format!("(big {} {} {})", sz.gold(), k.gold(), quote_delim(d))
             }
             Self::Row(items) => {
                 if items.is_empty() {
@@ -463,6 +518,14 @@ fn opt(n: &Option<Box<MathNode>>) -> String {
     match n {
         None => "_".into(),
         Some(x) => x.gold(),
+    }
+}
+
+fn quote_delim(d: &Delimiter) -> String {
+    match d {
+        Delimiter::Empty => ".".into(),
+        Delimiter::Char(c) => quote_atom(*c),
+        Delimiter::Named(n) => n.clone(),
     }
 }
 

@@ -963,3 +963,33 @@ error = "Unsupported"
 input = "\\textcolor{notacolor}{x}"
 expect = "unsupported: named color notacolor"
 
+[[gold]]
+name = "big_paren"
+kind = "ast"
+input = "\\big("
+expect = "(big big Open \"(\")"
+
+[[gold]]
+name = "Big_paren"
+kind = "ast"
+input = "\\Big("
+expect = "(big Big Open \"(\")"
+
+[[gold]]
+name = "bigg_paren"
+kind = "ast"
+input = "\\bigg("
+expect = "(big bigg Open \"(\")"
+
+[[gold]]
+name = "Bigg_paren"
+kind = "ast"
+input = "\\Bigg("
+expect = "(big Bigg Open \"(\")"
+
+[[gold]]
+name = "bigl_paren"
+kind = "ast"
+input = "\\bigl("
+expect = "(big big Open \"(\")"
+

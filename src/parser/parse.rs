@@ -4,8 +4,8 @@
 //! The math list itself is a TeX-style row of atoms, not an arithmetic tree.
 
 use super::ast::{
-    AccentKind, AtomKind, Delimiter, IntegralKind, MathNode, MatrixStyle, PhantomKind, SpaceKind,
-    TextStyle,
+    AccentKind, AtomKind, DelimSize, Delimiter, IntegralKind, MathNode, MatrixStyle, PhantomKind,
+    SpaceKind, TextStyle,
 };
 use super::preproc::preprocess;
 use super::token::{tokenize, Token};
@@ -466,8 +466,7 @@ impl Parser {
             | "bigotimes" | "biguplus" => Ok(MathNode::Operator(name.to_string(), true)),
             "big" | "Big" | "bigg" | "Bigg" | "bigl" | "bigr" | "Bigl" | "Bigr" | "biggl"
             | "biggr" | "Biggl" | "Biggr" | "bigm" | "Bigm" | "biggm" | "Biggm" => {
-                let d = self.parse_delimiter()?;
-                Ok(delim_to_atom(&d))
+                self.parse_sized_delim(name)
             }
             "displaystyle" | "textstyle" | "scriptstyle" | "scriptscriptstyle" | "limits"
             | "nolimits" => self.parse_nucleus(),
@@ -512,6 +511,19 @@ impl Parser {
         }
         let close = self.parse_delimiter()?;
         Ok(MathNode::Delimited(open, Box::new(body), close))
+    }
+
+    fn parse_sized_delim(&mut self, name: &str) -> Result<MathNode, ParseError> {
+        let size = DelimSize::from_command(name)
+            .ok_or_else(|| ParseError::Malformed(format!("unknown delimiter size \\{name}")))?;
+        let d = self.parse_delimiter()?;
+        let class = DelimSize::class_from_command(name).unwrap_or_else(|| match &d {
+            Delimiter::Char(c) => atom_kind(*c),
+            Delimiter::Named(n) if n == "{" => AtomKind::Open,
+            Delimiter::Named(n) if n == "}" => AtomKind::Close,
+            _ => AtomKind::Open,
+        });
+        Ok(MathNode::SizedDelim(d, size, class))
     }
 
     fn parse_delimiter(&mut self) -> Result<Delimiter, ParseError> {
@@ -867,16 +879,6 @@ fn atom_kind(c: char) -> AtomKind {
         ')' | ']' | '}' => AtomKind::Close,
         ',' | ';' | '!' | '?' => AtomKind::Punct,
         _ => AtomKind::Ord,
-    }
-}
-
-fn delim_to_atom(d: &Delimiter) -> MathNode {
-    match d {
-        Delimiter::Empty => MathNode::Row(Vec::new()),
-        Delimiter::Char(c) => MathNode::Atom(*c, atom_kind(*c)),
-        Delimiter::Named(n) if n == "{" => MathNode::Atom('{', AtomKind::Open),
-        Delimiter::Named(n) if n == "}" => MathNode::Atom('}', AtomKind::Close),
-        Delimiter::Named(n) => MathNode::Symbol(n.clone()),
     }
 }
 

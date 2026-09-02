@@ -10,7 +10,7 @@ This crate is **100% Rust**.
 - No Python scripts.
 - No shell commands in the crate. No shelling out to anything (`std::process`, `Command`, `system`).
 - No Node, no JavaScript, no external tools.
-- Dependencies must be Rust crates only. Allowed render/font stack: `ttf-parser`, `tiny-skia`, `egui` — all pure Rust. Layout math is `zenith-float` (`Dim`). No libc math, no FFI into a foreign numeric library.
+- Dependencies must be Rust crates only. Allowed render/font stack: `ttf-parser`, `tiny-skia`, `egui` — all pure Rust. Layout math is **zenith-float 1.0** from crates.io (`Dim` / `ExactNum`). Do not depend on an inner kernel crate. No libc math, no FFI into a foreign numeric library.
 - If it cannot be done in Rust, return `Err`. Do not call something else. Never invent a render.
 
 No hardware `f32` / `f64` in layout or parse arithmetic. No `libm`, no LLVM/Cranelift float codegen, no `as f64` / `From<f64>` as a numeric terminal. Tests and gold runners are Rust.
