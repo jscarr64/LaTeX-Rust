@@ -21,6 +21,10 @@ Milestones 1–10 landed as 0.1.0 development commits. This release packages tha
 surface as 1.0.0: rustdoc, README benchmarks, clippy/fmt, and crates.io metadata.
 The crate is publish-ready; crates.io upload is a separate step.
 
+[1.0.1] - 2026-09-02 - Fixed
+Fixed: Resolved an issue where the docs.rs documentation build was failing due to deprecated Rust nightly features (doc_auto_cfg).
+Removed:  two temporary build documents Prompt and color addition
+
 ### Architecture (build sheet §3)
 
 Crate modules: `parser/`, `layout/`, `font/`, `render/svg`, `render/png`,
