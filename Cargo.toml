@@ -1,9 +1,9 @@
 [package]
 name = "latex-rust"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 rust-version = "1.76"
-authors = ["Jeffrey S Carr <jscarr@gmail.com>"]
+authors = ["Jeffrey S Carr <jscarr1964@gmail.com>"]
 license = "MIT OR Apache-2.0"
 description = "Pure-Rust LaTeX math renderer. Parse to AST, TeX-faithful layout in zenith-float, emit SVG, PNG, or egui shapes. No JavaScript, no webview, no runtime."
 readme = "README.md"
