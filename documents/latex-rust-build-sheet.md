@@ -2,7 +2,7 @@
 **Version:** 0.1.0-plan  
 **Date:** 2026-09-01  
 **License:** MIT OR Apache-2.0  
-**Status:** Milestone 6 accents and decorations green (`golds/accents.toml`)  
+**Status:** Milestone 7 advanced structures green (`golds/envs.toml`)  
 
 > Pure Rust LaTeX math renderer. No JavaScript. No webview. No runtime dependencies.  
 > Surpasses MathJax and KaTeX in correctness, performance, and platform coverage.
@@ -85,7 +85,11 @@ MathNode
 ├── SubSup(base, sub, exp)         — x_{}^{}
 ├── Delimited(open, body, close)   — \left( \right)
 ├── Row(Vec<MathNode>)             — horizontal sequence
-├── Matrix(rows, cols, Vec<MathNode>, style) — pmatrix, bmatrix, etc.
+├── Matrix(style, colspec, rows)   — pmatrix, array, align, gather, …
+├── Substack(Vec<MathNode>)        — \substack
+├── Ref(key)                       — \ref
+├── Tag / Label / NoNumber         — peeled into EnvRow inside environments
+├── Hline / Intertext              — array / align rows
 ├── Sum(limits)                    — \sum
 ├── Integral(limits)               — \int
 ├── Product(limits)                — \prod
@@ -175,9 +179,9 @@ Font metrics are stored as zenith-float `Dim` values — no hardware float in th
 | Delimiters `\left \right` | ✅ | Sized to content; extensible variants |
 | Fixed-size delimiters | ✅ | `\big \Big \bigg \Bigg` |
 | Matrices | ✅ | pmatrix (and siblings) |
-| Cases `\begin{cases}` | ✅ | Left brace sized to rows |
-| Arrays `\begin{array}` | ⬜ | Column alignment l c r |
-| Aligned equations | ⬜ | `\begin{aligned}` |
+| Cases `\begin{cases}` | ✅ | Left brace; quad between columns (`golds/envs.toml`) |
+| Arrays `\begin{array}` | ✅ | `l` `c` `r` `\|`, `\hline` (`golds/envs.toml`) |
+| Aligned equations | ✅ | `\begin{aligned}` / `split` RL columns |
 
 ### 4.2 Symbols
 
@@ -259,13 +263,16 @@ Font metrics are stored as zenith-float `Dim` values — no hardware float in th
 | Capability | Status | Notes |
 |---|---|---|
 | Display math centering | ⬜ | |
-| Equation numbering | ⬜ | `\tag{}` |
-| `\begin{equation}` | ⬜ | |
-| `\begin{align}` | ⬜ | |
-| `\begin{gather}` | ⬜ | |
-| `\begin{multline}` | ⬜ | |
-| `\nonumber \notag` | ⬜ | |
-| `\label \ref` | ⬜ | Within document |
+| Equation numbering | ✅ | `\tag{}` / `\tag*{}`; `NumberingConfig` in `layout/` (`golds/envs.toml`) |
+| `\begin{equation}` | ✅ | Display + number (or `\nonumber`) |
+| `\begin{align}` | ✅ | RL alignment; per-row numbers |
+| `\begin{gather}` | ✅ | Centered rows; per-row numbers |
+| `\begin{multline}` | ✅ | First left, last right, middle center |
+| `\begin{split}` | ✅ | Same alignment as `aligned`; number from enclosing `equation` |
+| `\substack` | ✅ | Script-style centered stack |
+| `\intertext` | ✅ | Full-width text row in `align` |
+| `\nonumber \notag` | ✅ | |
+| `\label \ref` | ✅ | Two-pass on one tree; state survives `layout_with_numbering` |
 
 ### 4.8 Color
 
@@ -426,10 +433,10 @@ Each milestone ends with a full gold suite pass before the next begins.
 - [x] Gold tests for all accent types
 
 ### Milestone 7 — Advanced Structures
-- [ ] Multiline environments (align, gather, multline)
-- [ ] Equation numbering
-- [ ] Cases environment
-- [ ] Gold tests for all environments
+- [x] Multiline environments (align, gather, multline)
+- [x] Equation numbering
+- [x] Cases environment
+- [x] Gold tests for all environments
 
 ### Milestone 8 — Color Support
 - [x] Color model parser — named, rgb, HTML hex, cmyk, gray (`parse_color_spec`, golds)
@@ -507,10 +514,6 @@ KaTeX cold start in a browser is typically 200-400ms. latex-rust target is < 10m
 ## 11. Licensing and Relationship to Accumath
 
 latex-rust is MIT OR Apache-2.0. It is a standalone crate.
-
-It does not mention Accumath. It does not link to Accumath. It does not require Accumath.
-
-Accumath uses latex-rust as a dependency for UI rendering. That relationship is one-directional and not documented in this crate.
 
 The font data (STIX Two Math, Latin Modern Math) is OFL licensed and may be embedded in the compiled binary.
 

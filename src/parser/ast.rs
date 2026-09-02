@@ -239,6 +239,8 @@ pub enum MatrixStyle {
     Multline,
     /// `{equation}`
     Equation,
+    /// `{split}`
+    Split,
 }
 
 impl MatrixStyle {
@@ -257,6 +259,139 @@ impl MatrixStyle {
             Self::Gather => "gather",
             Self::Multline => "multline",
             Self::Equation => "equation",
+            Self::Split => "split",
+        }
+    }
+
+    /// `align` / `gather` / `multline` / `equation` take display style and numbers.
+    #[must_use]
+    pub fn is_display_env(self) -> bool {
+        matches!(
+            self,
+            Self::Align | Self::Gather | Self::Multline | Self::Equation
+        )
+    }
+
+    /// Rows are numbered unless `\nonumber` / `\notag` / `\tag` says otherwise.
+    #[must_use]
+    pub fn numbers_rows(self) -> bool {
+        matches!(self, Self::Align | Self::Gather)
+    }
+
+    /// One equation number for the whole environment (last line for `multline`).
+    #[must_use]
+    pub fn numbers_once(self) -> bool {
+        matches!(self, Self::Equation | Self::Multline)
+    }
+}
+
+/// One column of an `{array}` preamble (`l`, `c`, `r`, `|`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ColSpec {
+    /// `l`
+    Left,
+    /// `c`
+    Center,
+    /// `r`
+    Right,
+    /// `|`
+    VRule,
+}
+
+impl ColSpec {
+    fn gold(self) -> char {
+        match self {
+            Self::Left => 'l',
+            Self::Center => 'c',
+            Self::Right => 'r',
+            Self::VRule => '|',
+        }
+    }
+
+    /// True for `|`.
+    #[must_use]
+    pub fn is_rule(self) -> bool {
+        matches!(self, Self::VRule)
+    }
+}
+
+/// Per-row equation number in numbered environments.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum EqNumber {
+    /// Auto number when the environment numbers rows; none otherwise.
+    Default,
+    /// `\nonumber` / `\notag`
+    Suppress,
+    /// `\tag{...}` or `\tag*{...}`
+    Tag {
+        /// `\tag*` — no parentheses around the tag.
+        star: bool,
+        /// Tag body (text style at layout).
+        body: Box<MathNode>,
+    },
+}
+
+/// One row of a matrix / alignment environment.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum EnvRow {
+    /// Alignment cells (`&`-separated).
+    Cells {
+        /// Column entries.
+        cells: Vec<MathNode>,
+        /// Number / tag for this row.
+        number: EqNumber,
+        /// `\label{...}` keys bound to this row's number.
+        labels: Vec<String>,
+    },
+    /// `\hline`
+    Hline,
+    /// `\intertext{...}`
+    Intertext(Box<MathNode>),
+}
+
+impl EnvRow {
+    /// A data row with default numbering and no labels.
+    #[must_use]
+    pub fn cells(cells: Vec<MathNode>) -> Self {
+        Self::Cells {
+            cells,
+            number: EqNumber::Default,
+            labels: Vec::new(),
+        }
+    }
+
+    fn gold(&self) -> String {
+        match self {
+            Self::Hline => "(hline)".into(),
+            Self::Intertext(n) => format!("(intertext {})", n.gold()),
+            Self::Cells {
+                cells,
+                number,
+                labels,
+            } => {
+                let mut s = String::from("(");
+                for (i, c) in cells.iter().enumerate() {
+                    if i > 0 {
+                        s.push(' ');
+                    }
+                    s.push_str(&c.gold());
+                }
+                match number {
+                    EqNumber::Default => {}
+                    EqNumber::Suppress => s.push_str(" (nonumber)"),
+                    EqNumber::Tag { star: false, body } => {
+                        s.push_str(&format!(" (tag {})", body.gold()));
+                    }
+                    EqNumber::Tag { star: true, body } => {
+                        s.push_str(&format!(" (tagstar {})", body.gold()));
+                    }
+                }
+                for lab in labels {
+                    s.push_str(&format!(" (label {lab})"));
+                }
+                s.push(')');
+                s
+            }
         }
     }
 }
@@ -407,8 +542,27 @@ pub enum MathNode {
     SizedDelim(Delimiter, DelimSize, AtomKind),
     /// Horizontal list of nodes.
     Row(Vec<MathNode>),
-    /// Matrix or multiline environment.
-    Matrix(MatrixStyle, Vec<Vec<MathNode>>),
+    /// Matrix or multiline environment. `colspec` is the `{array}` preamble (empty otherwise).
+    Matrix(MatrixStyle, Vec<ColSpec>, Vec<EnvRow>),
+    /// `\substack{...}` — stacked script-style lines.
+    Substack(Vec<MathNode>),
+    /// `\ref{key}`
+    Ref(String),
+    /// `\tag{...}` / `\tag*{...}` (peeled into [`EnvRow`] when inside an environment).
+    Tag {
+        /// `\tag*`
+        star: bool,
+        /// Tag body.
+        body: Box<MathNode>,
+    },
+    /// `\label{key}`
+    Label(String),
+    /// `\nonumber` / `\notag`
+    NoNumber,
+    /// `\hline` (peeled into [`EnvRow::Hline`] in environments).
+    Hline,
+    /// `\intertext{...}`
+    Intertext(Box<MathNode>),
     /// `\sum` with optional lower / upper limits.
     Sum(Option<Box<MathNode>>, Option<Box<MathNode>>),
     /// `\int` family with optional limits.
@@ -476,22 +630,37 @@ impl MathNode {
                     s
                 }
             }
-            Self::Matrix(style, rows) => {
+            Self::Matrix(style, spec, rows) => {
                 let mut s = format!("(matrix {}", style.gold());
+                if !spec.is_empty() {
+                    s.push(' ');
+                    for c in spec {
+                        s.push(c.gold());
+                    }
+                }
                 for row in rows {
                     s.push(' ');
-                    s.push('(');
-                    for (i, cell) in row.iter().enumerate() {
-                        if i > 0 {
-                            s.push(' ');
-                        }
-                        s.push_str(&cell.gold());
-                    }
-                    s.push(')');
+                    s.push_str(&row.gold());
                 }
                 s.push(')');
                 s
             }
+            Self::Substack(lines) => {
+                let mut s = String::from("(substack");
+                for ln in lines {
+                    s.push(' ');
+                    s.push_str(&ln.gold());
+                }
+                s.push(')');
+                s
+            }
+            Self::Ref(k) => format!("(ref {k})"),
+            Self::Tag { star: false, body } => format!("(tag {})", body.gold()),
+            Self::Tag { star: true, body } => format!("(tagstar {})", body.gold()),
+            Self::Label(k) => format!("(label {k})"),
+            Self::NoNumber => "(nonumber)".into(),
+            Self::Hline => "(hline)".into(),
+            Self::Intertext(n) => format!("(intertext {})", n.gold()),
             Self::Sum(lo, hi) => format!("(sum {} {})", opt(lo), opt(hi)),
             Self::Integral(k, lo, hi) => {
                 format!("({} {} {})", k.gold(), opt(lo), opt(hi))

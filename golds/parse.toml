@@ -149,7 +149,7 @@ expect = "(matrix cases ((atom Ord \"a\")) ((atom Ord \"b\")))"
 name = "array"
 kind = "ast"
 input = "\\begin{array}{cc}a&b\\\\c&d\\end{array}"
-expect = "(matrix array ((atom Ord \"a\") (atom Ord \"b\")) ((atom Ord \"c\") (atom Ord \"d\")))"
+expect = "(matrix array cc ((atom Ord \"a\") (atom Ord \"b\")) ((atom Ord \"c\") (atom Ord \"d\")))"
 
 [[gold]]
 name = "aligned"

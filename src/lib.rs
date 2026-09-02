@@ -3,8 +3,10 @@
 //! Crate layout follows the build-sheet architecture:
 //! [`parser`], [`mod@layout`], [`font`], [`render`] (`svg` / `png` / `egui`).
 //!
-//! Milestone 6 covers TeX-exact accent placement, extensible decorations from
-//! MATH variants and glyph assembly, cancel diagonals, and boxed frames.
+//! Milestone 7 covers multiline environments, equation numbering, `{array}`
+//! column specs, `\substack`, and `\intertext`. Milestone 6 covers TeX-exact
+//! accent placement, extensible decorations from MATH variants and glyph
+//! assembly, cancel diagonals, and boxed frames.
 //! Milestone 5 covers the math-symbol catalog, TeX atom classes, and Unicode
 //! math alphabets (`\mathbb`, `\mathcal`, …) through STIX Two Math. Milestone 4
 //! renders a [`MathBox`] to SVG. Unsupported constructs return [`Error`] — never
@@ -65,10 +67,14 @@ pub use error::{Error, FontError, ParseError};
 pub use font::{
     GlyphMetrics, MathFont, STIX_TWO_MATH_NAME, STIX_TWO_MATH_OTF, STIX_TWO_MATH_SHA256,
 };
-pub use layout::{layout, BoxContent, MathBox, MathParams, MathStyle};
+pub use layout::{
+    layout, layout_with_numbering, BoxContent, MathBox, MathParams, MathStyle, NumberFormat,
+    NumberStyle, NumberingConfig, NumberingState,
+};
 pub use parser::{
-    format_tokens, parse, parse_with_colors, preprocess, tokenize, AccentKind, AtomKind, DelimSize,
-    Delimiter, IntegralKind, MathNode, MatrixStyle, PhantomKind, SpaceKind, TextStyle, Token,
+    format_tokens, parse, parse_with_colors, preprocess, tokenize, AccentKind, AtomKind, ColSpec,
+    DelimSize, Delimiter, EnvRow, EqNumber, IntegralKind, MathNode, MatrixStyle, PhantomKind,
+    SpaceKind, TextStyle, Token,
 };
 pub use render::egui::render_egui;
 pub use render::png::{latex_to_png, render_png, PngOptions};

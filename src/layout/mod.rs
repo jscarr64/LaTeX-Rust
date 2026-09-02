@@ -2,11 +2,13 @@
 
 mod engine;
 mod metrics;
+mod numbering;
 mod space;
 mod style;
 
-pub use engine::layout;
+pub use engine::{layout, layout_with_numbering};
 pub use metrics::MathParams;
+pub use numbering::{NumberFormat, NumberStyle, NumberingConfig, NumberingState};
 pub use style::MathStyle;
 
 use crate::color::Color;

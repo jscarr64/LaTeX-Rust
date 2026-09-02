@@ -1,5 +1,6 @@
 //! `MathNode` → `MathBox`. All sizes are [`Dim`](crate::Dim) (zenith-float 1.0).
 
+use core::cell::Cell;
 use core::cmp::Ordering;
 
 use crate::atoms::symbol_atom_kind;
@@ -8,25 +9,46 @@ use crate::dim::Dim;
 use crate::error::Error;
 use crate::font::MathFont;
 use crate::layout::metrics::MathParams;
+use crate::layout::numbering::NumberingState;
 use crate::layout::space::{atom_space_mu, convert_bin, space_width};
 use crate::layout::style::MathStyle;
 use crate::layout::{BoxContent, MathBox};
 use crate::parser::{
-    AccentKind, AtomKind, DelimSize, Delimiter, IntegralKind, MathNode, MatrixStyle, PhantomKind,
-    SpaceKind, TextStyle,
+    AccentKind, AtomKind, ColSpec, DelimSize, Delimiter, EnvRow, IntegralKind, MathNode,
+    MatrixStyle, PhantomKind, SpaceKind, TextStyle,
 };
 use crate::style_map::styled_char;
 use crate::symbols::lookup;
 
 /// Layout `node` in `style` using STIX Two Math metrics.
 pub fn layout(node: &MathNode, font: &MathFont, style: MathStyle) -> Result<MathBox, Error> {
+    let mut state = NumberingState::default();
+    layout_with_numbering(node, font, style, &mut state)
+}
+
+/// Layout with a caller-owned equation counter and label table.
+pub fn layout_with_numbering(
+    node: &MathNode,
+    font: &MathFont,
+    style: MathStyle,
+    state: &mut NumberingState,
+) -> Result<MathBox, Error> {
     let params = MathParams::from_font(font)?;
-    Engine { font, params }.layout(node, style)
+    let start = state.collect(node);
+    Engine {
+        font,
+        params,
+        numbers: state,
+        idx: Cell::new(start),
+    }
+    .layout(node, style)
 }
 
 struct Engine<'a> {
     font: &'a MathFont,
     params: MathParams,
+    numbers: &'a NumberingState,
+    idx: Cell<usize>,
 }
 
 struct Item {
@@ -148,7 +170,21 @@ impl Engine<'_> {
             }
             MathNode::Accent(base, kind) => self.accent(base, *kind, style),
             MathNode::CancelTo(value, expr) => self.cancelto(value, expr, style),
-            MathNode::Matrix(ms, rows) => self.matrix(*ms, rows, style),
+            MathNode::Matrix(ms, spec, rows) => self.matrix(*ms, spec, rows, style),
+            MathNode::Substack(lines) => self.substack(lines, style),
+            MathNode::Ref(key) => self.reference(key, style),
+            MathNode::Tag { star, body } => self.tag_box(*star, body, style),
+            MathNode::Label(_) | MathNode::NoNumber => Ok(Item {
+                bx: MathBox::empty(),
+                class: None,
+            }),
+            MathNode::Hline => Err(Error::Unsupported {
+                what: "hline outside array".into(),
+            }),
+            MathNode::Intertext(n) => Ok(Item {
+                class: Some(AtomKind::Ord),
+                bx: self.layout(n, MathStyle::Text)?,
+            }),
             MathNode::Color(c, body) | MathNode::TextColor(c, body) => {
                 let inner = self.layout(body, style)?;
                 Ok(Item {
@@ -1015,11 +1051,484 @@ impl Engine<'_> {
         }
     }
 
+    fn take_number(&self) -> Option<String> {
+        let i = self.idx.get();
+        self.idx.set(i + 1);
+        self.numbers.assigned(i).map(str::to_string)
+    }
+
+    fn number_box(&self, s: &str, style: MathStyle) -> Result<MathBox, Error> {
+        Ok(self.text_run(s, TextStyle::Rm, style)?.bx)
+    }
+
+    fn attach_number(&self, body: MathBox, num: Option<MathBox>, style: MathStyle) -> MathBox {
+        let Some(num) = num else {
+            return body;
+        };
+        let gap = self.params.em(style);
+        MathBox::hpack(vec![body, MathBox::kern(gap), num])
+    }
+
+    fn reference(&self, key: &str, style: MathStyle) -> Result<Item, Error> {
+        let s = self.numbers.lookup(key).ok_or_else(|| Error::Unsupported {
+            what: format!("undefined label {key}"),
+        })?;
+        self.text_run(s, TextStyle::Rm, style)
+    }
+
+    fn tag_box(&self, star: bool, body: &MathNode, style: MathStyle) -> Result<Item, Error> {
+        let inner = self.layout(body, MathStyle::Text)?;
+        let bx = if star {
+            inner
+        } else {
+            let open = self.glyph('(', style)?;
+            let close = self.glyph(')', style)?;
+            MathBox::hpack(vec![open, inner, close])
+        };
+        Ok(Item {
+            class: Some(AtomKind::Ord),
+            bx,
+        })
+    }
+
+    fn substack(&self, lines: &[MathNode], style: MathStyle) -> Result<Item, Error> {
+        let ss = style.into_script();
+        let sep = self.params.em(ss) / Dim::from_i64(5);
+        let mut laid = Vec::new();
+        for ln in lines {
+            laid.push(self.layout(ln, ss)?);
+        }
+        let width = laid.iter().fold(Dim::zero(), |w, b| w.max(&b.width));
+        let mut rows = Vec::new();
+        for (i, b) in laid.into_iter().enumerate() {
+            if i > 0 {
+                rows.push(MathBox {
+                    width: Dim::zero(),
+                    height: Dim::zero(),
+                    depth: sep.clone(),
+                    italic: Dim::zero(),
+                    shift: Dim::zero(),
+                    content: BoxContent::Empty,
+                });
+            }
+            rows.push(align_in(b, &width, ColSpec::Center));
+        }
+        Ok(Item {
+            class: Some(AtomKind::Ord),
+            bx: MathBox::vpack(rows),
+        })
+    }
+
     fn matrix(
         &self,
         style_m: MatrixStyle,
+        spec: &[ColSpec],
+        rows: &[EnvRow],
+        style: MathStyle,
+    ) -> Result<Item, Error> {
+        if rows.is_empty() {
+            return Ok(Item {
+                bx: MathBox::empty(),
+                class: Some(AtomKind::Inner),
+            });
+        }
+        let body_style = if style_m.is_display_env() {
+            MathStyle::Display
+        } else {
+            style
+        };
+        match style_m {
+            MatrixStyle::Align => self.align_env(rows, body_style, true),
+            MatrixStyle::Aligned | MatrixStyle::Split => self.align_env(rows, body_style, false),
+            MatrixStyle::Gather => self.gather_env(rows, body_style),
+            MatrixStyle::Multline => self.multline_env(rows, body_style),
+            MatrixStyle::Equation => self.equation_env(rows, body_style),
+            MatrixStyle::Array => self.array_env(spec, rows, body_style),
+            MatrixStyle::Cases => self.cases_env(rows, body_style),
+            _ => self.centered_matrix(style_m, rows, body_style),
+        }
+    }
+
+    fn centered_matrix(
+        &self,
+        style_m: MatrixStyle,
+        rows: &[EnvRow],
+        style: MathStyle,
+    ) -> Result<Item, Error> {
+        let data = data_cells(rows)?;
+        self.grid(
+            &data,
+            style,
+            None,
+            self.params.mu(style) * Dim::from_i64(10),
+            ColSpec::Center,
+            matrix_delims(style_m),
+            false,
+        )
+    }
+
+    fn cases_env(&self, rows: &[EnvRow], style: MathStyle) -> Result<Item, Error> {
+        let data = data_cells(rows)?;
+        self.grid(
+            &data,
+            style,
+            None,
+            self.params.em(style),
+            ColSpec::Left,
+            (Some('{'), None),
+            false,
+        )
+    }
+
+    fn align_env(&self, rows: &[EnvRow], style: MathStyle, numbered: bool) -> Result<Item, Error> {
+        let mut math_rows: Vec<Vec<MathBox>> = Vec::new();
+        let mut nums: Vec<Option<MathBox>> = Vec::new();
+        let mut extras: Vec<RowKind> = Vec::new();
+        let mut ncols = 0;
+        for row in rows {
+            match row {
+                EnvRow::Hline => {
+                    extras.push(RowKind::Hline);
+                }
+                EnvRow::Intertext(n) => {
+                    extras.push(RowKind::Intertext(self.layout(n, MathStyle::Text)?));
+                }
+                EnvRow::Cells { cells, .. } => {
+                    let mut rboxes = Vec::new();
+                    for c in cells {
+                        rboxes.push(self.layout(c, style)?);
+                    }
+                    ncols = ncols.max(rboxes.len());
+                    math_rows.push(rboxes);
+                    extras.push(RowKind::Cells);
+                    if numbered {
+                        nums.push(match self.take_number() {
+                            Some(s) => Some(self.number_box(&s, MathStyle::Text)?),
+                            None => None,
+                        });
+                    }
+                }
+            }
+        }
+        let mut col_w = vec![Dim::zero(); ncols];
+        for row in &math_rows {
+            for (j, cell) in row.iter().enumerate() {
+                col_w[j] = col_w[j].max(&cell.width);
+            }
+        }
+        let pair_sep = self.params.em(style);
+        let row_sep = self.params.em(style) / Dim::from_i64(5);
+        let mut packed = Vec::new();
+        let mut mi = 0;
+        for extra in extras {
+            match extra {
+                RowKind::Hline => {
+                    return Err(Error::Unsupported {
+                        what: "hline in align".into(),
+                    });
+                }
+                RowKind::Intertext(t) => {
+                    if !packed.is_empty() {
+                        packed.push(sep_row(row_sep.clone()));
+                    }
+                    packed.push(t);
+                }
+                RowKind::Cells => {
+                    if !packed.is_empty() {
+                        packed.push(sep_row(row_sep.clone()));
+                    }
+                    let mut parts = Vec::new();
+                    let row = pad_row(math_rows[mi].clone(), ncols);
+                    for (j, cell) in row.into_iter().enumerate() {
+                        if j > 0 {
+                            if j % 2 == 0 {
+                                parts.push(MathBox::kern(pair_sep.clone()));
+                            }
+                        }
+                        let align = if j % 2 == 0 {
+                            ColSpec::Right
+                        } else {
+                            ColSpec::Left
+                        };
+                        parts.push(align_in(cell, &col_w[j], align));
+                    }
+                    let mut body = MathBox::hpack(parts);
+                    if numbered {
+                        body = self.attach_number(body, nums[mi].clone(), style);
+                    }
+                    packed.push(body);
+                    mi += 1;
+                }
+            }
+        }
+        Ok(Item {
+            class: Some(AtomKind::Inner),
+            bx: MathBox::vpack(packed),
+        })
+    }
+
+    fn gather_env(&self, rows: &[EnvRow], style: MathStyle) -> Result<Item, Error> {
+        let row_sep = self.params.em(style) / Dim::from_i64(5);
+        let mut bodies = Vec::new();
+        let mut kinds = Vec::new();
+        for row in rows {
+            match row {
+                EnvRow::Hline => {
+                    return Err(Error::Unsupported {
+                        what: "hline in gather".into(),
+                    });
+                }
+                EnvRow::Intertext(n) => {
+                    kinds.push(RowKind::Intertext(self.layout(n, MathStyle::Text)?));
+                }
+                EnvRow::Cells { cells, .. } => {
+                    let node = if cells.len() == 1 {
+                        cells[0].clone()
+                    } else {
+                        MathNode::Row(cells.clone())
+                    };
+                    bodies.push(self.layout(&node, style)?);
+                    kinds.push(RowKind::Cells);
+                }
+            }
+        }
+        let max_w = bodies.iter().fold(Dim::zero(), |w, b| w.max(&b.width));
+        let mut packed = Vec::new();
+        let mut bi = 0;
+        for kind in kinds {
+            if !packed.is_empty() {
+                packed.push(sep_row(row_sep.clone()));
+            }
+            match kind {
+                RowKind::Intertext(t) => packed.push(t),
+                RowKind::Cells => {
+                    let body = align_in(bodies[bi].clone(), &max_w, ColSpec::Center);
+                    let num = match self.take_number() {
+                        Some(s) => Some(self.number_box(&s, MathStyle::Text)?),
+                        None => None,
+                    };
+                    packed.push(self.attach_number(body, num, style));
+                    bi += 1;
+                }
+                RowKind::Hline => {}
+            }
+        }
+        Ok(Item {
+            class: Some(AtomKind::Inner),
+            bx: MathBox::vpack(packed),
+        })
+    }
+
+    fn multline_env(&self, rows: &[EnvRow], style: MathStyle) -> Result<Item, Error> {
+        let data = data_cells(rows)?;
+        if data.is_empty() {
+            let _ = self.take_number();
+            return Ok(Item {
+                bx: MathBox::empty(),
+                class: Some(AtomKind::Inner),
+            });
+        }
+        let mut bodies = Vec::new();
+        for row in &data {
+            let node = if row.len() == 1 {
+                row[0].clone()
+            } else {
+                MathNode::Row(row.clone())
+            };
+            bodies.push(self.layout(&node, style)?);
+        }
+        let max_w = bodies.iter().fold(Dim::zero(), |w, b| w.max(&b.width));
+        let n = bodies.len();
+        let row_sep = self.params.em(style) / Dim::from_i64(5);
+        let mut packed = Vec::new();
+        for (i, b) in bodies.into_iter().enumerate() {
+            if i > 0 {
+                packed.push(sep_row(row_sep.clone()));
+            }
+            let align = if i == 0 {
+                ColSpec::Left
+            } else if i + 1 == n {
+                ColSpec::Right
+            } else {
+                ColSpec::Center
+            };
+            packed.push(align_in(b, &max_w, align));
+        }
+        let mut inner = MathBox::vpack(packed);
+        let num = match self.take_number() {
+            Some(s) => Some(self.number_box(&s, MathStyle::Text)?),
+            None => None,
+        };
+        inner = self.attach_number(inner, num, style);
+        Ok(Item {
+            class: Some(AtomKind::Inner),
+            bx: inner,
+        })
+    }
+
+    fn equation_env(&self, rows: &[EnvRow], style: MathStyle) -> Result<Item, Error> {
+        let data = data_cells(rows)?;
+        let mut parts = Vec::new();
+        for row in &data {
+            for (i, c) in row.iter().enumerate() {
+                if i > 0 {
+                    parts.push(MathNode::Space(SpaceKind::Quad));
+                }
+                parts.push(c.clone());
+            }
+        }
+        let node = wrap_nodes(parts);
+        let body = self.layout(&node, style)?;
+        let num = match self.take_number() {
+            Some(s) => Some(self.number_box(&s, MathStyle::Text)?),
+            None => None,
+        };
+        Ok(Item {
+            class: Some(AtomKind::Inner),
+            bx: self.attach_number(body, num, style),
+        })
+    }
+
+    fn array_env(
+        &self,
+        spec: &[ColSpec],
+        rows: &[EnvRow],
+        style: MathStyle,
+    ) -> Result<Item, Error> {
+        let thick = self.params.fraction_rule_thickness.clone() * self.params.scale(style);
+        let col_sep = self.params.mu(style) * Dim::from_i64(10);
+        let row_sep = self.params.em(style) / Dim::from_i64(5);
+        let mut kinds = Vec::new();
+        let mut data: Vec<Vec<MathBox>> = Vec::new();
+        let mut ncols_data = 0;
+        for row in rows {
+            match row {
+                EnvRow::Hline => kinds.push(RowKind::Hline),
+                EnvRow::Intertext(n) => {
+                    kinds.push(RowKind::Intertext(self.layout(n, MathStyle::Text)?));
+                }
+                EnvRow::Cells { cells, .. } => {
+                    let mut rboxes = Vec::new();
+                    for c in cells {
+                        rboxes.push(self.layout(c, style)?);
+                    }
+                    ncols_data = ncols_data.max(rboxes.len());
+                    data.push(rboxes);
+                    kinds.push(RowKind::Cells);
+                }
+            }
+        }
+        let mut spec: Vec<ColSpec> = if spec.is_empty() {
+            vec![ColSpec::Center; ncols_data]
+        } else {
+            spec.to_vec()
+        };
+        let mut ndata = spec.iter().filter(|c| !c.is_rule()).count();
+        while ndata < ncols_data {
+            spec.push(ColSpec::Center);
+            ndata += 1;
+        }
+        for row in &mut data {
+            while row.len() < ndata {
+                row.push(MathBox::empty());
+            }
+        }
+        let mut col_w: Vec<Dim> = spec
+            .iter()
+            .map(|c| {
+                if c.is_rule() {
+                    thick.clone()
+                } else {
+                    Dim::zero()
+                }
+            })
+            .collect();
+        for row in &data {
+            let mut dj = 0;
+            for (j, sp) in spec.iter().enumerate() {
+                if sp.is_rule() {
+                    continue;
+                }
+                if dj < row.len() {
+                    col_w[j] = col_w[j].max(&row[dj].width);
+                }
+                dj += 1;
+            }
+        }
+        let mut table_w = Dim::zero();
+        for (j, _) in spec.iter().enumerate() {
+            if j > 0 && !spec[j].is_rule() && !spec[j - 1].is_rule() {
+                table_w = &table_w + &col_sep;
+            }
+            table_w = &table_w + &col_w[j];
+        }
+        let mut packed = Vec::new();
+        let mut di = 0;
+        for kind in kinds {
+            match kind {
+                RowKind::Hline => {
+                    packed.push(MathBox::rule(table_w.clone(), thick.clone(), Dim::zero()));
+                }
+                RowKind::Intertext(t) => {
+                    if !packed.is_empty() {
+                        packed.push(sep_row(row_sep.clone()));
+                    }
+                    packed.push(t);
+                }
+                RowKind::Cells => {
+                    if !packed.is_empty()
+                        && !matches!(packed.last().map(|b| &b.content), Some(BoxContent::Rule))
+                    {
+                        packed.push(sep_row(row_sep.clone()));
+                    }
+                    let row = &data[di];
+                    let mut rh = Dim::zero();
+                    let mut rd = Dim::zero();
+                    for c in row {
+                        rh = rh.max(&c.height);
+                        rd = rd.max(&c.depth);
+                    }
+                    let mut parts = Vec::new();
+                    let mut dj = 0;
+                    for (j, sp) in spec.iter().enumerate() {
+                        if j > 0 && !sp.is_rule() && !spec[j - 1].is_rule() {
+                            parts.push(MathBox::kern(col_sep.clone()));
+                        }
+                        if sp.is_rule() {
+                            parts.push(MathBox {
+                                width: thick.clone(),
+                                height: rh.clone(),
+                                depth: rd.clone(),
+                                italic: Dim::zero(),
+                                shift: Dim::zero(),
+                                content: BoxContent::Rule,
+                            });
+                        } else {
+                            let cell = row.get(dj).cloned().unwrap_or_else(MathBox::empty);
+                            parts.push(align_in(cell, &col_w[j], *sp));
+                            dj += 1;
+                        }
+                    }
+                    packed.push(MathBox::hpack(parts));
+                    di += 1;
+                }
+            }
+        }
+        Ok(Item {
+            class: Some(AtomKind::Inner),
+            bx: MathBox::vpack(packed),
+        })
+    }
+
+    fn grid(
+        &self,
         rows: &[Vec<MathNode>],
         style: MathStyle,
+        spec: Option<&[ColSpec]>,
+        col_sep: Dim,
+        default_align: ColSpec,
+        delims: (Option<char>, Option<char>),
+        numbered: bool,
     ) -> Result<Item, Error> {
         if rows.is_empty() {
             return Ok(Item {
@@ -1046,7 +1555,6 @@ impl Engine<'_> {
                 col_w[j] = col_w[j].max(&cell.width);
             }
         }
-        let col_sep = self.params.mu(style) * Dim::from_i64(10);
         let row_sep = self.params.em(style) / Dim::from_i64(5);
         let mut row_boxes = Vec::new();
         for (ri, row) in cells.into_iter().enumerate() {
@@ -1055,23 +1563,27 @@ impl Engine<'_> {
                 if j > 0 {
                     parts.push(MathBox::kern(col_sep.clone()));
                 }
-                parts.push(center_in(cell, &col_w[j]));
+                let align = spec
+                    .and_then(|s| s.get(j).copied())
+                    .unwrap_or(default_align);
+                parts.push(align_in(cell, &col_w[j], align));
             }
             if ri > 0 {
-                row_boxes.push(MathBox {
-                    width: Dim::zero(),
-                    height: Dim::zero(),
-                    depth: row_sep.clone(),
-                    italic: Dim::zero(),
-                    shift: Dim::zero(),
-                    content: BoxContent::Empty,
-                });
+                row_boxes.push(sep_row(row_sep.clone()));
             }
-            row_boxes.push(MathBox::hpack(parts));
+            let mut packed = MathBox::hpack(parts);
+            if numbered {
+                let num = match self.take_number() {
+                    Some(s) => Some(self.number_box(&s, MathStyle::Text)?),
+                    None => None,
+                };
+                packed = self.attach_number(packed, num, style);
+            }
+            row_boxes.push(packed);
         }
         let mut inner = MathBox::vpack(row_boxes);
         let needed = &inner.height + &inner.depth;
-        let (ld, rd) = matrix_delims(style_m);
+        let (ld, rd) = delims;
         if let Some(l) = ld {
             let left = self.sized_glyph(l, &needed, style)?;
             let right = match rd {
@@ -1084,6 +1596,98 @@ impl Engine<'_> {
             class: Some(AtomKind::Inner),
             bx: inner,
         })
+    }
+}
+
+enum RowKind {
+    Cells,
+    Hline,
+    Intertext(MathBox),
+}
+
+fn data_cells(rows: &[EnvRow]) -> Result<Vec<Vec<MathNode>>, Error> {
+    let mut out = Vec::new();
+    for r in rows {
+        match r {
+            EnvRow::Cells { cells, .. } => out.push(cells.clone()),
+            EnvRow::Hline => {
+                return Err(Error::Unsupported {
+                    what: "hline in this environment".into(),
+                });
+            }
+            EnvRow::Intertext(_) => {
+                return Err(Error::Unsupported {
+                    what: "intertext in this environment".into(),
+                });
+            }
+        }
+    }
+    Ok(out)
+}
+
+fn sep_row(depth: Dim) -> MathBox {
+    MathBox {
+        width: Dim::zero(),
+        height: Dim::zero(),
+        depth,
+        italic: Dim::zero(),
+        shift: Dim::zero(),
+        content: BoxContent::Empty,
+    }
+}
+
+fn pad_row(mut row: Vec<MathBox>, ncols: usize) -> Vec<MathBox> {
+    while row.len() < ncols {
+        row.push(MathBox::empty());
+    }
+    row
+}
+
+fn wrap_nodes(items: Vec<MathNode>) -> MathNode {
+    if items.len() == 1 {
+        items
+            .into_iter()
+            .next()
+            .unwrap_or(MathNode::Row(Vec::new()))
+    } else {
+        MathNode::Row(items)
+    }
+}
+
+fn align_in(inner: MathBox, width: &Dim, align: ColSpec) -> MathBox {
+    if matches!(align, ColSpec::VRule) || inner.width.eq_dim(width) {
+        return inner;
+    }
+    let extra = width - &inner.width;
+    match align {
+        ColSpec::Center => center_in(inner, width),
+        ColSpec::Left => {
+            let h = inner.height.clone();
+            let d = inner.depth.clone();
+            let packed = MathBox::hpack(vec![inner, MathBox::kern(extra)]);
+            MathBox {
+                width: packed.width,
+                height: h,
+                depth: d,
+                italic: Dim::zero(),
+                shift: Dim::zero(),
+                content: packed.content,
+            }
+        }
+        ColSpec::Right => {
+            let h = inner.height.clone();
+            let d = inner.depth.clone();
+            let packed = MathBox::hpack(vec![MathBox::kern(extra), inner]);
+            MathBox {
+                width: packed.width,
+                height: h,
+                depth: d,
+                italic: Dim::zero(),
+                shift: Dim::zero(),
+                content: packed.content,
+            }
+        }
+        ColSpec::VRule => inner,
     }
 }
 
@@ -1298,7 +1902,8 @@ fn class_of(n: &MathNode) -> Option<AtomKind> {
         | MathNode::Limit(_) => Some(AtomKind::Op),
         MathNode::Fraction(_, _)
         | MathNode::Radical(_, _)
-        | MathNode::Matrix(_, _)
+        | MathNode::Matrix(_, _, _)
+        | MathNode::Substack(_)
         | MathNode::Delimited(_, _, _) => Some(AtomKind::Inner),
         MathNode::SizedDelim(_, _, k) => Some(*k),
         MathNode::Superscript(b, _)
@@ -1306,8 +1911,10 @@ fn class_of(n: &MathNode) -> Option<AtomKind> {
         | MathNode::SubSup(b, _, _)
         | MathNode::Accent(b, _)
         | MathNode::OverUnder(b, _, _)
-        | MathNode::CancelTo(_, b) => class_of(b),
-        MathNode::Text(_, _) => Some(AtomKind::Ord),
+        | MathNode::CancelTo(_, b)
+        | MathNode::Tag { body: b, .. }
+        | MathNode::Intertext(b) => class_of(b),
+        MathNode::Text(_, _) | MathNode::Ref(_) => Some(AtomKind::Ord),
         MathNode::Color(_, b)
         | MathNode::TextColor(_, b)
         | MathNode::ColorBox(_, b)
@@ -1315,7 +1922,11 @@ fn class_of(n: &MathNode) -> Option<AtomKind> {
         | MathNode::Phantom(_, b) => class_of(b),
         MathNode::Row(v) if v.len() == 1 => class_of(&v[0]),
         MathNode::Row(_) => Some(AtomKind::Ord),
-        MathNode::Space(_) | MathNode::Strut(_, _) => None,
+        MathNode::Space(_)
+        | MathNode::Strut(_, _)
+        | MathNode::Label(_)
+        | MathNode::NoNumber
+        | MathNode::Hline => None,
     }
 }
 

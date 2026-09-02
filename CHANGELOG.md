@@ -2,6 +2,18 @@
 
 ## 0.1.0 (unreleased)
 
+### Milestone 7 — Advanced structures
+
+- `align` / `aligned` / `split` use right-left column pairs at `&`. `gather`
+  centers each row; `multline` is left / center / right; `equation` is display
+  with a number. `\nonumber`, `\tag{}` / `\tag*{}`, `\label` / `\ref` (two-pass).
+- `{array}` keeps the `lcr|` preamble and `\hline`. `{cases}` uses a quad
+  between columns. `\substack` stacks script-style limits. `\intertext` is a
+  full-width text row.
+- Numbering lives in `layout/` (`NumberingConfig`, `layout_with_numbering`).
+  Golds in `golds/envs.toml`. Mismatched `\begin`/`\end` is `Malformed`; unknown
+  environments are `Unsupported`.
+
 ### Architecture (build sheet §3)
 
 - Crate modules match the sheet: `parser/`, `layout/`, `font/`, `render/svg`,

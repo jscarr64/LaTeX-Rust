@@ -29,6 +29,11 @@ are out of scope and return `Err` — never a fake render.
 
 ## Status
 
+**Milestone 7** (advanced structures): `align` / `aligned` / `split` / `gather` /
+`multline` / `equation`, `{array}` column specs, `{cases}` with a quad, equation
+numbers (`\tag`, `\label`, `\ref`), `\substack`, `\intertext`. Golds in
+`golds/envs.toml`.
+
 **Milestone 6** (accents and decorations): TeX accent placement in `Dim`,
 extensible hats/arrows/braces from MATH variants and glyph assembly, cancel
 diagonals as SVG `<line>`, `\boxed` as a stroked frame. Golds in

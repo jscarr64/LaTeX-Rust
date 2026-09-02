@@ -4,8 +4,8 @@
 //! The math list itself is a TeX-style row of atoms, not an arithmetic tree.
 
 use super::ast::{
-    AccentKind, AtomKind, DelimSize, Delimiter, IntegralKind, MathNode, MatrixStyle, PhantomKind,
-    SpaceKind, TextStyle,
+    AccentKind, AtomKind, ColSpec, DelimSize, Delimiter, EnvRow, EqNumber, IntegralKind, MathNode,
+    MatrixStyle, PhantomKind, SpaceKind, TextStyle,
 };
 use super::preproc::preprocess;
 use super::token::{tokenize, Token};
@@ -91,6 +91,14 @@ impl Stop {
             ..Self::eof()
         }
     }
+
+    fn substack_line() -> Self {
+        Self {
+            end_group: true,
+            cr: true,
+            ..Self::eof()
+        }
+    }
 }
 
 struct Parser {
@@ -163,15 +171,6 @@ impl Parser {
                 Token::Command(n) if n == "definecolor" => {
                     self.bump();
                     self.parse_definecolor()?;
-                    continue;
-                }
-                Token::Command(n) if n == "tag" || n == "label" => {
-                    self.bump();
-                    let _ = self.parse_arg()?;
-                    continue;
-                }
-                Token::Command(n) if n == "nonumber" || n == "notag" => {
-                    self.bump();
                     continue;
                 }
                 _ => {}
@@ -483,6 +482,35 @@ impl Parser {
             | "biggr" | "Biggl" | "Biggr" | "bigm" | "Bigm" | "biggm" | "Biggm" => {
                 self.parse_sized_delim(name)
             }
+            "tag" => {
+                let star = matches!(self.peek_ws(), Some(Token::Char('*')));
+                if star {
+                    self.bump();
+                }
+                let body = self.parse_arg()?;
+                Ok(MathNode::Tag {
+                    star,
+                    body: Box::new(body),
+                })
+            }
+            "label" => {
+                let key = self.collect_group_text()?;
+                Ok(MathNode::Label(key))
+            }
+            "ref" => {
+                let key = self.collect_group_text()?;
+                Ok(MathNode::Ref(key))
+            }
+            "nonumber" | "notag" => Ok(MathNode::NoNumber),
+            "hline" => Ok(MathNode::Hline),
+            "intertext" => {
+                let s = self.collect_group_text()?;
+                Ok(MathNode::Intertext(Box::new(MathNode::Text(
+                    s,
+                    TextStyle::Text,
+                ))))
+            }
+            "substack" => self.parse_substack(),
             "displaystyle" | "textstyle" | "scriptstyle" | "scriptscriptstyle" | "limits"
             | "nolimits" => self.parse_nucleus(),
             "{" | "}" => {
@@ -605,9 +633,12 @@ impl Parser {
 
     fn parse_begin(&mut self) -> Result<MathNode, ParseError> {
         let name = self.collect_group_text()?;
-        if name == "array" {
-            let _preamble = self.collect_group_text()?;
-        }
+        let colspec = if name == "array" {
+            let preamble = self.collect_group_text()?;
+            parse_colspec(&preamble)?
+        } else {
+            Vec::new()
+        };
         let style = match name.as_str() {
             "matrix" => MatrixStyle::Matrix,
             "pmatrix" => MatrixStyle::Pmatrix,
@@ -622,25 +653,89 @@ impl Parser {
             "gather" => MatrixStyle::Gather,
             "multline" => MatrixStyle::Multline,
             "equation" => MatrixStyle::Equation,
+            "split" => MatrixStyle::Split,
             other => {
                 return Err(ParseError::Unsupported(format!("environment {other}")));
             }
         };
         let rows = self.parse_rows()?;
         self.expect_end(&name)?;
-        Ok(MathNode::Matrix(style, rows))
+        Ok(MathNode::Matrix(style, colspec, rows))
     }
 
-    fn parse_rows(&mut self) -> Result<Vec<Vec<MathNode>>, ParseError> {
+    fn parse_substack(&mut self) -> Result<MathNode, ParseError> {
+        self.skip_ws();
+        match self.bump() {
+            Some(Token::BeginGroup) => {}
+            _ => {
+                return Err(ParseError::Malformed(
+                    "expected '{' after \\substack".into(),
+                ))
+            }
+        }
+        let mut lines = Vec::new();
+        loop {
+            self.skip_ws();
+            if matches!(self.peek(), Some(Token::EndGroup)) {
+                self.bump();
+                break;
+            }
+            let line = self.parse_list(Stop::substack_line())?;
+            lines.push(line);
+            self.skip_ws();
+            match self.peek() {
+                Some(Token::Command(n)) if n == "\\" || n == "cr" => {
+                    self.bump();
+                }
+                Some(Token::EndGroup) => {
+                    self.bump();
+                    break;
+                }
+                None => return Err(ParseError::Malformed("unmatched '{' in \\substack".into())),
+                Some(other) => {
+                    return Err(ParseError::Malformed(format!(
+                        "unexpected token {other} in \\substack"
+                    )))
+                }
+            }
+        }
+        if lines.is_empty() {
+            return Err(ParseError::Malformed("empty \\substack".into()));
+        }
+        Ok(MathNode::Substack(lines))
+    }
+
+    fn parse_rows(&mut self) -> Result<Vec<EnvRow>, ParseError> {
         self.skip_ws();
         if matches!(self.peek(), Some(Token::Command(n)) if n == "end") {
             return Ok(Vec::new());
         }
         let mut rows = Vec::new();
         loop {
+            self.skip_ws();
+            if matches!(self.peek(), Some(Token::Command(n)) if n == "end") {
+                return Ok(rows);
+            }
+            if matches!(self.peek(), Some(Token::Command(n)) if n == "hline") {
+                self.bump();
+                rows.push(EnvRow::Hline);
+                continue;
+            }
+            if matches!(self.peek(), Some(Token::Command(n)) if n == "intertext") {
+                self.bump();
+                let s = self.collect_group_text()?;
+                rows.push(EnvRow::Intertext(Box::new(MathNode::Text(
+                    s,
+                    TextStyle::Text,
+                ))));
+                continue;
+            }
             let mut cells = Vec::new();
+            let mut number = EqNumber::Default;
+            let mut labels = Vec::new();
             loop {
                 let cell = self.parse_list(Stop::cell())?;
+                let cell = peel_row_meta(cell, &mut number, &mut labels);
                 cells.push(cell);
                 self.skip_ws();
                 match self.peek() {
@@ -649,7 +744,7 @@ impl Parser {
                     }
                     Some(Token::Command(n)) if n == "\\" || n == "cr" => {
                         self.bump();
-                        rows.push(cells);
+                        rows.push(finish_env_row(cells, number, labels));
                         self.skip_ws();
                         if matches!(self.peek(), Some(Token::Command(e)) if e == "end") {
                             return Ok(rows);
@@ -657,7 +752,7 @@ impl Parser {
                         break;
                     }
                     Some(Token::Command(n)) if n == "end" => {
-                        rows.push(cells);
+                        rows.push(finish_env_row(cells, number, labels));
                         return Ok(rows);
                     }
                     None => {
@@ -873,10 +968,77 @@ fn wrap_row(mut items: Vec<MathNode>) -> MathNode {
     }
 }
 
+fn parse_colspec(s: &str) -> Result<Vec<ColSpec>, ParseError> {
+    let mut out = Vec::new();
+    for c in s.chars() {
+        match c {
+            'l' => out.push(ColSpec::Left),
+            'c' => out.push(ColSpec::Center),
+            'r' => out.push(ColSpec::Right),
+            '|' => out.push(ColSpec::VRule),
+            ' ' | '\t' => {}
+            '@' | '!' | '>' | '<' | 'p' | 'm' | 'b' | '*' => {
+                return Err(ParseError::Unsupported(format!("array preamble `{c}`")))
+            }
+            other => return Err(ParseError::Malformed(format!("array preamble `{other}`"))),
+        }
+    }
+    if out.is_empty() {
+        return Err(ParseError::Malformed("empty array preamble".into()));
+    }
+    Ok(out)
+}
+
+fn peel_row_meta(node: MathNode, number: &mut EqNumber, labels: &mut Vec<String>) -> MathNode {
+    match node {
+        MathNode::NoNumber => {
+            *number = EqNumber::Suppress;
+            MathNode::Row(Vec::new())
+        }
+        MathNode::Tag { star, body } => {
+            *number = EqNumber::Tag { star, body };
+            MathNode::Row(Vec::new())
+        }
+        MathNode::Label(k) => {
+            labels.push(k);
+            MathNode::Row(Vec::new())
+        }
+        MathNode::Hline => MathNode::Hline,
+        MathNode::Intertext(n) => MathNode::Intertext(n),
+        MathNode::Row(items) => {
+            let mut kept = Vec::new();
+            for it in items {
+                let p = peel_row_meta(it, number, labels);
+                if !is_empty_node(&p) {
+                    kept.push(p);
+                }
+            }
+            wrap_row(kept)
+        }
+        other => other,
+    }
+}
+
+fn finish_env_row(cells: Vec<MathNode>, number: EqNumber, labels: Vec<String>) -> EnvRow {
+    if cells.len() == 1 && matches!(cells[0], MathNode::Hline) {
+        return EnvRow::Hline;
+    }
+    if cells.len() == 1 {
+        if let MathNode::Intertext(n) = &cells[0] {
+            return EnvRow::Intertext(n.clone());
+        }
+    }
+    EnvRow::Cells {
+        cells,
+        number,
+        labels,
+    }
+}
+
 fn is_empty_node(n: &MathNode) -> bool {
     match n {
         MathNode::Row(v) => v.is_empty() || v.iter().all(is_empty_node),
-        MathNode::Space(_) => true,
+        MathNode::Space(_) | MathNode::NoNumber | MathNode::Label(_) => true,
         _ => false,
     }
 }
@@ -934,6 +1096,9 @@ fn apply_text_style(node: MathNode, style: TextStyle) -> MathNode {
         MathNode::Row(v) => collapse_text(MathNode::Row(
             v.into_iter().map(|n| apply_text_style(n, style)).collect(),
         )),
+        MathNode::Substack(v) => {
+            MathNode::Substack(v.into_iter().map(|n| apply_text_style(n, style)).collect())
+        }
         other => other,
     }
 }
