@@ -5,8 +5,7 @@ Canonical crate catalog: [`data/symbols.tsv`](../data/symbols.tsv) (loaded by
 bare single-glyph Symbol/Operator row to layout and SVG-render as that Unicode
 character with the correct TeX atom class.
 
-Keyboard source tables in this folder remain reference; the crate catalog is
-the renderer contract.
+The crate catalog is the renderer contract.
 
 Dedup: one duplicate `\sqrt{}` row was dropped. `\sqrt[{}]{}` is kept as the
 nth-root form.
