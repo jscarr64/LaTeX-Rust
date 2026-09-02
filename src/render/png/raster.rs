@@ -2,6 +2,8 @@
 //!
 //! Pixel coordinates are [`Dim`](crate::Dim) until the tiny-skia call, then
 //! IEEE-754 bits via [`Dim::to_ieee32_bits`]. No layout `f32`/`f64` arithmetic.
+//!
+//! SIMD is automatic: AVX2 on x86_64, NEON on Apple Silicon. No compile flags.
 
 use std::collections::HashMap;
 

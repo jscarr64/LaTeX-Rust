@@ -10,16 +10,16 @@ the Rust standard library plus the crates listed below.
 
 It parses LaTeX math into a typed AST, lays the AST out with a TeX-faithful box
 model whose dimensions are [zenith-float](https://crates.io/crates/zenith-float)
-`Dim` values (no hardware `f32`/`f64` in the layout path), and renders to SVG.
-PNG and egui live under `src/render/` and return `Err` until those milestones.
+`Dim` values (no hardware `f32`/`f64` in the layout path), and renders to SVG,
+PNG (`features = ["png"]`), or egui shapes (`features = ["egui"]`).
 
 ```
 src/parser/     LaTeX → AST
 src/layout/     AST → box model
 src/font/       STIX Two Math metrics / TrueType loader
 src/render/svg  box model → SVG
-src/render/png  box model → PNG (Unsupported until Milestone 9)
-src/render/egui box model → egui (Unsupported until Milestone 10)
+src/render/png  box model → PNG (`tiny-skia`, feature `png`)
+src/render/egui box model → egui Shapes (feature `egui`)
 golds/          gold tests
 benches/        layout / SVG timings
 ```
@@ -27,7 +27,29 @@ benches/        layout / SVG timings
 This crate does not typeset documents. Text-mode LaTeX, TikZ, chemistry, and PDF
 are out of scope and return `Err` — never a fake render.
 
+## PNG renderer
+
+Enable with `features = ["png"]`. `tiny-skia` rasterizes the same `MathBox` tree
+as the SVG backend. SIMD is selected at runtime:
+
+- On x86_64 with AVX2 — tiny-skia runs at peak performance automatically
+- On Apple Silicon — tiny-skia uses the ARM NEON path, also fast
+- No user configuration needed
+- No compile flags required
+- Works correctly on every supported architecture
+
+Without the feature, `latex_to_png` / `render_png` return `Err(Unsupported)`.
+
 ## Status
+
+**Milestone 10** (egui renderer): `MathBox` → `egui::Shape` meshes and rects
+(`features = ["egui"]`). No SVG intermediate. Golds in `golds/egui.toml`.
+
+**Milestone 9** (PNG renderer): `MathBox` → PNG via `tiny-skia`
+(`features = ["png"]`). Golds in `golds/png.toml`.
+
+**Milestone 8** (color): named / rgb / RGB / HTML / cmyk / gray, `\definecolor`,
+group scope, SVG `fill` / `stroke`.
 
 **Milestone 7** (advanced structures): `align` / `aligned` / `split` / `gather` /
 `multline` / `equation`, `{array}` column specs, `{cases}` with a quad, equation
@@ -101,10 +123,9 @@ rationals. Glyph outlines become SVG `<path>` elements.
 Math-mode commands ship as `data/symbols.tsv`. Look up with `latex_rust::lookup`.
 TeX atom class is `symbol_atom_kind`. Styled letters go through `styled_char`.
 
-Color is in v1.0 (see `documents/latex-rust-color-addition.md`, merged into the
-build sheet). Resolve with `named_color` / `parse_color_spec`. Channel values
-use `Dim`. `spot` and unknown names return `Err` — never a fake color. SVG
-`fill` lands with the renderer.
+Color is in v1.0. Resolve with `named_color` / `parse_color_spec`. Channel values
+use `Dim`. `spot` and unknown names return `Err` — never a fake color. SVG, PNG,
+and egui all take `Color::to_rgba8()`.
 
 ## License
 

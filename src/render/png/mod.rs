@@ -2,6 +2,12 @@
 //!
 //! Without the feature every entry point is [`Error::Unsupported`](crate::Error::Unsupported).
 //! Color channels use [`Color::to_rgba8`](crate::Color::to_rgba8).
+//!
+//! `tiny-skia` picks a SIMD path at runtime. No user configuration and no extra
+//! compile flags are required; output is correct on every supported architecture:
+//!
+//! - On x86_64 with AVX2 — tiny-skia runs at peak performance automatically
+//! - On Apple Silicon — tiny-skia uses the ARM NEON path, also fast
 
 #[cfg(feature = "png")]
 mod raster;

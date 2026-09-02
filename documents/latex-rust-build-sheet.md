@@ -2,7 +2,7 @@
 **Version:** 0.1.0-plan  
 **Date:** 2026-09-01  
 **License:** MIT OR Apache-2.0  
-**Status:** Milestone 9 PNG renderer green (`features = ["png"]`; `golds/png.toml`)  
+**Status:** Milestone 10 egui renderer green (`features = ["egui"]`; `golds/egui.toml`)  
 
 > Pure Rust LaTeX math renderer. No JavaScript. No webview. No runtime dependencies.  
 > Surpasses MathJax and KaTeX in correctness, performance, and platform coverage.
@@ -156,11 +156,16 @@ Font metrics are stored as zenith-float `Dim` values — no hardware float in th
 - `tiny-skia` 0.11 rasterization; DPI-aware (`pixels = points × dpi / 72`)
 - Without `features = ["png"]` every entry point is `Err(Unsupported)`
 - Gold hashes lock PNG bytes at 72 / 144 / 300 DPI (`golds/png.toml`)
+- On x86_64 with AVX2 — tiny-skia runs at peak performance automatically
+- On Apple Silicon — tiny-skia uses the ARM NEON path, also fast
+- No user configuration needed
+- No compile flags required
+- Works correctly on every supported architecture
 
 **egui renderer (`src/render/egui`, feature `egui`):**
-- Entry points exist now and return `Err(Unsupported)` until Milestone 10
-- Milestone 10 emits egui `Shape` primitives directly (no SVG intermediate)
-- Feature `egui` is reserved for the egui dependency — not pulled today
+- TrueType outlines tessellated to `egui::Mesh`; rules and color boxes are `Shape::Rect`
+- No SVG intermediate. Without `features = ["egui"]` every entry point is `Err(Unsupported)`
+- Golds lock shape counts and bounding rects (`golds/egui.toml`)
 
 ---
 
@@ -294,7 +299,7 @@ Color is in scope for v1.0 (Milestone 8). Channel math uses `Dim` — never hard
 | Color inheritance / scope | ✅ | Color scoped to current group `{}` |
 | SVG fill / stroke emission | ✅ | `fill` and `stroke` on `<g>`; boxes as `<rect>` |
 | PNG color pass-through | ✅ | tiny-skia `Paint` from `Color::to_rgba8` (`golds/png.toml`) |
-| egui color pass-through | ⬜ | egui `Color32` emission (Milestone 10) |
+| egui color pass-through | ✅ | `Color32` on meshes and rects (`golds/egui.toml`) |
 | Unsupported color model | ✅ | Returns `Err(Unsupported)` — never a fake color |
 
 ---
@@ -447,8 +452,8 @@ Each milestone ends with a full gold suite pass before the next begins.
 - [x] Color scope propagation through layout engine
 - [x] SVG renderer — `fill` and `stroke` attribute emission on colored glyphs
 - [x] PNG renderer — tiny-skia color pass-through (Milestone 9; `Color::to_rgba8`)
-- [ ] egui renderer — `Color32` emission (Milestone 10; `Color::to_rgba8` is the contract)
-- [x] Gold tests for every color capability (hex / tokenize / parse AST / layout color boxes / SVG `fill`/`stroke` locked; PNG and egui wait on later milestones)
+- [x] egui renderer — `Color32` emission (Milestone 10; `Color::to_rgba8`)
+- [x] Gold tests for every color capability (hex / tokenize / parse AST / layout color boxes / SVG `fill`/`stroke` / PNG / egui locked)
 - [x] Full corpus pass before Milestone 9
 
 ### Milestone 9 — PNG Renderer (feature = "png")
@@ -457,10 +462,10 @@ Each milestone ends with a full gold suite pass before the next begins.
 - [x] Gold tests for pixel output
 
 ### Milestone 10 — egui Renderer (feature = "egui")
-- [ ] egui Shape emission
-- [ ] Zero SVG intermediate
-- [ ] Integration test with egui test harness
-- [ ] Gold tests for shape output
+- [x] egui Shape emission
+- [x] Zero SVG intermediate
+- [x] Integration test with egui test harness
+- [x] Gold tests for shape output
 
 ### Milestone 11 — Polish and Release
 - [ ] Full documentation (rustdoc on every public item)

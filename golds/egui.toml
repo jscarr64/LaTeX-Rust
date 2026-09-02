@@ -1,0 +1,157 @@
+# Gold tests — Milestone 10 egui renderer
+# Contract: shape counts and bounding rects. Do not edit golds to hide a bug.
+
+[[gold]]
+name = "glyph-x"
+kind = "egui"
+input = "x"
+font_size_pt = "14"
+pixels_per_point = "1"
+shape_count = "1"
+mesh_count = "1"
+rect_count = "0"
+rect_width_px = "6.705999851226806640625e+0"
+rect_height_px = "6.622000217437744140625e+0"
+
+[[gold]]
+name = "frac"
+kind = "egui"
+input = "\\frac{1}{2}"
+font_size_pt = "14"
+pixels_per_point = "2"
+shape_count = "3"
+mesh_count = "2"
+rect_count = "1"
+rect_width_px = "9.701999664306640625e+0"
+rect_height_px = "4.528440093994140625e+1"
+
+[[gold]]
+name = "sqrt-x"
+kind = "egui"
+input = "\\sqrt{x}"
+font_size_pt = "14"
+pixels_per_point = "2"
+shape_count = "3"
+mesh_count = "2"
+rect_count = "1"
+rect_width_px = "3.5644001007080078125e+1"
+rect_height_px = "3.323600006103515625e+1"
+
+[[gold]]
+name = "sup-x2"
+kind = "egui"
+input = "x^2"
+font_size_pt = "14"
+pixels_per_point = "2"
+shape_count = "2"
+mesh_count = "2"
+rect_count = "0"
+rect_width_px = "2.38980007171630859375e+1"
+rect_height_px = "2.270240020751953125e+1"
+
+[[gold]]
+name = "x-ppp-1"
+kind = "egui"
+input = "x"
+font_size_pt = "14"
+pixels_per_point = "1"
+shape_count = "1"
+mesh_count = "1"
+rect_count = "0"
+rect_width_px = "6.705999851226806640625e+0"
+rect_height_px = "6.622000217437744140625e+0"
+
+[[gold]]
+name = "x-ppp-2"
+kind = "egui"
+input = "x"
+font_size_pt = "14"
+pixels_per_point = "2"
+shape_count = "1"
+mesh_count = "1"
+rect_count = "0"
+rect_width_px = "1.341199970245361328125e+1"
+rect_height_px = "1.324400043487548828125e+1"
+
+[[gold]]
+name = "x-ppp-3"
+kind = "egui"
+input = "x"
+font_size_pt = "14"
+pixels_per_point = "3"
+shape_count = "1"
+mesh_count = "1"
+rect_count = "0"
+rect_width_px = "2.0118000030517578125e+1"
+rect_height_px = "1.98659992218017578125e+1"
+
+[[gold]]
+name = "textcolor-red"
+kind = "egui"
+input = "\\textcolor{red}{x}"
+font_size_pt = "14"
+pixels_per_point = "2"
+shape_count = "1"
+mesh_count = "1"
+rect_count = "0"
+color = "red"
+
+[[gold]]
+name = "colorbox-yellow"
+kind = "egui"
+input = "\\colorbox{yellow}{x}"
+font_size_pt = "14"
+pixels_per_point = "2"
+shape_count = "2"
+mesh_count = "1"
+rect_count = "1"
+color = "yellow-rect"
+
+[[gold]]
+name = "theme-blue"
+kind = "egui"
+input = "x"
+font_size_pt = "14"
+pixels_per_point = "2"
+shape_count = "1"
+mesh_count = "1"
+rect_count = "0"
+color = "blue"
+
+[[gold]]
+name = "sum-display"
+kind = "egui"
+style = "display"
+input = "\\sum_{k=1}^{n} k^2"
+font_size_pt = "14"
+pixels_per_point = "2"
+shape_count = "7"
+mesh_count = "7"
+rect_count = "0"
+
+[[gold]]
+name = "pmatrix"
+kind = "egui"
+input = "\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}"
+font_size_pt = "14"
+pixels_per_point = "2"
+shape_count = "6"
+mesh_count = "6"
+rect_count = "0"
+
+[[gold]]
+name = "partial-frac"
+kind = "egui"
+input = "\\frac{\\partial f}{\\partial x}"
+font_size_pt = "14"
+pixels_per_point = "2"
+shape_count = "5"
+mesh_count = "4"
+rect_count = "1"
+
+[[gold]]
+name = "zero-ppp"
+kind = "err"
+input = "x"
+pixels_per_point = "0"
+expect = "invalid option"

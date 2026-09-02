@@ -3,10 +3,11 @@
 //! Crate layout follows the build-sheet architecture:
 //! [`parser`], [`mod@layout`], [`font`], [`render`] (`svg` / `png` / `egui`).
 //!
-//! Milestone 9 rasterizes a [`MathBox`] to PNG via `tiny-skia` behind
-//! `features = ["png"]`. Milestone 8 covers math-mode color: named / rgb / RGB /
-//! HTML / cmyk / gray, `\definecolor`, group scope, and SVG `fill` / `stroke`.
-//! egui color paint waits on Milestone 10. Milestone 7 covers
+//! Milestone 10 emits egui `Shape` meshes behind `features = ["egui"]` with no
+//! SVG intermediate. Milestone 9 rasterizes a [`MathBox`] to PNG via `tiny-skia`
+//! behind `features = ["png"]`. Milestone 8 covers math-mode color: named / rgb /
+//! RGB / HTML / cmyk / gray, `\definecolor`, group scope, and SVG `fill` /
+//! `stroke`. Milestone 7 covers
 //! multiline environments, equation numbering, `{array}` column specs,
 //! `\substack`, and `\intertext`. Milestone 6 covers TeX-exact accent placement,
 //! extensible decorations from MATH variants and glyph assembly, cancel
@@ -80,7 +81,9 @@ pub use parser::{
     DelimSize, Delimiter, EnvRow, EqNumber, IntegralKind, MathNode, MatrixStyle, PhantomKind,
     SpaceKind, TextStyle, Token,
 };
-pub use render::egui::render_egui;
+#[cfg(feature = "egui")]
+pub use render::egui::{latex_to_shapes, paint_egui, shapes};
+pub use render::egui::{render_egui, EguiOptions};
 pub use render::png::{latex_to_png, render_png, PngBackground, PngOptions};
 pub use render::svg::{latex_to_svg, render_svg, SvgOptions};
 pub use style_map::styled_char;

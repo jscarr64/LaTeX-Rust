@@ -1,9 +1,8 @@
 //! Color models for math mode. Channel arithmetic is [`Dim`](crate::Dim) only.
 //!
-//! SVG `fill` / `stroke` are emitted in Milestone 8. PNG (`tiny-skia`) and egui
-//! (`Color32`) convert [`Color::to_rgba8`] once those backends land (Milestones 9
-//! and 10). This module resolves a color to 8-bit sRGB so every backend shares
-//! one contract.
+//! SVG `fill` / `stroke`, PNG (`tiny-skia`), and egui (`Color32`) all convert
+//! through [`Color::to_rgba8`]. This module resolves a color to 8-bit sRGB so
+//! every backend shares one contract.
 
 use std::collections::BTreeMap;
 use std::fmt;
