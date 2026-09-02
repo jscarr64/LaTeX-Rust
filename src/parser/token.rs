@@ -1,4 +1,4 @@
-//! LaTeX math tokenizer (Milestone 1). AST parsing is Milestone 2.
+//! LaTeX math tokenizer.
 
 use core::fmt;
 use core::iter::Peekable;
@@ -27,6 +27,8 @@ pub enum Token {
     MathShift,
     /// `$$`
     DisplayShift,
+    /// A space character (kept for `\text`; skipped in math lists).
+    Space,
 }
 
 impl fmt::Display for Token {
@@ -41,6 +43,7 @@ impl fmt::Display for Token {
             Self::AlignmentTab => f.write_str("&"),
             Self::MathShift => f.write_str("$"),
             Self::DisplayShift => f.write_str("$$"),
+            Self::Space => f.write_str("space"),
         }
     }
 }
@@ -68,7 +71,8 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, ParseError> {
     while let Some(c) = chars.next() {
         match c {
             '%' => skip_line(&mut chars),
-            ' ' | '\t' | '\n' | '\r' => {}
+            ' ' => out.push(Token::Space),
+            '\t' | '\n' | '\r' => {}
             '{' => out.push(Token::BeginGroup),
             '}' => out.push(Token::EndGroup),
             '^' => out.push(Token::Superscript),

@@ -23,6 +23,14 @@ pub enum Error {
 pub enum ParseError {
     /// Input ended with a stray `\` and no command character.
     TrailingBackslash,
+    /// Command is known but this crate will not invent a rendering for it.
+    Unsupported(String),
+    /// Command is not in the catalog and is not a known math structure.
+    Unknown(String),
+    /// Syntactically invalid input. Names the construct or position.
+    Malformed(String),
+    /// `\left` without `\right`, or `\right` without `\left`.
+    UnmatchedDelimiter,
 }
 
 /// Font loader or metric lookup failure.
@@ -51,6 +59,10 @@ impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::TrailingBackslash => f.write_str("trailing backslash"),
+            Self::Unsupported(s) => write!(f, "unsupported: {s}"),
+            Self::Unknown(s) => write!(f, "unknown command: {s}"),
+            Self::Malformed(s) => write!(f, "malformed: {s}"),
+            Self::UnmatchedDelimiter => f.write_str("unmatched delimiter"),
         }
     }
 }

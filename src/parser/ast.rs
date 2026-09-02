@@ -1,0 +1,508 @@
+//! Typed math AST produced by the parser.
+
+use crate::color::Color;
+use crate::dim::Dim;
+
+/// TeX math atom class (Appendix G).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AtomKind {
+    /// Ordinary (`x`, `1`, `\alpha` as a letter-like glyph).
+    Ord,
+    /// Large operator class.
+    Op,
+    /// Binary operator (`+`, `\times`).
+    Bin,
+    /// Relation (`=`, `\leq`).
+    Rel,
+    /// Opening delimiter.
+    Open,
+    /// Closing delimiter.
+    Close,
+    /// Punctuation (`,`).
+    Punct,
+    /// Inner (fraction-like).
+    Inner,
+}
+
+impl AtomKind {
+    fn gold(self) -> &'static str {
+        match self {
+            Self::Ord => "Ord",
+            Self::Op => "Op",
+            Self::Bin => "Bin",
+            Self::Rel => "Rel",
+            Self::Open => "Open",
+            Self::Close => "Close",
+            Self::Punct => "Punct",
+            Self::Inner => "Inner",
+        }
+    }
+}
+
+/// Accent or decoration applied to a nucleus.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AccentKind {
+    /// `\hat`
+    Hat,
+    /// `\check`
+    Check,
+    /// `\breve`
+    Breve,
+    /// `\acute`
+    Acute,
+    /// `\grave`
+    Grave,
+    /// `\tilde`
+    Tilde,
+    /// `\bar`
+    Bar,
+    /// `\vec`
+    Vec,
+    /// `\dot`
+    Dot,
+    /// `\ddot`
+    Ddot,
+    /// `\dddot`
+    Dddot,
+    /// `\widehat`
+    WideHat,
+    /// `\widetilde`
+    WideTilde,
+    /// `\overline`
+    Overline,
+    /// `\underline`
+    Underline,
+    /// `\overbrace`
+    Overbrace,
+    /// `\underbrace`
+    Underbrace,
+    /// `\overleftarrow`
+    Overleftarrow,
+    /// `\overrightarrow`
+    Overrightarrow,
+    /// `\cancel`
+    Cancel,
+    /// `\bcancel`
+    BCancel,
+    /// `\xcancel`
+    XCancel,
+    /// `\boxed`
+    Boxed,
+    /// `\mathring`
+    Ring,
+    /// `\not`
+    Not,
+}
+
+impl AccentKind {
+    fn gold(self) -> &'static str {
+        match self {
+            Self::Hat => "hat",
+            Self::Check => "check",
+            Self::Breve => "breve",
+            Self::Acute => "acute",
+            Self::Grave => "grave",
+            Self::Tilde => "tilde",
+            Self::Bar => "bar",
+            Self::Vec => "vec",
+            Self::Dot => "dot",
+            Self::Ddot => "ddot",
+            Self::Dddot => "dddot",
+            Self::WideHat => "widehat",
+            Self::WideTilde => "widetilde",
+            Self::Overline => "overline",
+            Self::Underline => "underline",
+            Self::Overbrace => "overbrace",
+            Self::Underbrace => "underbrace",
+            Self::Overleftarrow => "overleftarrow",
+            Self::Overrightarrow => "overrightarrow",
+            Self::Cancel => "cancel",
+            Self::BCancel => "bcancel",
+            Self::XCancel => "xcancel",
+            Self::Boxed => "boxed",
+            Self::Ring => "mathring",
+            Self::Not => "not",
+        }
+    }
+}
+
+/// Font / text style for a run of characters.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TextStyle {
+    /// `\mathrm`
+    Rm,
+    /// `\mathbf`
+    Bf,
+    /// `\mathit`
+    It,
+    /// `\mathsf`
+    Sf,
+    /// `\mathtt`
+    Tt,
+    /// `\mathbb`
+    Bb,
+    /// `\mathcal`
+    Cal,
+    /// `\mathfrak`
+    Frak,
+    /// `\mathscr`
+    Scr,
+    /// `\boldsymbol`
+    Boldsymbol,
+    /// `\pmb`
+    Pmb,
+    /// `\text`
+    Text,
+}
+
+impl TextStyle {
+    fn gold(self) -> &'static str {
+        match self {
+            Self::Rm => "rm",
+            Self::Bf => "bf",
+            Self::It => "it",
+            Self::Sf => "sf",
+            Self::Tt => "tt",
+            Self::Bb => "bb",
+            Self::Cal => "cal",
+            Self::Frak => "frak",
+            Self::Scr => "scr",
+            Self::Boldsymbol => "boldsymbol",
+            Self::Pmb => "pmb",
+            Self::Text => "text",
+        }
+    }
+}
+
+/// Horizontal skip.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SpaceKind {
+    /// `\,`
+    Thin,
+    /// `\:` or `\>`
+    Medium,
+    /// `\;`
+    Thick,
+    /// `\!`
+    NegThin,
+    /// `\quad`
+    Quad,
+    /// `\qquad`
+    Qquad,
+    /// `\ ` (control space)
+    ControlSpace,
+    /// `\hspace{...}` in em.
+    Hspace(Dim),
+}
+
+/// Matrix / alignment environment.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MatrixStyle {
+    /// `{matrix}`
+    Matrix,
+    /// `{pmatrix}`
+    Pmatrix,
+    /// `{bmatrix}`
+    Bmatrix,
+    /// `{vmatrix}`
+    Vmatrix,
+    /// `{Vmatrix}`
+    VVmatrix,
+    /// `{Bmatrix}`
+    BBmatrix,
+    /// `{cases}`
+    Cases,
+    /// `{array}`
+    Array,
+    /// `{aligned}`
+    Aligned,
+    /// `{align}`
+    Align,
+    /// `{gather}`
+    Gather,
+    /// `{multline}`
+    Multline,
+    /// `{equation}`
+    Equation,
+}
+
+impl MatrixStyle {
+    fn gold(self) -> &'static str {
+        match self {
+            Self::Matrix => "matrix",
+            Self::Pmatrix => "pmatrix",
+            Self::Bmatrix => "bmatrix",
+            Self::Vmatrix => "vmatrix",
+            Self::VVmatrix => "Vmatrix",
+            Self::BBmatrix => "Bmatrix",
+            Self::Cases => "cases",
+            Self::Array => "array",
+            Self::Aligned => "aligned",
+            Self::Align => "align",
+            Self::Gather => "gather",
+            Self::Multline => "multline",
+            Self::Equation => "equation",
+        }
+    }
+}
+
+/// Which integral glyph.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IntegralKind {
+    /// `\int`
+    Int,
+    /// `\iint`
+    Iint,
+    /// `\iiint`
+    Iiint,
+    /// `\oint`
+    Oint,
+    /// `\oiint`
+    Oiint,
+}
+
+impl IntegralKind {
+    fn gold(self) -> &'static str {
+        match self {
+            Self::Int => "int",
+            Self::Iint => "iint",
+            Self::Iiint => "iiint",
+            Self::Oint => "oint",
+            Self::Oiint => "oiint",
+        }
+    }
+}
+
+/// `\phantom` / `\vphantom` / `\hphantom`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PhantomKind {
+    /// `\phantom`
+    Full,
+    /// `\vphantom`
+    Vertical,
+    /// `\hphantom`
+    Horizontal,
+}
+
+impl PhantomKind {
+    fn gold(self) -> &'static str {
+        match self {
+            Self::Full => "phantom",
+            Self::Vertical => "vphantom",
+            Self::Horizontal => "hphantom",
+        }
+    }
+}
+
+/// A `\left` / `\right` delimiter (or `.` for empty).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Delimiter {
+    /// `\left.` / `\right.`
+    Empty,
+    /// Literal character (`(`, `[`, `|`).
+    Char(char),
+    /// Named delimiter (`langle`, `{` from `\{`).
+    Named(String),
+}
+
+impl Delimiter {
+    fn gold(&self) -> String {
+        match self {
+            Self::Empty => ".".into(),
+            Self::Char(c) => c.to_string(),
+            Self::Named(n) => {
+                if n == "{" || n == "}" || n == "|" {
+                    format!("\\{n}")
+                } else {
+                    n.clone()
+                }
+            }
+        }
+    }
+}
+
+/// Typed math-mode syntax tree.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum MathNode {
+    /// Single character with a TeX atom class.
+    Atom(char, AtomKind),
+    /// `\frac` / `\dfrac` / `\tfrac` / `\cfrac` / `{a \over b}`.
+    Fraction(Box<MathNode>, Box<MathNode>),
+    /// `\sqrt` / `\sqrt[n]`. Index `None` is a square root.
+    Radical(Option<Box<MathNode>>, Box<MathNode>),
+    /// `x^{}`
+    Superscript(Box<MathNode>, Box<MathNode>),
+    /// `x_{}`
+    Subscript(Box<MathNode>, Box<MathNode>),
+    /// `x_{}^{}`
+    SubSup(Box<MathNode>, Box<MathNode>, Box<MathNode>),
+    /// `\left ... \right`
+    Delimited(Delimiter, Box<MathNode>, Delimiter),
+    /// Horizontal list of nodes.
+    Row(Vec<MathNode>),
+    /// Matrix or multiline environment.
+    Matrix(MatrixStyle, Vec<Vec<MathNode>>),
+    /// `\sum` with optional lower / upper limits.
+    Sum(Option<Box<MathNode>>, Option<Box<MathNode>>),
+    /// `\int` family with optional limits.
+    Integral(IntegralKind, Option<Box<MathNode>>, Option<Box<MathNode>>),
+    /// `\prod` with optional limits.
+    Product(Option<Box<MathNode>>, Option<Box<MathNode>>),
+    /// `\lim` with optional subscript.
+    Limit(Option<Box<MathNode>>),
+    /// `\overset` / `\underset` / `\stackrel` (base, over, under).
+    OverUnder(Box<MathNode>, Option<Box<MathNode>>, Option<Box<MathNode>>),
+    /// Accent or decoration on a nucleus.
+    Accent(Box<MathNode>, AccentKind),
+    /// Styled character run (`\mathrm`, `\text`, …).
+    Text(String, TextStyle),
+    /// Explicit math skip.
+    Space(SpaceKind),
+    /// Named operator (`\sin`). The flag is `\limits` vs `\nolimits`.
+    Operator(String, bool),
+    /// Named glyph (`\alpha`, `\times`). The string is the control-sequence name.
+    Symbol(String),
+    /// `\color` applied to a following math list.
+    Color(Color, Box<MathNode>),
+    /// `\textcolor{...}{...}`
+    TextColor(Color, Box<MathNode>),
+    /// `\colorbox{...}{...}`
+    ColorBox(Color, Box<MathNode>),
+    /// `\fcolorbox{border}{fill}{body}`
+    FColorBox(Color, Color, Box<MathNode>),
+    /// Vertical strut (height, depth) in em.
+    Strut(Dim, Dim),
+    /// `\phantom` family.
+    Phantom(PhantomKind, Box<MathNode>),
+}
+
+impl MathNode {
+    /// Gold-stable S-expression. One space between items; no trailing space.
+    #[must_use]
+    pub fn gold(&self) -> String {
+        match self {
+            Self::Atom(c, k) => format!("(atom {} {})", k.gold(), quote_atom(*c)),
+            Self::Fraction(n, d) => format!("(frac {} {})", n.gold(), d.gold()),
+            Self::Radical(None, r) => format!("(sqrt {})", r.gold()),
+            Self::Radical(Some(i), r) => format!("(sqrtn {} {})", i.gold(), r.gold()),
+            Self::Superscript(b, e) => format!("(sup {} {})", b.gold(), e.gold()),
+            Self::Subscript(b, s) => format!("(sub {} {})", b.gold(), s.gold()),
+            Self::SubSup(b, s, e) => format!("(subsup {} {} {})", b.gold(), s.gold(), e.gold()),
+            Self::Delimited(l, b, r) => {
+                format!("(delim {} {} {})", l.gold(), b.gold(), r.gold())
+            }
+            Self::Row(items) => {
+                if items.is_empty() {
+                    "(row)".into()
+                } else {
+                    let mut s = String::from("(row");
+                    for it in items {
+                        s.push(' ');
+                        s.push_str(&it.gold());
+                    }
+                    s.push(')');
+                    s
+                }
+            }
+            Self::Matrix(style, rows) => {
+                let mut s = format!("(matrix {}", style.gold());
+                for row in rows {
+                    s.push(' ');
+                    s.push('(');
+                    for (i, cell) in row.iter().enumerate() {
+                        if i > 0 {
+                            s.push(' ');
+                        }
+                        s.push_str(&cell.gold());
+                    }
+                    s.push(')');
+                }
+                s.push(')');
+                s
+            }
+            Self::Sum(lo, hi) => format!("(sum {} {})", opt(lo), opt(hi)),
+            Self::Integral(k, lo, hi) => {
+                format!("({} {} {})", k.gold(), opt(lo), opt(hi))
+            }
+            Self::Product(lo, hi) => format!("(prod {} {})", opt(lo), opt(hi)),
+            Self::Limit(lo) => format!("(lim {})", opt(lo)),
+            Self::OverUnder(b, over, under) => {
+                format!("(overunder {} {} {})", b.gold(), opt(over), opt(under))
+            }
+            Self::Accent(b, a) => format!("(accent {} {})", a.gold(), b.gold()),
+            Self::Text(t, st) => format!("(text {} {})", st.gold(), quote_text(t)),
+            Self::Space(SpaceKind::Thin) => "(space thin)".into(),
+            Self::Space(SpaceKind::Medium) => "(space medium)".into(),
+            Self::Space(SpaceKind::Thick) => "(space thick)".into(),
+            Self::Space(SpaceKind::NegThin) => "(space negthin)".into(),
+            Self::Space(SpaceKind::Quad) => "(space quad)".into(),
+            Self::Space(SpaceKind::Qquad) => "(space qquad)".into(),
+            Self::Space(SpaceKind::ControlSpace) => "(space control)".into(),
+            Self::Space(SpaceKind::Hspace(d)) => format!("(space hspace {})", dim_gold(d)),
+            Self::Operator(name, false) => format!("(op {name})"),
+            Self::Operator(name, true) => format!("(op {name} limits)"),
+            Self::Symbol(name) => format!("(symbol {name})"),
+            Self::Color(c, b) => format!("(color {} {})", c.css_hex(), b.gold()),
+            Self::TextColor(c, b) => format!("(textcolor {} {})", c.css_hex(), b.gold()),
+            Self::ColorBox(c, b) => format!("(colorbox {} {})", c.css_hex(), b.gold()),
+            Self::FColorBox(border, fill, b) => {
+                format!(
+                    "(fcolorbox {} {} {})",
+                    border.css_hex(),
+                    fill.css_hex(),
+                    b.gold()
+                )
+            }
+            Self::Strut(h, d) => format!("(strut {} {})", dim_gold(h), dim_gold(d)),
+            Self::Phantom(k, b) => format!("({} {})", k.gold(), b.gold()),
+        }
+    }
+}
+
+fn opt(n: &Option<Box<MathNode>>) -> String {
+    match n {
+        None => "_".into(),
+        Some(x) => x.gold(),
+    }
+}
+
+fn quote_atom(c: char) -> String {
+    match c {
+        '"' => "'\"'".into(),
+        '\'' => "\"'\"".into(),
+        _ => format!("\"{c}\""),
+    }
+}
+
+fn quote_text(t: &str) -> String {
+    format!("\"{}\"", t.replace('\\', "\\\\").replace('"', "\\\""))
+}
+
+fn dim_gold(d: &Dim) -> String {
+    const RATIOS: [(i64, i64); 10] = [
+        (0, 1),
+        (1, 1),
+        (2, 1),
+        (1, 2),
+        (1, 18),
+        (2, 18),
+        (3, 18),
+        (7, 10),
+        (3, 10),
+        (1, 10),
+    ];
+    for (n, den) in RATIOS {
+        if d.eq_dim(&Dim::ratio(n, den)) {
+            if den == 1 {
+                return n.to_string();
+            }
+            return format!("{n}/{den}");
+        }
+    }
+    for i in -64i64..65 {
+        if d.eq_dim(&Dim::from_i64(i)) {
+            return i.to_string();
+        }
+    }
+    d.to_dec_string()
+}
