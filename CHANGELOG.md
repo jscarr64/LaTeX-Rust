@@ -2,6 +2,13 @@
 
 ## 0.1.0 (unreleased)
 
+### Milestone 5 — Symbol coverage
+
+- Catalog grew to every TeX/AMS math glyph STIX Two Math can draw. Fake keyboard placeholders (`[ ]` for `\square`, ASCII `F` for `\mathbb{F}`) are real Unicode now.
+- `styled_char` maps `\mathbb` / `\mathcal` / `\mathfrak` / `\mathscr` / `\mathrm` / `\mathbf` / `\mathit` / `\mathsf` / `\mathtt` / `\boldsymbol` onto the Mathematical Alphanumeric Symbols block. Missing font glyphs stay `Err`.
+- `symbol_atom_kind` locks TeX Table 18 classes. `\not` overlays a slash and keeps the nucleus class. `\xrightarrow` uses horizontal MATH variants when the label is wider than the arrow.
+- Golds in `golds/symbols.toml` plus a catalog corpus in `tests/symbol_golds.rs`.
+
 ### Milestone 4 — SVG renderer
 
 - `render_svg` / `latex_to_svg`: `MathBox` → self-contained SVG 1.1. Glyphs are `<path>` from STIX Two Math outlines; rules are `<rect>`; `\textcolor` / `\colorbox` set `fill`.

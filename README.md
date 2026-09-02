@@ -18,6 +18,10 @@ are out of scope and return `Err` — never a fake render.
 
 ## Status
 
+**Milestone 5** (symbol coverage): every catalog glyph, TeX atom class, and math
+alphabet (`\mathbb`, `\mathcal`, `\mathfrak`, …) renders through STIX Two Math.
+Golds in `golds/symbols.toml`. Missing glyphs are `Err`, never a substitute.
+
 **Milestone 4** (SVG renderer): `MathBox` → self-contained SVG (`<path>` from STIX Two Math,
 `<rect>` for rules). Golds in `golds/svg.toml`. Layout remains zenith-float `Dim` only.
 
@@ -71,10 +75,10 @@ assert_eq!(packed.width, Dim::ratio(3, 2));
 
 The crate embeds **STIX Two Math** 2.13 (SIL OFL 1.1) and loads metrics through
 `ttf-parser` using integer font units converted to `Dim` via zenith-float
-rationals. Glyph outlines and SVG emission are later milestones.
+rationals. Glyph outlines become SVG `<path>` elements.
 
-Math-mode commands ship as `data/symbols.tsv` (226 entries, from the keyboard
-symbol table). Look up with `latex_rust::lookup`.
+Math-mode commands ship as `data/symbols.tsv`. Look up with `latex_rust::lookup`.
+TeX atom class is `symbol_atom_kind`. Styled letters go through `styled_char`.
 
 Color is in v1.0 (see `documents/latex-rust-color-addition.md`, merged into the
 build sheet). Resolve with `named_color` / `parse_color_spec`. Channel values

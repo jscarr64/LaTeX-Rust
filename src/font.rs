@@ -166,6 +166,32 @@ impl MathFont {
         }
     }
 
+    /// Horizontal MATH variants of `glyph_id`, including the base glyph first.
+    pub fn horizontal_variants(&self, glyph_id: u16) -> Vec<u16> {
+        let mut out = vec![glyph_id];
+        let Ok(face) = self.face() else {
+            return out;
+        };
+        let Some(math) = face.tables().math else {
+            return out;
+        };
+        let Some(variants) = math.variants else {
+            return out;
+        };
+        let Some(cons) = variants
+            .horizontal_constructions
+            .get(ttf_parser::GlyphId(glyph_id))
+        else {
+            return out;
+        };
+        for i in 0..cons.variants.len() {
+            if let Some(v) = cons.variants.get(i) {
+                out.push(v.variant_glyph.0);
+            }
+        }
+        out
+    }
+
     /// Vertical MATH variants of `glyph_id`, including the base glyph first.
     pub fn vertical_variants(&self, glyph_id: u16) -> Vec<u16> {
         let mut out = vec![glyph_id];

@@ -2,6 +2,7 @@
 
 use core::cmp::Ordering;
 
+use crate::atoms::symbol_atom_kind;
 use crate::color::Color;
 use crate::dim::Dim;
 use crate::error::Error;
@@ -12,8 +13,9 @@ use crate::layout::style::MathStyle;
 use crate::layout::{BoxContent, MathBox};
 use crate::parser::{
     AccentKind, AtomKind, DelimSize, Delimiter, IntegralKind, MathNode, MatrixStyle, PhantomKind,
-    SpaceKind,
+    SpaceKind, TextStyle,
 };
+use crate::style_map::styled_char;
 use crate::symbols::lookup;
 
 /// Layout `node` in `style` using STIX Two Math metrics.
@@ -105,7 +107,7 @@ impl Engine<'_> {
                     bx,
                 })
             }
-            MathNode::Text(s, _) => self.text_run(s, style),
+            MathNode::Text(s, ts) => self.text_run(s, *ts, style),
             MathNode::Operator(name, limits) => self.operator(name, *limits, style),
             MathNode::Sum(lo, hi) => self.large_op('∑', lo.as_deref(), hi.as_deref(), style, true),
             MathNode::Product(lo, hi) => {
@@ -122,7 +124,7 @@ impl Engine<'_> {
                 self.large_op(ch, lo.as_deref(), hi.as_deref(), style, false)
             }
             MathNode::Limit(sub) => {
-                let op = self.text_run("lim", style)?;
+                let op = self.text_run("lim", TextStyle::Rm, style)?;
                 if let Some(s) = sub {
                     self.attach_limits(op.bx, None, Some(s), style, true)
                 } else {
@@ -133,7 +135,15 @@ impl Engine<'_> {
                 }
             }
             MathNode::OverUnder(base, over, under) => {
-                let b = self.layout(base, style)?;
+                let mut b = self.layout(base, style)?;
+                let mut needed = b.width.clone();
+                if let Some(o) = over {
+                    needed = needed.max(&self.layout(o, style.into_script())?.width);
+                }
+                if let Some(u) = under {
+                    needed = needed.max(&self.layout(u, style.into_script())?.width);
+                }
+                b = self.stretch_h(b, &needed, style)?;
                 self.attach_limits(b, over.as_deref(), under.as_deref(), style, true)
             }
             MathNode::Accent(base, kind) => self.accent(base, *kind, style),
@@ -209,18 +219,38 @@ impl Engine<'_> {
         }
     }
 
-    fn text_run(&self, s: &str, style: MathStyle) -> Result<Item, Error> {
+    fn text_run(&self, s: &str, ts: TextStyle, style: MathStyle) -> Result<Item, Error> {
+        if ts == TextStyle::Pmb {
+            return self.pmb(s, style);
+        }
         let mut kids = Vec::new();
         for c in s.chars() {
             if c == ' ' {
                 kids.push(MathBox::kern(self.params.mu(style) * Dim::from_i64(4)));
             } else {
-                kids.push(self.glyph(c, style)?);
+                kids.push(self.glyph(styled_char(c, ts), style)?);
             }
         }
         Ok(Item {
             bx: MathBox::hpack(kids),
             class: Some(AtomKind::Ord),
+        })
+    }
+
+    fn pmb(&self, s: &str, style: MathStyle) -> Result<Item, Error> {
+        let base = self.text_run(s, TextStyle::Rm, style)?;
+        let dx = self.params.em(style) / Dim::from_i64(25);
+        let shifted = MathBox::hpack(vec![MathBox::kern(dx.clone()), base.bx.clone()]);
+        Ok(Item {
+            class: Some(AtomKind::Ord),
+            bx: MathBox {
+                width: &base.bx.width + &dx,
+                height: base.bx.height.clone(),
+                depth: base.bx.depth.clone(),
+                italic: Dim::zero(),
+                shift: Dim::zero(),
+                content: BoxContent::Overlap(vec![base.bx, shifted]),
+            },
         })
     }
 
@@ -230,7 +260,7 @@ impl Engine<'_> {
                 return self.large_op(ch, None, None, style, limits);
             }
         }
-        self.text_run(name, style).map(|mut it| {
+        self.text_run(name, TextStyle::Rm, style).map(|mut it| {
             it.class = Some(AtomKind::Op);
             it
         })
@@ -550,6 +580,29 @@ impl Engine<'_> {
         Ok(best)
     }
 
+    fn stretch_h(&self, base: MathBox, needed: &Dim, style: MathStyle) -> Result<MathBox, Error> {
+        let BoxContent::Glyph { ch, glyph_id } = base.content else {
+            return Ok(base);
+        };
+        let mut best = base;
+        let mut best_w = best.width.clone();
+        for gid in self.font.horizontal_variants(glyph_id) {
+            let cand = self.glyph_id(ch, gid, style)?;
+            let wider_needed = best_w.cmp(needed).is_some_and(|o| o == Ordering::Less);
+            let fits = cand.width.cmp(needed).is_some_and(|o| o != Ordering::Less);
+            let tighter = cand.width.cmp(&best_w).is_some_and(|o| o == Ordering::Less);
+            let longer = cand
+                .width
+                .cmp(&best_w)
+                .is_some_and(|o| o == Ordering::Greater);
+            if (fits && (wider_needed || tighter)) || (wider_needed && longer) {
+                best_w = cand.width.clone();
+                best = cand;
+            }
+        }
+        Ok(best)
+    }
+
     fn large_op(
         &self,
         ch: char,
@@ -619,8 +672,39 @@ impl Engine<'_> {
         })
     }
 
+    fn not_overlay(&self, base: &MathNode, b: MathBox, style: MathStyle) -> Result<Item, Error> {
+        let slash = match self.glyph('\u{0338}', style) {
+            Ok(bx) => bx,
+            Err(_) => self.glyph('/', style)?,
+        };
+        let width = b.width.max(&slash.width);
+        let two = Dim::from_i64(2);
+        let b_axis = &(&b.height - &b.depth) / &two;
+        let s_axis = &(&slash.height - &slash.depth) / &two;
+        let raise = &b_axis - &s_axis;
+        let height = b.height.max(&(&slash.height + &raise).max(&slash.height));
+        let depth = b.depth.max(&(&slash.depth - &raise).clamp_nonneg());
+        Ok(Item {
+            class: class_of(base),
+            bx: MathBox {
+                width: width.clone(),
+                height,
+                depth,
+                italic: Dim::zero(),
+                shift: Dim::zero(),
+                content: BoxContent::Overlap(vec![
+                    center_in(b, &width),
+                    center_in(slash, &width).with_shift(raise),
+                ]),
+            },
+        })
+    }
+
     fn accent(&self, base: &MathNode, kind: AccentKind, style: MathStyle) -> Result<Item, Error> {
         let b = self.layout(base, style)?;
+        if kind == AccentKind::Not {
+            return self.not_overlay(base, b, style);
+        }
         if matches!(
             kind,
             AccentKind::Overline
@@ -871,19 +955,7 @@ fn symbol_char(name: &str) -> Result<char, Error> {
 }
 
 fn symbol_class(name: &str) -> AtomKind {
-    match name {
-        "times" | "div" | "cdot" | "pm" | "mp" | "ast" | "star" | "circ" | "bullet" | "oplus"
-        | "ominus" | "otimes" | "oslash" | "odot" | "wedge" | "vee" | "cap" | "cup" | "sqcap"
-        | "sqcup" | "uplus" | "amalg" | "dagger" | "ddagger" | "wr" | "bigcirc" | "unlhd"
-        | "unrhd" | "triangleleft" | "triangleright" => AtomKind::Bin,
-        "leq" | "geq" | "neq" | "equiv" | "approx" | "sim" | "simeq" | "cong" | "propto" | "in"
-        | "notin" | "subset" | "supset" | "subseteq" | "supseteq" | "subsetneq" | "ll" | "gg"
-        | "prec" | "succ" | "preceq" | "succeq" | "perp" | "parallel" | "mid" | "to"
-        | "leftarrow" | "rightarrow" | "leftrightarrow" | "Rightarrow" | "mapsto"
-        | "longrightarrow" | "implies" | "iff" | "models" | "vdash" | "dashv" | "asymp"
-        | "bowtie" | "therefore" | "because" => AtomKind::Rel,
-        _ => AtomKind::Ord,
-    }
+    symbol_atom_kind(name)
 }
 
 fn named_delim(n: &str) -> Result<char, Error> {

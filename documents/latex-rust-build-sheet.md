@@ -2,7 +2,7 @@
 **Version:** 0.1.0-plan  
 **Date:** 2026-09-01  
 **License:** MIT OR Apache-2.0  
-**Status:** Milestone 4 SVG renderer green (`golds/svg.toml`)  
+**Status:** Milestone 5 symbol coverage green (`golds/symbols.toml`, catalog corpus)  
 
 > Pure Rust LaTeX math renderer. No JavaScript. No webview. No runtime dependencies.  
 > Surpasses MathJax and KaTeX in correctness, performance, and platform coverage.
@@ -179,20 +179,20 @@ Font metrics are stored as zenith-float `Dim` values — no hardware float in th
 
 | Capability | Status | Notes |
 |---|---|---|
-| Greek lowercase α β γ … | ⬜ | Full set |
-| Greek uppercase Α Β Γ … | ⬜ | Full set |
-| Hebrew ℵ ℶ ℷ ℸ | ⬜ | |
-| Binary operators + − × ÷ ± ∓ … | ⬜ | Full TeX set |
-| Relations = < > ≤ ≥ ≠ ≈ ∼ … | ⬜ | Full TeX set |
-| Arrows → ← ↔ ⇒ ⇔ … | ⬜ | Full TeX set |
-| Large operators ∑ ∏ ∫ ∮ ∯ … | ⬜ | Display/text sizing |
-| Dots ⋯ ⋮ ⋱ … | ⬜ | \cdots \vdots \ddots |
-| Set symbols ∈ ∉ ⊂ ⊃ ∪ ∩ … | ⬜ | |
-| Logic symbols ∀ ∃ ∧ ∨ ¬ … | ⬜ | |
-| Blackboard bold ℝ ℂ ℤ ℚ ℕ … | ⬜ | \mathbb |
-| Calligraphic 𝒜 ℬ 𝒞 … | ⬜ | \mathcal |
-| Fraktur 𝔄 𝔅 ℭ … | ⬜ | \mathfrak |
-| AMS symbols | ⬜ | Full amssymb set |
+| Greek lowercase α β γ … | ✅ | Full set + variants; STIX glyphs |
+| Greek uppercase Α Β Γ … | ✅ | `\Gamma` … `\Omega` |
+| Hebrew ℵ ℶ ℷ ℸ | ✅ | |
+| Binary operators + − × ÷ ± ∓ … | ✅ | Full TeX set; Bin atom class |
+| Relations = < > ≤ ≥ ≠ ≈ ∼ … | ✅ | Full TeX set; Rel atom class |
+| Arrows → ← ↔ ⇒ ⇔ … | ✅ | Short/long/harpoons; `\xrightarrow` stretches |
+| Large operators ∑ ∏ ∫ ∮ ∯ … | ✅ | Display/text sizing |
+| Dots ⋯ ⋮ ⋱ … | ✅ | `\ldots` `\cdots` `\vdots` `\ddots` `\iddots` |
+| Set symbols ∈ ∉ ⊂ ⊃ ∪ ∩ … | ✅ | |
+| Logic symbols ∀ ∃ ∧ ∨ ¬ … | ✅ | |
+| Blackboard bold ℝ ℂ ℤ ℚ ℕ … | ✅ | `\mathbb` Unicode math alphabets |
+| Calligraphic 𝒜 ℬ 𝒞 … | ✅ | `\mathcal` / `\mathscr` |
+| Fraktur 𝔄 𝔅 ℭ … | ✅ | `\mathfrak` upper and lower |
+| AMS symbols | ✅ | amssymb operators, relations, arrows, misc |
 
 ### 4.3 Accents and Decorations
 
@@ -213,12 +213,12 @@ Font metrics are stored as zenith-float `Dim` values — no hardware float in th
 
 | Capability | Status | Notes |
 |---|---|---|
-| `\mathrm \mathbf \mathit` | ⬜ | |
-| `\mathsf \mathtt \mathbb` | ⬜ | |
-| `\mathcal \mathfrak \mathscr` | ⬜ | |
-| `\text{}` | ⬜ | Text mode inside math |
-| `\boldsymbol \pmb` | ⬜ | Bold math |
-| `\operatorname{}` | ⬜ | Named operators |
+| `\mathrm \mathbf \mathit` | ✅ | Unicode math alphabets through STIX |
+| `\mathsf \mathtt \mathbb` | ✅ | Full Latin; digits where Unicode defines them |
+| `\mathcal \mathfrak \mathscr` | ✅ | Script exceptions (ℒ, ℋ, …); fraktur upper and lower |
+| `\text{}` | ✅ | Text mode inside math |
+| `\boldsymbol \pmb` | ✅ | Bold italic Greek/Latin; `\pmb` is a true overlay |
+| `\operatorname{}` | ✅ | Named operators in `\mathrm` |
 
 ### 4.5 Spacing
 
@@ -405,11 +405,11 @@ Each milestone ends with a full gold suite pass before the next begins.
 - [x] Gold tests for SVG output on representative expressions
 
 ### Milestone 5 — Symbol Coverage
-- [ ] Full Greek alphabet
-- [ ] Full AMS symbol set
-- [ ] Blackboard bold, calligraphic, fraktur
-- [ ] All named operators
-- [ ] Gold tests for every symbol category
+- [x] Full Greek alphabet
+- [x] Full AMS symbol set
+- [x] Blackboard bold, calligraphic, fraktur
+- [x] All named operators
+- [x] Gold tests for every symbol category
 
 ### Milestone 6 — Accents and Decorations
 - [ ] All single-char accents

@@ -186,7 +186,7 @@ expect = "missing glyph"
 name = "sym_count"
 kind = "symbol"
 op = "count"
-expect = "226"
+expect = "476"
 
 [[gold]]
 name = "sym_alpha"
@@ -207,7 +207,7 @@ name = "sym_greek"
 kind = "symbol"
 op = "category_count"
 input = "Greek"
-expect = "24"
+expect = "42"
 
 [[gold]]
 name = "tok_textcolor"

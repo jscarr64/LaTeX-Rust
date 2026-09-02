@@ -1,8 +1,9 @@
 //! LaTeX-Rust: pure Rust LaTeX math renderer.
 //!
-//! Milestone 4 renders a [`MathBox`] to a self-contained SVG document. Milestone 3
-//! lays out a [`MathNode`] into that box tree. Unsupported constructs return
-//! [`Error`] — never a fake render.
+//! Milestone 5 covers the math-symbol catalog, TeX atom classes, and Unicode
+//! math alphabets (`\mathbb`, `\mathcal`, …) through STIX Two Math. Milestone 4
+//! renders a [`MathBox`] to SVG. Unsupported constructs return [`Error`] — never
+//! a fake render.
 //!
 //! No hardware `f32` / `f64` is used in layout arithmetic.
 //!
@@ -36,15 +37,18 @@
 #![deny(clippy::float_arithmetic)]
 #![deny(clippy::undocumented_unsafe_blocks)]
 
+mod atoms;
 mod color;
 mod dim;
 mod error;
 mod font;
 mod layout;
 mod parser;
+mod style_map;
 mod svg;
 mod symbols;
 
+pub use atoms::symbol_atom_kind;
 pub use color::{named_color, parse_color_spec, Color, ColorTable};
 pub use dim::{Dim, DIM_PREC};
 pub use error::{Error, FontError, ParseError};
@@ -56,5 +60,6 @@ pub use parser::{
     format_tokens, parse, parse_with_colors, preprocess, tokenize, AccentKind, AtomKind, DelimSize,
     Delimiter, IntegralKind, MathNode, MatrixStyle, PhantomKind, SpaceKind, TextStyle, Token,
 };
+pub use style_map::styled_char;
 pub use svg::{latex_to_svg, render_svg, SvgOptions};
-pub use symbols::{category_count, lookup, symbols, SymbolEntry, SymbolKind};
+pub use symbols::{category_count, glyph_char, lookup, symbols, SymbolEntry, SymbolKind};

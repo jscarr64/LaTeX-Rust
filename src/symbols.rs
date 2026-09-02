@@ -123,13 +123,40 @@ pub fn symbols() -> &'static [SymbolEntry] {
 }
 
 /// Look up by raw table LaTeX (`\alpha`, `\frac{}{}`) or command name (`alpha`).
+///
+/// Bare commands (`\aleph`) win over composite rows (`\aleph_0`).
 #[must_use]
 pub fn lookup(query: &str) -> Option<&'static SymbolEntry> {
     let q = query.trim();
     let q_name = command_name(q);
+    if let Some(e) = catalog().iter().find(|e| e.latex == q) {
+        return Some(e);
+    }
+    if let Some(e) = catalog()
+        .iter()
+        .find(|e| e.command_name() == q_name && is_bare_latex(e.latex, q_name))
+    {
+        return Some(e);
+    }
     catalog()
         .iter()
-        .find(|e| e.latex == q || e.command_name() == q || e.command_name() == q_name)
+        .find(|e| e.command_name() == q || e.command_name() == q_name)
+}
+
+/// Single-character catalog glyph for `query`, if the row is a lone code point.
+#[must_use]
+pub fn glyph_char(query: &str) -> Option<char> {
+    let e = lookup(query)?;
+    let mut chars = e.glyph.chars();
+    match (chars.next(), chars.next()) {
+        (Some(c), None) => Some(c),
+        _ => None,
+    }
+}
+
+fn is_bare_latex(latex: &str, name: &str) -> bool {
+    let t = latex.trim();
+    t == name || t.strip_prefix('\\').is_some_and(|rest| rest == name)
 }
 
 /// Number of entries in a category.

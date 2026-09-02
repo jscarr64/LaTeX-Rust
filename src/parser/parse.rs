@@ -399,6 +399,22 @@ impl Parser {
             "mathscr" => self.font(TextStyle::Scr),
             "boldsymbol" => self.font(TextStyle::Boldsymbol),
             "pmb" => self.font(TextStyle::Pmb),
+            "xrightarrow" => {
+                let over = self.parse_arg()?;
+                Ok(MathNode::OverUnder(
+                    Box::new(MathNode::Symbol("longrightarrow".into())),
+                    Some(Box::new(over)),
+                    None,
+                ))
+            }
+            "xleftarrow" => {
+                let over = self.parse_arg()?;
+                Ok(MathNode::OverUnder(
+                    Box::new(MathNode::Symbol("longleftarrow".into())),
+                    Some(Box::new(over)),
+                    None,
+                ))
+            }
             "text" | "mbox" => self.parse_text(TextStyle::Text),
             "operatorname" => {
                 let name = self.collect_group_text()?;
@@ -483,7 +499,15 @@ impl Parser {
             }
             "|" => Ok(MathNode::Symbol("Vert".into())),
             "backslash" => Ok(MathNode::Symbol("backslash".into())),
-            _ => self.parse_symbol_or_unknown(name),
+            _ => {
+                if name.starts_with("math")
+                    && name.len() > 4
+                    && name.chars().all(|c| c.is_ascii_alphabetic())
+                {
+                    return Err(ParseError::Unsupported(format!("font style {name}")));
+                }
+                self.parse_symbol_or_unknown(name)
+            }
         }
     }
 
@@ -846,8 +870,21 @@ fn apply_scripts(nucleus: MathNode, sub: Option<MathNode>, sup: Option<MathNode>
 
 fn apply_text_style(node: MathNode, style: TextStyle) -> MathNode {
     match node {
-        MathNode::Atom(c, _) if c.is_ascii_alphanumeric() => MathNode::Text(c.to_string(), style),
+        MathNode::Atom(c, _) if crate::style_map::is_stylable(c) => {
+            MathNode::Text(c.to_string(), style)
+        }
         MathNode::Text(s, _) => MathNode::Text(s, style),
+        MathNode::Symbol(name) => {
+            if let Some(ch) = crate::symbols::glyph_char(&name) {
+                if crate::style_map::is_stylable(ch) {
+                    MathNode::Text(ch.to_string(), style)
+                } else {
+                    MathNode::Symbol(name)
+                }
+            } else {
+                MathNode::Symbol(name)
+            }
+        }
         MathNode::Row(v) => collapse_text(MathNode::Row(
             v.into_iter().map(|n| apply_text_style(n, style)).collect(),
         )),
@@ -874,10 +911,10 @@ fn collapse_text(node: MathNode) -> MathNode {
 fn atom_kind(c: char) -> AtomKind {
     match c {
         '+' | '-' | '*' | '±' | '∓' | '·' | '×' | '÷' => AtomKind::Bin,
-        '=' | '<' | '>' | '≠' | '≤' | '≥' | '≈' | '≡' | ':' => AtomKind::Rel,
+        '=' | '<' | '>' | '≠' | '≤' | '≥' | '≈' | '≡' => AtomKind::Rel,
         '(' | '[' | '{' => AtomKind::Open,
         ')' | ']' | '}' => AtomKind::Close,
-        ',' | ';' | '!' | '?' => AtomKind::Punct,
+        ',' | ';' | '!' | '?' | ':' => AtomKind::Punct,
         _ => AtomKind::Ord,
     }
 }
@@ -935,6 +972,10 @@ fn alias(name: &str) -> &str {
         "ge" => "geq",
         "ne" => "neq",
         "dots" => "ldots",
+        "lnot" => "neg",
+        "dag" => "dagger",
+        "ddag" => "ddagger",
+        "owns" => "ni",
         _ => name,
     }
 }

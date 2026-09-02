@@ -993,3 +993,34 @@ kind = "ast"
 input = "\\bigl("
 expect = "(big big Open \"(\")"
 
+[[gold]]
+name = "unknown_font_style"
+kind = "err"
+error = "Unsupported"
+input = "\\mathfoo{x}"
+expect = "unsupported: font style mathfoo"
+
+[[gold]]
+name = "symbol_Gamma"
+kind = "ast"
+input = "\\Gamma"
+expect = "(symbol Gamma)"
+
+[[gold]]
+name = "symbol_varepsilon"
+kind = "ast"
+input = "\\varepsilon"
+expect = "(symbol varepsilon)"
+
+[[gold]]
+name = "xrightarrow"
+kind = "ast"
+input = "\\xrightarrow{f}"
+expect = "(overunder (symbol longrightarrow) (atom Ord \"f\") _)"
+
+[[gold]]
+name = "colon_punct"
+kind = "ast"
+input = ":"
+expect = "(atom Punct \":\")"
+
