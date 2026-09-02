@@ -2,7 +2,7 @@
 **Version:** 0.1.0-plan  
 **Date:** 2026-09-01  
 **License:** MIT OR Apache-2.0  
-**Status:** Milestone 8 color support green (SVG `fill`/`stroke`; PNG/egui paint wait on M9/M10)  
+**Status:** Milestone 9 PNG renderer green (`features = ["png"]`; `golds/png.toml`)  
 
 > Pure Rust LaTeX math renderer. No JavaScript. No webview. No runtime dependencies.  
 > Surpasses MathJax and KaTeX in correctness, performance, and platform coverage.
@@ -153,9 +153,9 @@ Font metrics are stored as zenith-float `Dim` values — no hardware float in th
 - Primary output format
 
 **PNG renderer (`src/render/png`, feature `png`):**
-- Entry points exist now and return `Err(Unsupported)` until Milestone 9
-- Milestone 9 uses `tiny-skia` for rasterization; DPI-aware
-- Feature `png` is reserved for the `tiny-skia` dependency — not pulled today
+- `tiny-skia` 0.11 rasterization; DPI-aware (`pixels = points × dpi / 72`)
+- Without `features = ["png"]` every entry point is `Err(Unsupported)`
+- Gold hashes lock PNG bytes at 72 / 144 / 300 DPI (`golds/png.toml`)
 
 **egui renderer (`src/render/egui`, feature `egui`):**
 - Entry points exist now and return `Err(Unsupported)` until Milestone 10
@@ -293,7 +293,7 @@ Color is in scope for v1.0 (Milestone 8). Channel math uses `Dim` — never hard
 | Gray model `{gray}{g}` | ✅ | Value 0.0–1.0 via `Dim` |
 | Color inheritance / scope | ✅ | Color scoped to current group `{}` |
 | SVG fill / stroke emission | ✅ | `fill` and `stroke` on `<g>`; boxes as `<rect>` |
-| PNG color pass-through | ⬜ | tiny-skia color support (Milestone 9) |
+| PNG color pass-through | ✅ | tiny-skia `Paint` from `Color::to_rgba8` (`golds/png.toml`) |
 | egui color pass-through | ⬜ | egui `Color32` emission (Milestone 10) |
 | Unsupported color model | ✅ | Returns `Err(Unsupported)` — never a fake color |
 
@@ -446,15 +446,15 @@ Each milestone ends with a full gold suite pass before the next begins.
 - [x] Color AST nodes — `Color`, `TextColor`, `ColorBox`, `FColorBox` (`golds/parse.toml`)
 - [x] Color scope propagation through layout engine
 - [x] SVG renderer — `fill` and `stroke` attribute emission on colored glyphs
-- [ ] PNG renderer — tiny-skia color pass-through (Milestone 9; `Color::to_rgba8` is the contract)
+- [x] PNG renderer — tiny-skia color pass-through (Milestone 9; `Color::to_rgba8`)
 - [ ] egui renderer — `Color32` emission (Milestone 10; `Color::to_rgba8` is the contract)
 - [x] Gold tests for every color capability (hex / tokenize / parse AST / layout color boxes / SVG `fill`/`stroke` locked; PNG and egui wait on later milestones)
 - [x] Full corpus pass before Milestone 9
 
 ### Milestone 9 — PNG Renderer (feature = "png")
-- [ ] tiny-skia integration
-- [ ] DPI-aware rasterization
-- [ ] Gold tests for pixel output
+- [x] tiny-skia integration
+- [x] DPI-aware rasterization
+- [x] Gold tests for pixel output
 
 ### Milestone 10 — egui Renderer (feature = "egui")
 - [ ] egui Shape emission

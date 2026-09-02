@@ -34,13 +34,14 @@ path = "src/lib.rs"
 default = ["std"]
 std = ["zenith-float/std"]
 # Milestone 9: tiny-skia raster backend (`src/render/png`).
-png = []
+png = ["dep:tiny-skia"]
 # Milestone 10: egui Shape backend (`src/render/egui`).
 egui = []
 
 [dependencies]
 ttf-parser = "0.25"
 zenith-float = "1.0"
+tiny-skia = { version = "0.11", optional = true }
 
 [[bench]]
 name = "layout"

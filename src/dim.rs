@@ -9,6 +9,7 @@ use core::fmt;
 use core::ops::{Add, Div, Mul, Neg, Sub};
 use std::sync::Arc;
 
+use crate::error::Error;
 use zenith_float::{Consts, ExactNum, Radix, RoundingMode};
 
 /// Working precision for layout `Dim` values, in bits.
@@ -149,6 +150,63 @@ impl Dim {
     #[must_use]
     pub fn from_ieee32_bits(bits: u32) -> Self {
         wrap(zenith_float::Ieee32::from_bits(bits).to_exact(DIM_PREC))
+    }
+
+    /// Round to IEEE-754 binary32 bits for PNG / raster emission only.
+    ///
+    /// Layout arithmetic stays in [`Dim`]. This is the pixel-coordinate terminal
+    /// permitted for SVG/PNG backends.
+    #[must_use]
+    pub fn to_ieee32_bits(&self) -> u32 {
+        zenith_float::Ieee32::from_exact(self.inner.as_ref()).to_bits()
+    }
+
+    /// Largest `u32` that is not greater than `self`. Negative and NaN fail.
+    pub fn floor_to_u32(&self) -> Result<u32, Error> {
+        if self.is_nan() {
+            return Err(Error::InvalidOption {
+                what: "dimension is NaN".into(),
+            });
+        }
+        if matches!(self.cmp(&Self::zero()), Some(Ordering::Less)) {
+            return Err(Error::InvalidOption {
+                what: "negative dimension".into(),
+            });
+        }
+        const MAX: u32 = 1 << 20;
+        if matches!(
+            self.cmp(&Self::from_i64(i64::from(MAX))),
+            Some(Ordering::Greater) | Some(Ordering::Equal)
+        ) {
+            return Err(Error::InvalidOption {
+                what: "dimension exceeds raster limit".into(),
+            });
+        }
+        let mut ans = 0u32;
+        let mut bit = 1u32 << 19;
+        while bit > 0 {
+            let cand = ans + bit;
+            if Self::from_i64(i64::from(cand))
+                .cmp(self)
+                .is_some_and(|o| o != Ordering::Greater)
+            {
+                ans = cand;
+            }
+            bit /= 2;
+        }
+        Ok(ans)
+    }
+
+    /// Smallest `u32` that is not less than `self`.
+    pub fn ceil_to_u32(&self) -> Result<u32, Error> {
+        let floor = self.floor_to_u32()?;
+        if self.eq_dim(&Self::from_i64(i64::from(floor))) {
+            Ok(floor)
+        } else {
+            floor.checked_add(1).ok_or_else(|| Error::InvalidOption {
+                what: "dimension overflow".into(),
+            })
+        }
     }
 
     /// Compare two dimensions. `None` if either is NaN.

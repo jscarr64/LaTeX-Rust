@@ -1,0 +1,141 @@
+# Gold tests — Milestone 9 PNG renderer
+# Contract: code must match these values. Do not edit golds to hide a bug.
+# Pixel-level: sha256 of PNG bytes. Dimensions at the recorded DPI.
+
+[[gold]]
+name = "glyph-x-144"
+kind = "png"
+input = "x"
+dpi = "144"
+width_px = "12"
+height_px = "12"
+sha256 = "1b1551d2e2a57c7b4c7a0870e0e4eff0c514a191d87fa76bf7b0fa988289a8f9"
+
+[[gold]]
+name = "frac-144"
+kind = "png"
+input = "\\frac{1}{2}"
+dpi = "144"
+width_px = "9"
+height_px = "39"
+sha256 = "f1cdb709f41fb27dd06859e691777ebff30f0838d591d4a4f38d97c0925b30ee"
+
+[[gold]]
+name = "sqrt-x-144"
+kind = "png"
+input = "\\sqrt{x}"
+dpi = "144"
+width_px = "31"
+height_px = "29"
+sha256 = "9d4e6e68c0e161b9108d0db8af7837705207a3a480ffca3d4f92ac371067a1ca"
+
+[[gold]]
+name = "sup-x2-144"
+kind = "png"
+input = "x^2"
+dpi = "144"
+width_px = "21"
+height_px = "20"
+sha256 = "3bcbb57af9f4fb6a2f72f42048d5ffcac64461a8901e4299da63f8dc3a1fe77f"
+
+[[gold]]
+name = "sum-display-144"
+kind = "png"
+style = "display"
+input = "\\sum_{k=1}^{n}"
+dpi = "144"
+width_px = "30"
+height_px = "76"
+sha256 = "8cda6e09bbec2cc23c0b5cc3e85a30d17b2ca6b597bc6e486600ddb4474b26dd"
+
+[[gold]]
+name = "sup-x2-72"
+kind = "png"
+input = "x^2"
+dpi = "72"
+width_px = "11"
+height_px = "10"
+sha256 = "0cc72ab56044397d1afa1c0f6ca462ea7f6537782d00fb4a07ef502822bab7f1"
+
+[[gold]]
+name = "sup-x2-300"
+kind = "png"
+input = "x^2"
+dpi = "300"
+width_px = "43"
+height_px = "41"
+sha256 = "ed9268f308f9ceebd32f506640e8564e63fe701d2bac92d2e326091e7c11191f"
+
+[[gold]]
+name = "x-transparent"
+kind = "png"
+input = "x"
+dpi = "144"
+background = "transparent"
+width_px = "12"
+height_px = "12"
+sha256 = "1b1551d2e2a57c7b4c7a0870e0e4eff0c514a191d87fa76bf7b0fa988289a8f9"
+
+[[gold]]
+name = "x-white"
+kind = "png"
+input = "x"
+dpi = "144"
+background = "white"
+width_px = "12"
+height_px = "12"
+sha256 = "cf997700351a62a4a48a6d6a0040d5c11175f3ef1b23e41b9a14b5fe58cc8894"
+
+[[gold]]
+name = "x-yellow-bg"
+kind = "png"
+input = "x"
+dpi = "144"
+background = "yellow"
+width_px = "12"
+height_px = "12"
+sha256 = "23106cfc1baa331e5127b05d4972bb024e245a5f845b9583938a94b7497bd4b3"
+
+[[gold]]
+name = "textcolor-red-x"
+kind = "png"
+input = "\\textcolor{red}{x}"
+dpi = "144"
+width_px = "12"
+height_px = "12"
+sha256 = "7d8569d88198bf32fe6f55ac819c29d66cc17ecc541f45dc01df587ea11464e9"
+
+[[gold]]
+name = "colorbox-yellow-x"
+kind = "png"
+input = "\\colorbox{yellow}{x}"
+dpi = "144"
+width_px = "20"
+height_px = "20"
+sha256 = "2d9849d809ba2dc1c456551718e3c610c3a5bd1f3ad86be985eb3111ba3f231c"
+
+[[gold]]
+name = "aa-x-144"
+kind = "aa"
+input = "x"
+dpi = "144"
+
+[[gold]]
+name = "aa-cancel-300"
+kind = "aa"
+input = "\\cancel{x}"
+dpi = "300"
+
+[[gold]]
+name = "zero-dpi"
+kind = "err"
+input = "x"
+dpi = "0"
+expect = "invalid option"
+
+[[gold]]
+name = "huge-dpi"
+kind = "err"
+input = "x"
+dpi = "2401"
+expect = "invalid option"

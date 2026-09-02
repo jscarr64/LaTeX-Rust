@@ -3,9 +3,10 @@
 //! Crate layout follows the build-sheet architecture:
 //! [`parser`], [`mod@layout`], [`font`], [`render`] (`svg` / `png` / `egui`).
 //!
-//! Milestone 8 covers math-mode color: named / rgb / RGB / HTML / cmyk / gray,
-//! `\definecolor`, group scope, and SVG `fill` / `stroke`. PNG and egui color
-//! paint wait on those renderers (Milestones 9 and 10). Milestone 7 covers
+//! Milestone 9 rasterizes a [`MathBox`] to PNG via `tiny-skia` behind
+//! `features = ["png"]`. Milestone 8 covers math-mode color: named / rgb / RGB /
+//! HTML / cmyk / gray, `\definecolor`, group scope, and SVG `fill` / `stroke`.
+//! egui color paint waits on Milestone 10. Milestone 7 covers
 //! multiline environments, equation numbering, `{array}` column specs,
 //! `\substack`, and `\intertext`. Milestone 6 covers TeX-exact accent placement,
 //! extensible decorations from MATH variants and glyph assembly, cancel
@@ -80,7 +81,7 @@ pub use parser::{
     SpaceKind, TextStyle, Token,
 };
 pub use render::egui::render_egui;
-pub use render::png::{latex_to_png, render_png, PngOptions};
+pub use render::png::{latex_to_png, render_png, PngBackground, PngOptions};
 pub use render::svg::{latex_to_svg, render_svg, SvgOptions};
 pub use style_map::styled_char;
 pub use symbols::{category_count, glyph_char, lookup, symbols, SymbolEntry, SymbolKind};

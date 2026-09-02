@@ -22,6 +22,11 @@ pub enum Error {
         /// Human-readable description of what was malformed.
         what: String,
     },
+    /// A render option is out of range (for example PNG DPI of 0 or above 2400).
+    InvalidOption {
+        /// Human-readable name of the invalid option.
+        what: String,
+    },
 }
 
 /// Tokenizer / parser failure.
@@ -58,6 +63,7 @@ impl fmt::Display for Error {
             Self::Font(e) => write!(f, "{e}"),
             Self::Unsupported { what } => write!(f, "unsupported: {what}"),
             Self::Malformed { what } => write!(f, "malformed: {what}"),
+            Self::InvalidOption { what } => write!(f, "invalid option: {what}"),
         }
     }
 }
