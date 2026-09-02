@@ -41,7 +41,7 @@
 #![deny(missing_docs)]
 #![deny(clippy::float_arithmetic)]
 #![deny(clippy::undocumented_unsafe_blocks)]
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod atoms;
 mod color;
