@@ -1,0 +1,228 @@
+Symbol	Description	Raw LaTeX
+α	Greek Alphabet (Lowercase/Uppercase)	\alpha
+β	Greek Alphabet (Lowercase/Uppercase)	\beta
+γ	Greek Alphabet (Lowercase/Uppercase)	\gamma
+δ	Greek Alphabet (Lowercase/Uppercase)	\delta
+ε	Greek Alphabet (Lowercase/Uppercase)	\epsilon
+ζ	Greek Alphabet (Lowercase/Uppercase)	\zeta
+η	Greek Alphabet (Lowercase/Uppercase)	\eta
+θ	Greek Alphabet (Lowercase/Uppercase)	\theta
+ι	Greek Alphabet (Lowercase/Uppercase)	\iota
+κ	Greek Alphabet (Lowercase/Uppercase)	\kappa
+λ	Greek Alphabet (Lowercase/Uppercase)	\lambda
+μ	Greek Alphabet (Lowercase/Uppercase)	\mu
+ν	Greek Alphabet (Lowercase/Uppercase)	\nu
+ξ	Greek Alphabet (Lowercase/Uppercase)	\xi
+ο	Greek Alphabet (Lowercase/Uppercase)	\omicron
+π	Greek Alphabet (Lowercase/Uppercase)	\pi
+ρ	Greek Alphabet (Lowercase/Uppercase)	\rho
+σ	Greek Alphabet (Lowercase/Uppercase)	\sigma
+τ	Greek Alphabet (Lowercase/Uppercase)	\tau
+υ	Greek Alphabet (Lowercase/Uppercase)	\upsilon
+φ	Greek Alphabet (Lowercase/Uppercase)	\phi
+χ	Greek Alphabet (Lowercase/Uppercase)	\chi
+ψ	Greek Alphabet (Lowercase/Uppercase)	\psi
+ω	Greek Alphabet (Lowercase/Uppercase)	\omega
+×	Operations	\times
+÷	Operations	\div
+⋅	Operations	\cdot
+±	Plus-minus / Minus-plus	\pm
+∓	Plus-minus / Minus-plus	\mp
+∑	Sum, Product, Coproduct	\sum
+∏	Sum, Product, Coproduct	\prod
+∐	Sum, Product, Coproduct	\coprod
+∫	Integrals (Single to Volume/Contour)	\int
+∬	Integrals (Single to Volume/Contour)	\iint
+∭	Integrals (Single to Volume/Contour)	\iiint
+∮	Integrals (Single to Volume/Contour)	\oint
+∂	Partial derivative, Gradient/Nabla	\partial
+∇	Partial derivative, Gradient/Nabla	\nabla
+→	Arrows	\to
+←	Arrows	\leftarrow
+↔	Arrows	\leftrightarrow
+⇒	Implies / Equivalence arrows	\Rightarrow
+↦	Maps to / Long arrow	\mapsto
+⟶	Maps to / Long arrow	\longrightarrow
+≈	Similarity and Approximations	\approx
+∼	Similarity and Approximations	\sim
+≃	Similarity and Approximations	\simeq
+≡	Congruence and Equivalence	\equiv
+≅	Congruence and Equivalence	\cong
+≢	Congruence and Equivalence	\not\equiv
+≤	Inequalities	\leq
+≥	Inequalities	\geq
+≪	Inequalities	\ll
+≫	Inequalities	\gg
+∈	Set Theory (Membership & Subsets)	\in
+∉	Set Theory (Membership & Subsets)	\notin
+⊂	Set Theory (Membership & Subsets)	\subset
+⊃	Set Theory (Membership & Subsets)	\supset
+⊆	Subset/Superset variations	\subseteq
+⊇	Subset/Superset variations	\supseteq
+⊊	Subset/Superset variations	\subsetneq
+∪	Set Operations (Union, Intersect, Diff)	\cup
+∩	Set Operations (Union, Intersect, Diff)	\cap
+∖	Set Operations (Union, Intersect, Diff)	\setminus
+∅	Empty set	\emptyset
+∅	Empty set (Alternative)	\varnothing
+∀	Quantifiers	\forall
+∃	Quantifiers	\exists
+∄	Quantifiers	\nexists
+∧	Logic Operators (AND, OR, NOT)	\land
+∨	Logic Operators (AND, OR, NOT)	\lor
+¬	Logic Operators (AND, OR, NOT)	\neg
+⟹	Logical implication / equivalence	\implies
+⟺	Logical implication / equivalence	\iff
+∞	Infinity	\infty
+ℵ0	Infinity and Aleph null	\aleph_0
+⊥	Perpendicular, Parallel	\perp
+∥	Perpendicular, Parallel	\parallel
+∠	Geometry (Angle, Triangle, Square)	\angle
+△	Geometry (Angle, Triangle, Square)	\triangle
+□	Geometry (Angle, Triangle, Square)	\square
+□̄	Accents (Bar, Hat, Tilde)	\bar{\square}
+□̂	Accents (Bar, Hat, Tilde)	\hat{\square}
+□̃	Accents (Bar, Hat, Tilde)	\tilde{\square}
+□⃗	Vectors and Time Derivatives	\vec{\square}
+□̇	Vectors and Time Derivatives	\dot{\square}
+□̈	Vectors and Time Derivatives	\ddot{\square}
+□/□	Fractions	\frac{\square}{\square}
+√□	Square and Nth Roots	\sqrt{\square}
+ⁿ√□	Square and Nth Roots	\sqrt[\square]{\square}
+∑	Summations with Bounds	\sum_{\square}^{\square}
+∫	Definite Integrals with Bounds	\int_{\square}^{\square}
+lim	Limits	\lim_{\square \to \square}
+(□/□)	Scalable Parentheses / Brackets	\left( \frac{\square}{\square} \right)
+□ □ ; □ □	Basic Matrix	\begin{matrix} \square & \square \\ \square & \square \end{matrix}
+(□ □ ; □ □)	Matrix with Parentheses	\begin{pmatrix} \square & \square \\ \square & \square \end{pmatrix}
+|□ □ ; □ □|	Determinant Matrix	\begin{vmatrix} \square & \square \\ \square & \square \end{vmatrix}
++	Plus	+
+-	Minus	-
+∗	Asterisk	\ast
+⋆	Star	\star
+∘	Function composition (circle)	\circ
+•	Bullet	\bullet
+=	Equals	=
+≠	Not equal	\neq
+∝	Proportional to	\propto
+<	Less than	<
+>	Greater than	>
+ℵ	Aleph	\aleph
+ℏ	Reduced Planck constant (H-bar)	\hbar
+ℜ	Real part	\Re
+ℑ	Imaginary part	\Im
+℘	Weierstrass p	\wp
+(	Left parenthesis	(
+)	Right parenthesis	)
+[	Left square bracket	[
+]	Right square bracket	]
+{	Left curly brace	\{
+}	Right curly brace	\}
+⟨	Left angle bracket	\langle
+⟩	Right angle bracket	\rangle
+|	Vertical bar	\|
+⌊	Left floor	\lfloor
+⌋	Right floor	\rfloor
+⌈	Left ceiling	\lceil
+⌉	Right ceiling	\rceil
+≮	Not less than	\nless
+≯	Not greater than	\ngtr
+≰	Not less than or equal to	\nleq
+≱	Not greater than or equal to	\ngeq
+≁	Not similar to	\nsim
+≇	Not congruent to	\ncong
+⇀	Right harpoon up	\rightharpoonup
+⇁	Right harpoon down	\rightharpoondown
+↼	Left harpoon up	\leftharpoonup
+↽	Left harpoon down	\leftharpoondown
+⇌	Chemical equilibrium arrow / Right harpoon up over left harpoon down	\rightleftharpoons
+ℶ	Beth (Requires amssymb)	\beth
+ℷ	Gimel (Requires amssymb)	\gimel
+ℸ	Daleth (Requires amssymb)	\daleth
+√□	Surd (square root)	\sqrt{\square}
+⊤	Top	\top
+⊢	Right tack	\vdash
+⊣	Left tack	\dashv
+⊨	Models	\models
+ℓ	Cursive l	\ell
+ı	Dotless i	\imath
+ȷ	Dotless j	\jmath
+♭	Flat	\flat
+♮	Natural	\natural
+♯	Sharp	\sharp
+∴	Therefore	\therefore
+∵	Because	\because
+≍	Equivalent	\asymp
+⋈	Bowtie	\bowtie
+⋉	Left semidirect product (Requires amssymb)	\ltimes
+⋊	Right semidirect product (Requires amssymb)	\rtimes
+⊏	Square subset (Requires amssymb)	\sqsubset
+⊐	Square superset (Requires amssymb)	\sqsupset
+⊑	Square subset or equal (Requires amssymb)	\sqsubseteq
+⊒	Square superset or equal (Requires amssymb)	\sqsupseteq
+⊕	Direct sum (circled plus)	\oplus
+⊖	Circled minus	\ominus
+⊗	Tensor product (circled times)	\otimes
+⊘	Circled slash	\oslash
+⊙	Circled dot	\odot
+†	Dagger	\dagger
+‡	Double dagger	\ddagger
+⨿	Amalgamation	\amalg
+△	Big triangle up	\bigtriangleup
+▽	Big triangle down	\bigtriangledown
+◁	Left triangle	\triangleleft
+▷	Right triangle	\triangleright
+⊴	Left triangle or equal (Requires amssymb)	\unlhd
+⊵	Right triangle or equal (Requires amssymb)	\unrhd
+◇	Diamond (Requires amssymb)	\Diamond
+□	Box (Requires amssymb)	\Box
+℧	Mho (Requires amssymb)	\mho
+Å	Angstrom	\mathring{A}
+°C	Celsius	{}^\circ C
+°	Degree	{}^\circ
+$	Dollar sign	\$
+£	Pound sign	\text{£}
+€	Euro sign	\text{€}
+¥	Yen sign	\text{¥}
+¢	Cent sign	\text{¢}
+%	Percent	\%
+&	Ampersand	\&
+#	Hash	\#
+_	Underscore	\_
+\	Backslash	\backslash
+↑	Up arrow	\uparrow
+↓	Down arrow	\downarrow
+↕	Up down arrow	\updownarrow
+↗	North east arrow	\nearrow
+↘	South east arrow	\searrow
+↙	South west arrow	\swarrow
+↖	North west arrow	\nwarrow
+↩	Hook left arrow	\hookleftarrow
+↪	Hook right arrow	\hookrightarrow
+ℰ	Euler's number (script E) / Emf / Lagrangian density	\mathcal{E}
+ℱ	Fourier transform (script F)	\mathcal{F}
+ℒ	Laplace transform (script L) / Lagrangian	\mathcal{L}
+ℋ	Hamiltonian (script H)	\mathcal{H}
+ℤ	Integers (Blackboard bold Z) (Requires amsfonts)	\mathbb{Z}
+ℝ	Real numbers (Blackboard bold R) (Requires amsfonts)	\mathbb{R}
+ℂ	Complex numbers (Blackboard bold C) (Requires amsfonts)	\mathbb{C}
+ℚ	Rational numbers (Blackboard bold Q) (Requires amsfonts)	\mathbb{Q}
+ℕ	Natural numbers (Blackboard bold N) (Requires amsfonts)	\mathbb{N}
+⟨·|	Bra notation (Quantum Mechanics)	\langle \cdot \|
+|·⟩	Ket notation (Quantum Mechanics)	\| \cdot \rangle
+·†	Dagger / Hermitian conjugate	{\cdot}^\dagger
+F	Field (Blackboard Bold) (Requires amsfonts)	\mathbb{F}
+K	Field / Constant (Blackboard Bold) (Requires amsfonts)	\mathbb{K}
+P	Probability operator (Requires amsfonts)	\mathbb{P}
+E	Expectation operator (Requires amsfonts)	\mathbb{E}
+I	Indicator function (Requires amsfonts)	\mathbb{I}
+⊠	Box times (Exterior tensor product) (Requires amssymb)	\boxtimes
+⊞	Box plus (Requires amssymb)	\boxplus
+⋀	Wedge product (Large)	\bigwedge
+⋁	Vee product (Large)	\bigvee
+□̂	Wide hat accent	\widehat{\square}
+□̃	Wide tilde accent	\widetilde{\square}
+⏟	Underbrace with label	\underbrace{\square}_{\square}
+⏞	Overbrace with label	\overbrace{\square}^{\square}
+□̌	Check / Caron accent	\check{\square}
+□̆	Breve accent	\breve{\square}

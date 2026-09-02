@@ -1,0 +1,228 @@
+Symbol	Description	Raw LaTeX	Flutter Formula	Category	Key Type
+α	Greek Alphabet (Lowercase/Uppercase)	\alpha	$$\alpha$$	Greek	Symbol
+β	Greek Alphabet (Lowercase/Uppercase)	\beta	$$\beta$$	Greek	Symbol
+γ	Greek Alphabet (Lowercase/Uppercase)	\gamma	$$\gamma$$	Greek	Symbol
+δ	Greek Alphabet (Lowercase/Uppercase)	\delta	$$\delta$$	Greek	Symbol
+ε	Greek Alphabet (Lowercase/Uppercase)	\epsilon	$$\epsilon$$	Greek	Symbol
+ζ	Greek Alphabet (Lowercase/Uppercase)	\zeta	$$\zeta$$	Greek	Symbol
+η	Greek Alphabet (Lowercase/Uppercase)	\eta	$$\eta$$	Greek	Symbol
+θ	Greek Alphabet (Lowercase/Uppercase)	\theta	$$\theta$$	Greek	Symbol
+ι	Greek Alphabet (Lowercase/Uppercase)	\iota	$$\iota$$	Greek	Symbol
+κ	Greek Alphabet (Lowercase/Uppercase)	\kappa	$$\kappa$$	Greek	Symbol
+λ	Greek Alphabet (Lowercase/Uppercase)	\lambda	$$\lambda$$	Greek	Symbol
+μ	Greek Alphabet (Lowercase/Uppercase)	\mu	$$\mu$$	Greek	Symbol
+ν	Greek Alphabet (Lowercase/Uppercase)	\nu	$$\nu$$	Greek	Symbol
+ξ	Greek Alphabet (Lowercase/Uppercase)	\xi	$$\xi$$	Greek	Symbol
+ο	Greek Alphabet (Lowercase/Uppercase)	\omicron	$$\omicron$$	Greek	Symbol
+π	Greek Alphabet (Lowercase/Uppercase)	\pi	$$\pi$$	Greek	Symbol
+ρ	Greek Alphabet (Lowercase/Uppercase)	\rho	$$\rho$$	Greek	Symbol
+σ	Greek Alphabet (Lowercase/Uppercase)	\sigma	$$\sigma$$	Greek	Symbol
+τ	Greek Alphabet (Lowercase/Uppercase)	\tau	$$\tau$$	Greek	Symbol
+υ	Greek Alphabet (Lowercase/Uppercase)	\upsilon	$$\upsilon$$	Greek	Symbol
+φ	Greek Alphabet (Lowercase/Uppercase)	\phi	$$\phi$$	Greek	Symbol
+χ	Greek Alphabet (Lowercase/Uppercase)	\chi	$$\chi$$	Greek	Symbol
+ψ	Greek Alphabet (Lowercase/Uppercase)	\psi	$$\psi$$	Greek	Symbol
+ω	Greek Alphabet (Lowercase/Uppercase)	\omega	$$\omega$$	Greek	Symbol
+×	Operations	\times	$$\times$$	General	Symbol
+÷	Operations	\div	$$\div$$	General	Symbol
+⋅	Operations	\cdot	$$\cdot$$	General	Symbol
+±	Plus-minus / Minus-plus	\pm	$$\pm$$	General	Symbol
+∓	Plus-minus / Minus-plus	\mp	$$\mp$$	General	Symbol
+∑	Sum, Product, Coproduct	\sum	$$\sum$$	General	Symbol
+∏	Sum, Product, Coproduct	\prod	$$\prod$$	General	Symbol
+∐	Sum, Product, Coproduct	\coprod	$$\coprod$$	General	Symbol
+∫	Integrals (Single to Volume/Contour)	\int	$$\int$$	Calculus	Operator
+∬	Integrals (Single to Volume/Contour)	\iint	$$\iint$$	Calculus	Operator
+∭	Integrals (Single to Volume/Contour)	\iiint	$$\iiint$$	Calculus	Operator
+∮	Integrals (Single to Volume/Contour)	\oint	$$\oint$$	Calculus	Operator
+∂	Partial derivative, Gradient/Nabla	\partial	$$\partial$$	Calculus	Operator
+∇	Partial derivative, Gradient/Nabla	\nabla	$$\nabla$$	Calculus	Operator
+→	Arrows	\to	$$\to$$	General	Symbol
+←	Arrows	\leftarrow	$$\leftarrow$$	General	Symbol
+↔	Arrows	\leftrightarrow	$$\leftrightarrow$$	General	Symbol
+⇒	Implies / Equivalence arrows	\Rightarrow	$$\Rightarrow$$	General	Symbol
+↦	Maps to / Long arrow	\mapsto	$$\mapsto$$	General	Symbol
+⟶	Maps to / Long arrow	\longrightarrow	$$\longrightarrow$$	General	Symbol
+≈	Similarity and Approximations	\approx	$$\approx$$	General	Symbol
+∼	Similarity and Approximations	\sim	$$\sim$$	General	Symbol
+≃	Similarity and Approximations	\simeq	$$\simeq$$	General	Symbol
+≡	Congruence and Equivalence	\equiv	$$\equiv$$	General	Symbol
+≅	Congruence and Equivalence	\cong	$$\cong$$	General	Symbol
+≢	Congruence and Equivalence	\not\equiv	$$\not\equiv$$	General	Symbol
+≤	Inequalities	\leq	$$\leq$$	General	Symbol
+≥	Inequalities	\geq	$$\geq$$	General	Symbol
+≪	Inequalities	\ll	$$\ll$$	General	Symbol
+≫	Inequalities	\gg	$$\gg$$	General	Symbol
+∈	Set Theory (Membership & Subsets)	\in	$$\in$$	Relations & Logic	Operator
+∉	Set Theory (Membership & Subsets)	\notin	$$\notin$$	Relations & Logic	Operator
+⊂	Set Theory (Membership & Subsets)	\subset	$$\subset$$	Relations & Logic	Operator
+⊃	Set Theory (Membership & Subsets)	\supset	$$\supset$$	Relations & Logic	Operator
+⊆	Subset/Superset variations	\subseteq	$$\subseteq$$	Relations & Logic	Operator
+⊇	Subset/Superset variations	\supseteq	$$\supseteq$$	Relations & Logic	Operator
+⊊	Subset/Superset variations	\subsetneq	$$\subsetneq$$	Relations & Logic	Operator
+∪	Set Operations (Union, Intersect, Diff)	\cup	$$\cup$$	Relations & Logic	Operator
+∩	Set Operations (Union, Intersect, Diff)	\cap	$$\cap$$	Relations & Logic	Operator
+∖	Set Operations (Union, Intersect, Diff)	\setminus	$$\setminus$$	Relations & Logic	Operator
+∅	Empty set	\emptyset	$$\emptyset$$	Relations & Logic	Operator
+∅	Empty set (Alternative)	\varnothing	$$\varnothing$$	Relations & Logic	Operator
+∀	Quantifiers	\forall	$$\forall$$	General	Symbol
+∃	Quantifiers	\exists	$$\exists$$	General	Symbol
+∄	Quantifiers	\nexists	$$\nexists$$	General	Symbol
+∧	Logic Operators (AND, OR, NOT)	\land	$$\land$$	Relations & Logic	Operator
+∨	Logic Operators (AND, OR, NOT)	\lor	$$\lor$$	Relations & Logic	Operator
+¬	Logic Operators (AND, OR, NOT)	\neg	$$\neg$$	Relations & Logic	Operator
+⟹	Logical implication / equivalence	\implies	$$\implies$$	Relations & Logic	Operator
+⟺	Logical implication / equivalence	\iff	$$\iff$$	Relations & Logic	Operator
+∞	Infinity	\infty	$$\infty$$	General	Symbol
+ℵ0	Infinity and Aleph null	\aleph_0	$$\aleph_0$$	General	Symbol
+⊥	Perpendicular, Parallel	\perp	$$\perp$$	General	Symbol
+∥	Perpendicular, Parallel	\parallel	$$\parallel$$	General	Symbol
+∠	Geometry (Angle, Triangle, Square)	\angle	$$\angle$$	Geometry	Symbol
+△	Geometry (Angle, Triangle, Square)	\triangle	$$\triangle$$	Geometry	Symbol
+[ ]	Geometry (Angle, Triangle, Square)	\square	$$\square$$	Geometry	Symbol
+[ ]̄	Accents (Bar, Hat, Tilde)	\bar{}	$$\bar{}$$	Accents & Vectors	Modifier
+[ ]̂	Accents (Bar, Hat, Tilde)	\hat{}	$$\hat{}$$	Accents & Vectors	Modifier
+[ ]̃	Accents (Bar, Hat, Tilde)	\tilde{}	$$\tilde{}$$	Accents & Vectors	Modifier
+[ ]⃗	Vectors and Time Derivatives	\vec{}	$$\vec{}$$	Calculus	Operator
+[ ]̇	Vectors and Time Derivatives	\dot{}	$$\dot{}$$	Calculus	Operator
+[ ]̈	Vectors and Time Derivatives	\ddot{}	$$\ddot{}$$	Calculus	Operator
+[ ]/[ ]	Fractions	\frac{}{}	$$\frac{}{}$$	Algebra	Container
+√[ ]	Square and Nth Roots	\sqrt{}	$$\sqrt{}$$	Algebra	Container
+ⁿ√[ ]	Square and Nth Roots	\sqrt[{}]{}	$$\sqrt[{}]{}$$	Algebra	Container
+∑	Summations with Bounds	\sum_{}^{}	$$\sum_{}^{}$$	Calculus	Operator
+∫	Definite Integrals with Bounds	\int_{}^{}	$$\int_{}^{}$$	Calculus	Operator
+lim	Limits	\lim_{{} \to {}}	$$\lim_{{} \to {}}$$	Calculus	Operator
+([ ]/[ ])	Scalable Parentheses / Brackets	\left( \frac{}{} \right)	$$\left( \frac{}{} \right)$$	Delimiters	Container
+[ ] [ ] ; [ ] [ ]	Basic Matrix	\begin{matrix} {} & {} \\ {} & {} \end{matrix}	$$\begin{matrix} {} & {} \\ {} & {} \end{matrix}$$	Matrices	Container
+([ ] [ ] ; [ ] [ ])	Matrix with Parentheses	\begin{pmatrix} {} & {} \\ {} & {} \end{pmatrix}	$$\begin{pmatrix} {} & {} \\ {} & {} \end{pmatrix}$$	Matrices	Container
+|[ ] [ ] ; [ ] [ ]|	Determinant Matrix	\begin{vmatrix} {} & {} \\ {} & {} \end{vmatrix}	$$\begin{vmatrix} {} & {} \\ {} & {} \end{vmatrix}$$	Matrices	Container
++	Plus	+	$$+$$	General	Symbol
+-	Minus	-	$$-$$	General	Symbol
+∗	Asterisk	\ast	$$\ast$$	General	Symbol
+⋆	Star	\star	$$\star$$	General	Symbol
+∘	Function composition (circle)	\circ	$$\circ$$	General	Symbol
+•	Bullet	\bullet	$$\bullet$$	General	Symbol
+=	Equals	=	$$=$$	General	Symbol
+≠	Not equal	\neq	$$\neq$$	General	Symbol
+∝	Proportional to	\propto	$$\propto$$	General	Symbol
+<	Less than	<	$$<$$	General	Symbol
+>	Greater than	>	$$>$$	General	Symbol
+ℵ	Aleph	\aleph	$$\aleph$$	General	Symbol
+ℏ	Reduced Planck constant (H-bar)	\hbar	$$\hbar$$	General	Symbol
+ℜ	Real part	\Re	$$\Re$$	General	Symbol
+ℑ	Imaginary part	\Im	$$\Im$$	General	Symbol
+℘	Weierstrass p	\wp	$$\wp$$	General	Symbol
+(	Left parenthesis	(	$$($$	General	Symbol
+)	Right parenthesis	)	$$)$$	General	Symbol
+[	Left square bracket	[	$$[$$	Delimiters	Container
+]	Right square bracket	]	$$]$$	Delimiters	Container
+{	Left curly brace	\{	$$\{$$	General	Symbol
+}	Right curly brace	\}	$$\}$$	General	Symbol
+⟨	Left angle bracket	\langle	$$\langle$$	Geometry	Symbol
+⟩	Right angle bracket	\rangle	$$\rangle$$	Geometry	Symbol
+|	Vertical bar	\|	$$\|$$	General	Symbol
+⌊	Left floor	\lfloor	$$\lfloor$$	General	Symbol
+⌋	Right floor	\rfloor	$$\rfloor$$	General	Symbol
+⌈	Left ceiling	\lceil	$$\lceil$$	General	Symbol
+⌉	Right ceiling	\rceil	$$\rceil$$	General	Symbol
+≮	Not less than	\nless	$$\nless$$	General	Symbol
+≯	Not greater than	\ngtr	$$\ngtr$$	General	Symbol
+≰	Not less than or equal to	\nleq	$$\nleq$$	General	Symbol
+≱	Not greater than or equal to	\ngeq	$$\ngeq$$	General	Symbol
+≁	Not similar to	\nsim	$$\nsim$$	General	Symbol
+≇	Not congruent to	\ncong	$$\ncong$$	General	Symbol
+⇀	Right harpoon up	\rightharpoonup	$$\rightharpoonup$$	General	Symbol
+⇁	Right harpoon down	\rightharpoondown	$$\rightharpoondown$$	General	Symbol
+↼	Left harpoon up	\leftharpoonup	$$\leftharpoonup$$	General	Symbol
+↽	Left harpoon down	\leftharpoondown	$$\leftharpoondown$$	General	Symbol
+⇌	Chemical equilibrium arrow / Right harpoon up over left harpoon down	\rightleftharpoons	$$\rightleftharpoons$$	General	Symbol
+ℶ	Beth (Requires amssymb)	\beth	$$\beth$$	General	Symbol
+ℷ	Gimel (Requires amssymb)	\gimel	$$\gimel$$	General	Symbol
+ℸ	Daleth (Requires amssymb)	\daleth	$$\daleth$$	General	Symbol
+√[ ]	Surd (square root)	\sqrt{}	$$\sqrt{}$$	Algebra	Container
+⊤	Top	\top	$$\top$$	General	Symbol
+⊢	Right tack	\vdash	$$\vdash$$	General	Symbol
+⊣	Left tack	\dashv	$$\dashv$$	General	Symbol
+⊨	Models	\models	$$\models$$	General	Symbol
+ℓ	Cursive l	\ell	$$\ell$$	General	Symbol
+ı	Dotless i	\imath	$$\imath$$	General	Symbol
+ȷ	Dotless j	\jmath	$$\jmath$$	General	Symbol
+♭	Flat	\flat	$$\flat$$	General	Symbol
+♮	Natural	\natural	$$\natural$$	General	Symbol
+♯	Sharp	\sharp	$$\sharp$$	General	Symbol
+∴	Therefore	\therefore	$$\therefore$$	General	Symbol
+∵	Because	\because	$$\because$$	General	Symbol
+≍	Equivalent	\asymp	$$\asymp$$	General	Symbol
+⋈	Bowtie	\bowtie	$$\bowtie$$	General	Symbol
+⋉	Left semidirect product (Requires amssymb)	\ltimes	$$\ltimes$$	General	Symbol
+⋊	Right semidirect product (Requires amssymb)	\rtimes	$$\rtimes$$	General	Symbol
+⊏	Square subset (Requires amssymb)	\sqsubset	$$\sqsubset$$	Relations & Logic	Operator
+⊐	Square superset (Requires amssymb)	\sqsupset	$$\sqsupset$$	Relations & Logic	Operator
+⊑	Square subset or equal (Requires amssymb)	\sqsubseteq	$$\sqsubseteq$$	Relations & Logic	Operator
+⊒	Square superset or equal (Requires amssymb)	\sqsupseteq	$$\sqsupseteq$$	Relations & Logic	Operator
+⊕	Direct sum (circled plus)	\oplus	$$\oplus$$	General	Symbol
+⊖	Circled minus	\ominus	$$\ominus$$	General	Symbol
+⊗	Tensor product (circled times)	\otimes	$$\otimes$$	General	Symbol
+⊘	Circled slash	\oslash	$$\oslash$$	General	Symbol
+⊙	Circled dot	\odot	$$\odot$$	General	Symbol
+†	Dagger	\dagger	$$\dagger$$	General	Symbol
+‡	Double dagger	\ddagger	$$\ddagger$$	General	Symbol
+⨿	Amalgamation	\amalg	$$\amalg$$	General	Symbol
+△	Big triangle up	\bigtriangleup	$$\bigtriangleup$$	Geometry	Symbol
+▽	Big triangle down	\bigtriangledown	$$\bigtriangledown$$	Geometry	Symbol
+◁	Left triangle	\triangleleft	$$\triangleleft$$	Geometry	Symbol
+▷	Right triangle	\triangleright	$$\triangleright$$	Geometry	Symbol
+⊴	Left triangle or equal (Requires amssymb)	\unlhd	$$\unlhd$$	Geometry	Symbol
+⊵	Right triangle or equal (Requires amssymb)	\unrhd	$$\unrhd$$	Geometry	Symbol
+◇	Diamond (Requires amssymb)	\Diamond	$$\Diamond$$	General	Symbol
+[ ]	Box (Requires amssymb)	\Box	$$\Box$$	General	Symbol
+℧	Mho (Requires amssymb)	\mho	$$\mho$$	General	Symbol
+Å	Angstrom	\mathring{A}	$$\mathring{A}$$	General	Symbol
+°C	Celsius	{}^\circ C	$${}^\circ C$$	General	Symbol
+°	Degree	{}^\circ	$${}^\circ$$	General	Symbol
+$	Dollar sign	\$	$$\$$$	General	Symbol
+£	Pound sign	\text{£}	$$\text{£}$$	General	Symbol
+€	Euro sign	\text{€}	$$\text{€}$$	General	Symbol
+¥	Yen sign	\text{¥}	$$\text{¥}$$	General	Symbol
+¢	Cent sign	\text{¢}	$$\text{¢}$$	General	Symbol
+%	Percent	\%	$$\%$$	General	Symbol
+&	Ampersand	\&	$$\&$$	General	Symbol
+#	Hash	\#	$$\#$$	General	Symbol
+_	Underscore	\_	$$\_$$	General	Symbol
+\	Backslash	\backslash	$$\backslash$$	General	Symbol
+↑	Up arrow	\uparrow	$$\uparrow$$	General	Symbol
+↓	Down arrow	\downarrow	$$\downarrow$$	General	Symbol
+↕	Up down arrow	\updownarrow	$$\updownarrow$$	General	Symbol
+↗	North east arrow	\nearrow	$$\nearrow$$	General	Symbol
+↘	South east arrow	\searrow	$$\searrow$$	General	Symbol
+↙	South west arrow	\swarrow	$$\swarrow$$	General	Symbol
+↖	North west arrow	\nwarrow	$$\nwarrow$$	General	Symbol
+↩	Hook left arrow	\hookleftarrow	$$\hookleftarrow$$	General	Symbol
+↪	Hook right arrow	\hookrightarrow	$$\hookrightarrow$$	General	Symbol
+ℰ	Euler's number (script E) / Emf / Lagrangian density	\mathcal{E}	$$\mathcal{E}$$	General	Symbol
+ℱ	Fourier transform (script F)	\mathcal{F}	$$\mathcal{F}$$	General	Symbol
+ℒ	Laplace transform (script L) / Lagrangian	\mathcal{L}	$$\mathcal{L}$$	General	Symbol
+ℋ	Hamiltonian (script H)	\mathcal{H}	$$\mathcal{H}$$	General	Symbol
+ℤ	Integers (Blackboard bold Z) (Requires amsfonts)	\mathbb{Z}	$$\mathbb{Z}$$	General	Symbol
+ℝ	Real numbers (Blackboard bold R) (Requires amsfonts)	\mathbb{R}	$$\mathbb{R}$$	General	Symbol
+ℂ	Complex numbers (Blackboard bold C) (Requires amsfonts)	\mathbb{C}	$$\mathbb{C}$$	General	Symbol
+ℚ	Rational numbers (Blackboard bold Q) (Requires amsfonts)	\mathbb{Q}	$$\mathbb{Q}$$	General	Symbol
+ℕ	Natural numbers (Blackboard bold N) (Requires amsfonts)	\mathbb{N}	$$\mathbb{N}$$	General	Symbol
+⟨·|	Bra notation (Quantum Mechanics)	\langle \cdot \|	$$\langle \cdot \|$$	General	Symbol
+|·⟩	Ket notation (Quantum Mechanics)	\| \cdot \rangle	$$\| \cdot \rangle$$	General	Symbol
+·†	Dagger / Hermitian conjugate	{\cdot}^\dagger	$${\cdot}^\dagger$$	General	Symbol
+F	Field (Blackboard Bold) (Requires amsfonts)	\mathbb{F}	$$\mathbb{F}$$	General	Symbol
+K	Field / Constant (Blackboard Bold) (Requires amsfonts)	\mathbb{K}	$$\mathbb{K}$$	General	Symbol
+P	Probability operator (Requires amsfonts)	\mathbb{P}	$$\mathbb{P}$$	General	Symbol
+E	Expectation operator (Requires amsfonts)	\mathbb{E}	$$\mathbb{E}$$	General	Symbol
+I	Indicator function (Requires amsfonts)	\mathbb{I}	$$\mathbb{I}$$	General	Symbol
+⊠	Box times (Exterior tensor product) (Requires amssymb)	\boxtimes	$$\boxtimes$$	General	Symbol
+⊞	Box plus (Requires amssymb)	\boxplus	$$\boxplus$$	General	Symbol
+⋀	Wedge product (Large)	\bigwedge	$$\bigwedge$$	General	Symbol
+⋁	Vee product (Large)	\bigvee	$$\bigvee$$	General	Symbol
+[ ]̂	Wide hat accent	\widehat{}	$$\widehat{}$$	Accents & Vectors	Modifier
+[ ]̃	Wide tilde accent	\widetilde{}	$$\widetilde{}$$	Accents & Vectors	Modifier
+⏟	Underbrace with label	\underbrace{}_{}	$$\underbrace{}_{}$$	General	Symbol
+⏞	Overbrace with label	\overbrace{}^{}	$$\overbrace{}^{}$$	General	Symbol
+[ ]̌	Check / Caron accent	\check{}	$$\check{}$$	Accents & Vectors	Modifier
+[ ]̆	Breve accent	\breve{}	$$\breve{}$$	Accents & Vectors	Modifier

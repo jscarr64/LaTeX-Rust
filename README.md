@@ -1,0 +1,72 @@
+# LaTeX-Rust
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE-MIT)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE-APACHE)
+
+Repository: <https://github.com/jscarr64/LaTeX-Rust>
+
+Pure-Rust LaTeX **math** renderer. No JavaScript. No webview. No runtime beyond
+the Rust standard library plus the crates listed below.
+
+It parses LaTeX math into a typed AST, lays the AST out with a TeX-faithful box
+model whose dimensions are [zenith-float](https://crates.io/crates/zenith-float)
+`Dim` values (no hardware `f32`/`f64` in the layout path), and renders to SVG.
+PNG and egui backends are planned as optional features.
+
+This crate does not typeset documents. Text-mode LaTeX, TikZ, chemistry, and PDF
+are out of scope and return `Err` — never a fake render.
+
+## Status
+
+**Milestone 1** (core infrastructure): `Dim`, `MathBox`, STIX Two Math metric
+loader, tokenizer, gold runner. Parser, layout engine, and SVG follow the build
+sheet in `documents/latex-rust-build-sheet.md`.
+
+## Install
+
+```toml
+[dependencies]
+latex-rust = "0.1"
+```
+
+Until the crate is on crates.io:
+
+```toml
+[dependencies]
+latex-rust = { git = "https://github.com/jscarr64/LaTeX-Rust" }
+```
+
+Layout math uses [zenith-float](https://github.com/jscarr64/zenith-float) 1.0 via
+a path dependency (`../mathlibraries/zenith-float`) in this workspace. Clone
+that crate next to this one, or point Cargo at your checkout with `[patch]`.
+
+## Quick start
+
+```rust
+use latex_rust::{tokenize, MathFont, Dim, MathBox};
+
+let tokens = tokenize(r"\frac{1}{2}").expect("tokens");
+let font = MathFont::stix_two_math().expect("STIX Two Math");
+assert_eq!(font.units_per_em(), 1000);
+
+let em = Dim::one();
+let half = Dim::ratio(1, 2);
+let packed = MathBox::hpack(vec![
+    MathBox::rule(em.clone(), Dim::zero(), Dim::zero()),
+    MathBox::rule(half, Dim::zero(), Dim::zero()),
+]);
+assert_eq!(packed.width, Dim::ratio(3, 2));
+```
+
+## Fonts
+
+The crate embeds **STIX Two Math** 2.13 (SIL OFL 1.1) and loads metrics through
+`ttf-parser` using integer font units converted to `Dim` via zenith-float
+rationals. Glyph outlines and SVG emission are later milestones.
+
+Math-mode commands ship as `data/symbols.tsv` (226 entries, from the keyboard
+symbol table). Look up with `latex_rust::lookup`.
+
+## License
+
+MIT OR Apache-2.0. STIX Two Math remains under the SIL Open Font License 1.1.

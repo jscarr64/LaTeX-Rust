@@ -1,0 +1,42 @@
+[package]
+name = "latex-rust"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.74"
+authors = ["Jeffrey S Carr <jscarr@gmail.com>"]
+license = "MIT OR Apache-2.0"
+description = "Pure-Rust LaTeX math renderer. Parse to AST, TeX-faithful layout in zenith-float, emit SVG. No JavaScript, no webview, no runtime."
+readme = "README.md"
+repository = "https://github.com/jscarr64/LaTeX-Rust"
+homepage = "https://github.com/jscarr64/LaTeX-Rust"
+documentation = "https://docs.rs/latex-rust"
+keywords = ["latex", "math", "svg", "tex", "renderer"]
+categories = ["encoding", "graphics", "mathematics", "parser-implementations"]
+include = [
+    "src/**",
+    "data/**",
+    "fonts/**",
+    "golds/**",
+    "LICENSE-MIT",
+    "LICENSE-APACHE",
+    "README.md",
+    "CONTRIBUTING.md",
+    "CHANGELOG.md",
+    "NOTICE",
+]
+
+[lib]
+name = "latex_rust"
+path = "src/lib.rs"
+
+[features]
+default = ["std"]
+std = ["zenith-float/std"]
+
+[dependencies]
+ttf-parser = "0.25"
+zenith-float = { version = "1.0.0", path = "../mathlibraries/zenith-float" }
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
