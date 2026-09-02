@@ -2,6 +2,12 @@
 
 ## 0.1.0 (unreleased)
 
+### Milestone 4 — SVG renderer
+
+- `render_svg` / `latex_to_svg`: `MathBox` → self-contained SVG 1.1. Glyphs are `<path>` from STIX Two Math outlines; rules are `<rect>`; `\textcolor` / `\colorbox` set `fill`.
+- Outline points from `ttf-parser` enter as IEEE-32 bits and become `Dim` immediately. Layout arithmetic stays zenith-float.
+- Golds in `golds/svg.toml`.
+
 ### Milestone 3 — Layout engine
 
 - `layout(&MathNode, &MathFont, MathStyle) -> MathBox` with TeX Appendix G style, Table 18 spacing, fractions, radicals, scripts, `\left\right` / `\big` sizes, operator limits, matrices, and color wrappers.

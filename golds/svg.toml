@@ -1,0 +1,179 @@
+# Gold tests — Milestone 4 SVG renderer
+# Contract: code must match these values. Do not edit golds to hide a bug.
+# Structural match: path/rect counts, xmlns, fill. Dimensions are 12 pt em.
+
+[[gold]]
+name = "glyph-x"
+kind = "svg"
+input = "x"
+paths = "1"
+rects = "0"
+contains = "xmlns=\"http://www.w3.org/2000/svg\""
+expect = "width=\"5.748e+0pt\""
+
+[[gold]]
+name = "digit-2"
+kind = "svg"
+input = "2"
+paths = "1"
+rects = "0"
+
+[[gold]]
+name = "alpha"
+kind = "svg"
+input = "\\alpha"
+paths = "1"
+rects = "0"
+
+[[gold]]
+name = "frac-half"
+kind = "svg"
+input = "\\frac{1}{2}"
+paths = "2"
+rects = "1"
+
+[[gold]]
+name = "sqrt-x"
+kind = "svg"
+input = "\\sqrt{x}"
+paths = "2"
+rects = "1"
+
+[[gold]]
+name = "sup-x2"
+kind = "svg"
+input = "x^2"
+paths = "2"
+rects = "0"
+
+[[gold]]
+name = "sub-x2"
+kind = "svg"
+input = "x_2"
+paths = "2"
+rects = "0"
+
+[[gold]]
+name = "subsup"
+kind = "svg"
+input = "x_2^3"
+paths = "3"
+rects = "0"
+
+[[gold]]
+name = "left-right"
+kind = "svg"
+input = "\\left( x \\right)"
+paths = "3"
+rects = "0"
+
+[[gold]]
+name = "left-brace-frac"
+kind = "svg"
+input = "\\left\\{ \\frac{1}{2} \\right\\}"
+paths = "4"
+rects = "1"
+
+[[gold]]
+name = "sum-display"
+kind = "svg"
+style = "display"
+input = "\\sum_{k=1}^{n}"
+paths = "5"
+rects = "0"
+
+[[gold]]
+name = "int-display"
+kind = "svg"
+style = "display"
+input = "\\int_0^1"
+paths = "3"
+rects = "0"
+
+[[gold]]
+name = "pmatrix"
+kind = "svg"
+input = "\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}"
+paths = "6"
+rects = "0"
+
+[[gold]]
+name = "hat-x"
+kind = "svg"
+input = "\\hat{x}"
+paths = "2"
+rects = "0"
+
+[[gold]]
+name = "overline-row"
+kind = "svg"
+input = "\\overline{x+y}"
+paths = "3"
+rects = "1"
+
+[[gold]]
+name = "textcolor-red"
+kind = "svg"
+input = "\\textcolor{red}{x}"
+paths = "1"
+rects = "0"
+fill = "fill=\"#ff0000\""
+
+[[gold]]
+name = "color-blue-group"
+kind = "svg"
+input = "{\\color{blue} x + y} + z"
+paths = "5"
+rects = "0"
+fill = "fill=\"#0000ff\""
+
+[[gold]]
+name = "colorbox-yellow-frac"
+kind = "svg"
+input = "\\colorbox{yellow}{\\frac{1}{2}}"
+paths = "2"
+rects = "2"
+fill = "fill=\"#ffff00\""
+
+[[gold]]
+name = "definecolor-mygreen"
+kind = "svg"
+input = "\\definecolor{mygreen}{rgb}{0,0.6,0}\\textcolor{mygreen}{f}"
+paths = "1"
+rects = "0"
+fill = "fill=\"#009900\""
+
+[[gold]]
+name = "aligned"
+kind = "svg"
+input = "\\begin{aligned} x &= 1 \\\\ y &= 2 \\end{aligned}"
+paths = "6"
+rects = "0"
+
+[[gold]]
+name = "big-paren"
+kind = "svg"
+input = "\\big("
+paths = "1"
+rects = "0"
+
+[[gold]]
+name = "Big-paren"
+kind = "svg"
+input = "\\Big("
+paths = "1"
+rects = "0"
+
+[[gold]]
+name = "bigg-paren"
+kind = "svg"
+input = "\\bigg("
+paths = "1"
+rects = "0"
+
+[[gold]]
+name = "Bigg-paren"
+kind = "svg"
+input = "\\Bigg("
+paths = "1"
+rects = "0"

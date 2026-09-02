@@ -18,10 +18,8 @@ are out of scope and return `Err` — never a fake render.
 
 ## Status
 
-**Milestone 3** (layout engine): `MathNode` → `MathBox` with TeX Appendix G rules.
-Every size is a [zenith-float](https://crates.io/crates/zenith-float) **1.0** `Dim`.
-Parser golds stay in `golds/parse.toml`; layout golds in `golds/layout.toml`.
-Unknown constructs return `Err`. SVG is Milestone 4.
+**Milestone 4** (SVG renderer): `MathBox` → self-contained SVG (`<path>` from STIX Two Math,
+`<rect>` for rules). Golds in `golds/svg.toml`. Layout remains zenith-float `Dim` only.
 
 ## Install
 
@@ -44,7 +42,7 @@ depends on `zenith-float` only — not on its inner kernel package.
 ## Quick start
 
 ```rust
-use latex_rust::{parse, layout, tokenize, MathFont, MathStyle, Dim, MathBox};
+use latex_rust::{parse, layout, latex_to_svg, tokenize, MathFont, MathStyle, Dim, MathBox, SvgOptions};
 
 let ast = parse(r"\frac{1}{2}").expect("parse");
 assert_eq!(ast.gold(), r#"(frac (atom Ord "1") (atom Ord "2"))"#);
@@ -55,6 +53,10 @@ assert_eq!(font.units_per_em(), 1000);
 
 let boxed = layout(&ast, &font, MathStyle::Text).expect("layout");
 assert!(!boxed.width.is_zero());
+
+let svg = latex_to_svg(r"\frac{1}{2}", &font, &SvgOptions::new()).expect("svg");
+assert!(svg.contains("<path"));
+assert!(svg.contains("<rect"));
 
 let em = Dim::one();
 let half = Dim::ratio(1, 2);

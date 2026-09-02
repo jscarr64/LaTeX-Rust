@@ -1,10 +1,8 @@
 //! LaTeX-Rust: pure Rust LaTeX math renderer.
 //!
-//! Milestone 3 lays out a [`MathNode`] into a [`MathBox`] tree. Milestone 2
-//! parses LaTeX math into that AST. Milestone 1 still provides layout
-//! dimensions, STIX Two Math metrics, the tokenizer, the symbol catalog, and
-//! color-model resolution.
-//! Unsupported constructs return [`Error`] — never a fake render.
+//! Milestone 4 renders a [`MathBox`] to a self-contained SVG document. Milestone 3
+//! lays out a [`MathNode`] into that box tree. Unsupported constructs return
+//! [`Error`] — never a fake render.
 //!
 //! No hardware `f32` / `f64` is used in layout arithmetic.
 //!
@@ -24,6 +22,9 @@
 //! let boxed = layout(&ast, &font, MathStyle::Text).expect("layout");
 //! assert!(!boxed.width.is_zero());
 //!
+//! let svg = latex_rust::latex_to_svg(r"x", &font, &latex_rust::SvgOptions::new()).expect("svg");
+//! assert!(svg.contains("<path"));
+//!
 //! let packed = MathBox::hpack(vec![
 //!     MathBox::rule(Dim::one(), Dim::zero(), Dim::zero()),
 //!     MathBox::rule(Dim::ratio(1, 2), Dim::zero(), Dim::zero()),
@@ -41,6 +42,7 @@ mod error;
 mod font;
 mod layout;
 mod parser;
+mod svg;
 mod symbols;
 
 pub use color::{named_color, parse_color_spec, Color, ColorTable};
@@ -54,4 +56,5 @@ pub use parser::{
     format_tokens, parse, parse_with_colors, preprocess, tokenize, AccentKind, AtomKind, DelimSize,
     Delimiter, IntegralKind, MathNode, MatrixStyle, PhantomKind, SpaceKind, TextStyle, Token,
 };
+pub use svg::{latex_to_svg, render_svg, SvgOptions};
 pub use symbols::{category_count, lookup, symbols, SymbolEntry, SymbolKind};

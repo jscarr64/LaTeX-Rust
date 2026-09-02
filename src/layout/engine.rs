@@ -80,6 +80,7 @@ impl Engine<'_> {
                         height: h * &s,
                         depth: d * &s,
                         italic: Dim::zero(),
+                        shift: Dim::zero(),
                         content: BoxContent::Empty,
                     },
                     class: Some(AtomKind::Ord),
@@ -149,7 +150,7 @@ impl Engine<'_> {
                 let pad = self.params.mu(style) * Dim::from_i64(3);
                 Ok(Item {
                     class: Some(AtomKind::Inner),
-                    bx: color_wrap(*c, pad_box(inner, &pad)),
+                    bx: back_color_wrap(*c, pad_box(inner, &pad)),
                 })
             }
             MathNode::FColorBox(_border, fill, body) => {
@@ -157,7 +158,7 @@ impl Engine<'_> {
                 let pad = self.params.mu(style) * Dim::from_i64(3);
                 Ok(Item {
                     class: Some(AtomKind::Inner),
-                    bx: color_wrap(*fill, pad_box(inner, &pad)),
+                    bx: back_color_wrap(*fill, pad_box(inner, &pad)),
                 })
             }
         }
@@ -172,6 +173,7 @@ impl Engine<'_> {
             height: &g.height * &s,
             depth: &g.depth * &s,
             italic: &italic * &s,
+            shift: Dim::zero(),
             content: BoxContent::Glyph {
                 ch,
                 glyph_id: g.glyph_id,
@@ -188,6 +190,7 @@ impl Engine<'_> {
             height: &g.height * &s,
             depth: &g.depth * &s,
             italic: &italic * &s,
+            shift: Dim::zero(),
             content: BoxContent::Glyph { ch, glyph_id: gid },
         })
     }
@@ -302,15 +305,23 @@ impl Engine<'_> {
         let width = num_b.width.max(&den_b.width);
         let num_c = center_in(num_b, &width);
         let den_c = center_in(den_b, &width);
-        let rule = MathBox::rule(width.clone(), &axis + &half, Dim::zero());
+        let num_h = num_c.height.clone();
+        let den_d = den_c.depth.clone();
+        let bar =
+            MathBox::rule(width.clone(), thick.clone(), Dim::zero()).with_shift(&axis - &half);
         Ok(Item {
             class: Some(AtomKind::Inner),
             bx: MathBox {
                 width,
-                height: &num_shift + &num_c.height,
-                depth: &den_shift + &den_c.depth,
+                height: &num_shift + &num_h,
+                depth: &den_shift + &den_d,
                 italic: Dim::zero(),
-                content: BoxContent::VList(vec![num_c, rule, den_c]),
+                shift: Dim::zero(),
+                content: BoxContent::Overlap(vec![
+                    num_c.with_shift(num_shift),
+                    bar,
+                    den_c.with_shift(-den_shift),
+                ]),
             },
         })
     }
@@ -332,17 +343,15 @@ impl Engine<'_> {
         };
         let needed = &rad_b.height + &rad_b.depth + &gap + &thick + &extra;
         let surd = self.sized_glyph('√', &needed, style)?;
-        let bar = MathBox::rule(
-            rad_b.width.clone(),
-            &rad_b.height + &gap + &thick + &extra,
-            Dim::zero(),
-        );
+        let bar = MathBox::rule(rad_b.width.clone(), thick.clone(), Dim::zero())
+            .with_shift(&rad_b.height + &gap);
         let rad_col = MathBox {
             width: rad_b.width.clone(),
             height: &rad_b.height + &gap + &thick + &extra,
             depth: rad_b.depth.clone(),
             italic: Dim::zero(),
-            content: BoxContent::VList(vec![bar, rad_b.clone()]),
+            shift: Dim::zero(),
+            content: BoxContent::Overlap(vec![bar, rad_b.clone()]),
         };
         let mut kids = vec![surd, rad_col];
         let mut width = MathBox::hpack(vec![kids[0].clone(), kids[1].clone()]).width;
@@ -355,13 +364,7 @@ impl Engine<'_> {
             let pct = Dim::from_i64(i64::from(self.params.radical_degree_bottom_raise_percent))
                 / Dim::from_i64(100);
             let raise = &height * &pct;
-            let deg_box = MathBox {
-                width: db.width.clone(),
-                height: &db.height + &raise,
-                depth: (&db.depth - &raise).clamp_nonneg(),
-                italic: Dim::zero(),
-                content: db.content,
-            };
+            let deg_box = db.with_shift(raise);
             kids = vec![
                 MathBox::kern(before),
                 deg_box,
@@ -378,6 +381,7 @@ impl Engine<'_> {
                 height,
                 depth,
                 italic: Dim::zero(),
+                shift: Dim::zero(),
                 content: BoxContent::HList(kids),
             },
         })
@@ -444,37 +448,24 @@ impl Engine<'_> {
         let mut slot_d = Dim::zero();
         let mut slot_kids = Vec::new();
         if let Some(sp) = sup_laid {
-            let raised = MathBox {
-                width: sp.width.clone(),
-                height: &sp.height + &sup_shift,
-                depth: (&sp.depth - &sup_shift).clamp_nonneg(),
-                italic: Dim::zero(),
-                content: sp.content,
-            };
-            slot_w = slot_w.max(&raised.width);
-            slot_h = slot_h.max(&raised.height);
-            slot_d = slot_d.max(&raised.depth);
-            slot_kids.push(raised);
+            slot_w = slot_w.max(&sp.width);
+            slot_h = slot_h.max(&(&sp.height + &sup_shift));
+            slot_d = slot_d.max(&(&sp.depth - &sup_shift).clamp_nonneg());
+            slot_kids.push(sp.with_shift(sup_shift));
         }
         if let Some(sb) = sub_laid {
-            let lowered = MathBox {
-                width: sb.width.clone(),
-                height: (&sb.height - &sub_shift).clamp_nonneg(),
-                depth: &sb.depth + &sub_shift,
-                italic: Dim::zero(),
-                content: sb.content,
-            };
-            slot_w = slot_w.max(&lowered.width);
-            slot_h = slot_h.max(&lowered.height);
-            slot_d = slot_d.max(&lowered.depth);
-            slot_kids.push(lowered);
+            slot_w = slot_w.max(&sb.width);
+            slot_h = slot_h.max(&(&sb.height - &sub_shift).clamp_nonneg());
+            slot_d = slot_d.max(&(&sb.depth + &sub_shift));
+            slot_kids.push(sb.with_shift(-sub_shift));
         }
         kids.push(MathBox {
             width: slot_w.clone(),
             height: slot_h.clone(),
             depth: slot_d.clone(),
             italic: Dim::zero(),
-            content: BoxContent::VList(slot_kids),
+            shift: Dim::zero(),
+            content: BoxContent::Overlap(slot_kids),
         });
         if !after.is_zero() {
             kids.push(MathBox::kern(after.clone()));
@@ -487,6 +478,7 @@ impl Engine<'_> {
                 height: base.height.max(&slot_h),
                 depth: base.depth.max(&slot_d),
                 italic: Dim::zero(),
+                shift: Dim::zero(),
                 content: BoxContent::HList(kids),
             },
         })
@@ -588,10 +580,12 @@ impl Engine<'_> {
             return self.attach_scripts_to_box(op, Some(AtomKind::Op), under, over, style);
         }
         let s = self.params.scale(style);
+        let op_h = op.height.clone();
+        let op_d = op.depth.clone();
         let mut width = op.width.clone();
-        let mut height = op.height.clone();
-        let mut depth = op.depth.clone();
-        let mut kids = vec![op.clone()];
+        let mut height = op_h.clone();
+        let mut depth = op_d.clone();
+        let mut kids = vec![op];
         if let Some(o) = over {
             let ob = self.layout(o, style.into_script())?;
             let gap = self.params.upper_limit_gap_min.clone() * &s;
@@ -599,7 +593,8 @@ impl Engine<'_> {
             let extra = gap.max(&rise);
             width = width.max(&ob.width);
             height = &height + &ob.height + &ob.depth + &extra;
-            kids.insert(0, center_in(ob, &width));
+            let sh = &op_h + &extra + &ob.depth;
+            kids.push(center_in(ob, &width).with_shift(sh));
         }
         if let Some(u) = under {
             let ub = self.layout(u, style.into_script())?;
@@ -608,7 +603,8 @@ impl Engine<'_> {
             let extra = gap.max(&drop);
             width = width.max(&ub.width);
             depth = &depth + &ub.height + &ub.depth + &extra;
-            kids.push(center_in(ub, &width));
+            let sh = -(&op_d + &extra + &ub.height);
+            kids.push(center_in(ub, &width).with_shift(sh));
         }
         Ok(Item {
             class: Some(AtomKind::Op),
@@ -617,7 +613,8 @@ impl Engine<'_> {
                 height,
                 depth,
                 italic: Dim::zero(),
-                content: BoxContent::VList(kids),
+                shift: Dim::zero(),
+                content: BoxContent::Overlap(kids),
             },
         })
     }
@@ -653,6 +650,11 @@ impl Engine<'_> {
                     bx: pad_box(b, &pad),
                 });
             }
+            let bar = if matches!(kind, AccentKind::Underline | AccentKind::Underbrace) {
+                MathBox::rule(b.width.clone(), thick, Dim::zero()).with_shift(-(&b.depth + &gap))
+            } else {
+                MathBox::rule(b.width.clone(), thick, Dim::zero()).with_shift(&b.height + &gap)
+            };
             return Ok(Item {
                 class: Some(AtomKind::Ord),
                 bx: MathBox {
@@ -660,7 +662,8 @@ impl Engine<'_> {
                     height,
                     depth,
                     italic: Dim::zero(),
-                    content: BoxContent::HList(vec![b]),
+                    shift: Dim::zero(),
+                    content: BoxContent::Overlap(vec![b, bar]),
                 },
             });
         }
@@ -669,21 +672,19 @@ impl Engine<'_> {
         let s = self.params.scale(style);
         let raise = b.height.max(&(&self.params.accent_base_height * &s));
         let width = b.width.max(&acc.width);
-        let acc_r = MathBox {
-            width: acc.width.clone(),
-            height: &acc.height + &raise,
-            depth: Dim::zero(),
-            italic: Dim::zero(),
-            content: acc.content,
-        };
+        let acc_h = &acc.height + &raise;
         Ok(Item {
             class: Some(AtomKind::Ord),
             bx: MathBox {
                 width: width.clone(),
-                height: acc_r.height.max(&b.height),
+                height: acc_h.max(&b.height),
                 depth: b.depth.clone(),
                 italic: Dim::zero(),
-                content: BoxContent::HList(vec![center_in(b, &width), center_in(acc_r, &width)]),
+                shift: Dim::zero(),
+                content: BoxContent::Overlap(vec![
+                    center_in(b, &width),
+                    center_in(acc, &width).with_shift(raise),
+                ]),
             },
         })
     }
@@ -736,6 +737,7 @@ impl Engine<'_> {
                     height: Dim::zero(),
                     depth: row_sep.clone(),
                     italic: Dim::zero(),
+                    shift: Dim::zero(),
                     content: BoxContent::Empty,
                 });
             }
@@ -765,7 +767,19 @@ fn color_wrap(c: Color, inner: MathBox) -> MathBox {
         height: inner.height.clone(),
         depth: inner.depth.clone(),
         italic: inner.italic.clone(),
+        shift: inner.shift.clone(),
         content: BoxContent::Color(c, Box::new(inner)),
+    }
+}
+
+fn back_color_wrap(c: Color, inner: MathBox) -> MathBox {
+    MathBox {
+        width: inner.width.clone(),
+        height: inner.height.clone(),
+        depth: inner.depth.clone(),
+        italic: inner.italic.clone(),
+        shift: inner.shift.clone(),
+        content: BoxContent::BackColor(c, Box::new(inner)),
     }
 }
 
@@ -778,6 +792,7 @@ fn pad_box(inner: MathBox, pad: &Dim) -> MathBox {
         height: h,
         depth: d,
         italic: Dim::zero(),
+        shift: Dim::zero(),
         content: BoxContent::HList(vec![
             MathBox::kern(pad.clone()),
             inner,
@@ -804,6 +819,7 @@ fn center_in(inner: MathBox, width: &Dim) -> MathBox {
         height: h,
         depth: d,
         italic: Dim::zero(),
+        shift: Dim::zero(),
         content: packed.content,
     }
 }

@@ -34,8 +34,12 @@ pub enum BoxContent {
     VList(Vec<MathBox>),
     /// Horizontal kern (atom spacing, `\hspace`).
     Kern(Dim),
-    /// Color wrapper. Dimensions match the inner box.
+    /// Color wrapper. Dimensions match the inner box. Sets SVG `fill`.
     Color(Color, Box<MathBox>),
+    /// Background color (`\colorbox`). Inner glyphs keep the default fill.
+    BackColor(Color, Box<MathBox>),
+    /// Children share the left edge; each child's [`MathBox::shift`] is its baseline.
+    Overlap(Vec<MathBox>),
 }
 
 /// TeX-style box: width, height above baseline, depth below, italic correction.
@@ -49,6 +53,8 @@ pub struct MathBox {
     pub depth: Dim,
     /// Italic correction.
     pub italic: Dim,
+    /// Baseline raise relative to the parent list (positive is up).
+    pub shift: Dim,
     /// Payload.
     pub content: BoxContent,
 }
@@ -62,6 +68,7 @@ impl MathBox {
             height: Dim::zero(),
             depth: Dim::zero(),
             italic: Dim::zero(),
+            shift: Dim::zero(),
             content: BoxContent::Empty,
         }
     }
@@ -74,6 +81,7 @@ impl MathBox {
             height,
             depth,
             italic: Dim::zero(),
+            shift: Dim::zero(),
             content: BoxContent::Rule,
         }
     }
@@ -86,6 +94,7 @@ impl MathBox {
             height: Dim::zero(),
             depth: Dim::zero(),
             italic: Dim::zero(),
+            shift: Dim::zero(),
             content: BoxContent::Kern(width),
         }
     }
@@ -98,6 +107,7 @@ impl MathBox {
             height: g.height,
             depth: g.depth,
             italic: font.italic_correction(g.glyph_id),
+            shift: Dim::zero(),
             content: BoxContent::Glyph {
                 ch,
                 glyph_id: g.glyph_id,
@@ -121,6 +131,7 @@ impl MathBox {
             height,
             depth,
             italic: Dim::zero(),
+            shift: Dim::zero(),
             content: BoxContent::HList(children),
         }
     }
@@ -147,8 +158,16 @@ impl MathBox {
             height,
             depth,
             italic: Dim::zero(),
+            shift: Dim::zero(),
             content: BoxContent::VList(children),
         }
+    }
+
+    /// Raise this box's baseline by `shift` (positive is up).
+    #[must_use]
+    pub fn with_shift(mut self, shift: Dim) -> Self {
+        self.shift = shift;
+        self
     }
 
     /// Gold-stable width/height/depth decimal string.

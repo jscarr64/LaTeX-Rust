@@ -105,7 +105,10 @@ fn parse_style(s: &str) -> MathStyle {
 fn first_color(b: &MathBox) -> Option<Color> {
     match &b.content {
         BoxContent::Color(c, inner) => first_color(inner).or(Some(*c)),
-        BoxContent::HList(v) | BoxContent::VList(v) => v.iter().find_map(first_color),
+        BoxContent::BackColor(_, inner) => first_color(inner),
+        BoxContent::HList(v) | BoxContent::VList(v) | BoxContent::Overlap(v) => {
+            v.iter().find_map(first_color)
+        }
         _ => None,
     }
 }
@@ -114,7 +117,7 @@ fn has_nested_color(b: &MathBox, outer: Color, inner: Color) -> bool {
     match &b.content {
         BoxContent::Color(c, body) if *c == outer => first_color(body) == Some(inner),
         BoxContent::Color(_, body) => has_nested_color(body, outer, inner),
-        BoxContent::HList(v) | BoxContent::VList(v) => {
+        BoxContent::HList(v) | BoxContent::VList(v) | BoxContent::Overlap(v) => {
             v.iter().any(|k| has_nested_color(k, outer, inner))
         }
         _ => false,

@@ -139,6 +139,18 @@ impl Dim {
             .unwrap_or_else(|_| "NaN".into())
     }
 
+    /// Compact decimal for SVG attributes (same zenith-float decimal as layout golds).
+    #[must_use]
+    pub fn to_svg_string(&self) -> String {
+        self.to_dec_string()
+    }
+
+    /// Layout dimension from an IEEE-754 binary32 bit pattern (ttf-parser outline boundary).
+    #[must_use]
+    pub fn from_ieee32_bits(bits: u32) -> Self {
+        wrap(zenith_float::Ieee32::from_bits(bits).to_exact(DIM_PREC))
+    }
+
     /// Compare two dimensions. `None` if either is NaN.
     #[must_use]
     pub fn cmp(&self, other: &Self) -> Option<Ordering> {

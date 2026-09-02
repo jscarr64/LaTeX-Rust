@@ -2,7 +2,7 @@
 **Version:** 0.1.0-plan  
 **Date:** 2026-09-01  
 **License:** MIT OR Apache-2.0  
-**Status:** Milestone 3 layout engine green (`golds/layout.toml`)  
+**Status:** Milestone 4 SVG renderer green (`golds/svg.toml`)  
 
 > Pure Rust LaTeX math renderer. No JavaScript. No webview. No runtime dependencies.  
 > Surpasses MathJax and KaTeX in correctness, performance, and platform coverage.
@@ -398,11 +398,11 @@ Each milestone ends with a full gold suite pass before the next begins.
 - [x] Gold tests for layout dimensions on every node type
 
 ### Milestone 4 — SVG Renderer
-- [ ] Glyph path extraction from TrueType
-- [ ] Box → SVG transform
-- [ ] Self-contained SVG output
-- [ ] Extensible delimiter rendering
-- [ ] Gold tests for SVG output on representative expressions
+- [x] Glyph path extraction from TrueType
+- [x] Box → SVG transform
+- [x] Self-contained SVG output
+- [x] Extensible delimiter rendering
+- [x] Gold tests for SVG output on representative expressions
 
 ### Milestone 5 — Symbol Coverage
 - [ ] Full Greek alphabet
@@ -430,10 +430,10 @@ Each milestone ends with a full gold suite pass before the next begins.
 - [x] `\definecolor` custom color registration (`ColorTable::define`)
 - [x] Color AST nodes — `Color`, `TextColor`, `ColorBox`, `FColorBox` (`golds/parse.toml`)
 - [x] Color scope propagation through layout engine
-- [ ] SVG renderer — `fill` and `stroke` attribute emission on colored glyphs
+- [x] SVG renderer — `fill` and `stroke` attribute emission on colored glyphs
 - [ ] PNG renderer — tiny-skia color pass-through
 - [ ] egui renderer — `Color32` emission
-- [~] Gold tests for every color capability (hex / tokenize / parse AST / layout color boxes locked; SVG `fill` golds wait on Milestone 4+8 render)
+- [~] Gold tests for every color capability (hex / tokenize / parse AST / layout color boxes / SVG `fill` locked; PNG and egui wait on later milestones)
 - [ ] Full corpus pass before Milestone 9
 
 ### Milestone 9 — PNG Renderer (feature = "png")
