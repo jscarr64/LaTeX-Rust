@@ -1,7 +1,7 @@
 //! LaTeX-Rust: pure Rust LaTeX math renderer.
 //!
 //! Milestone 1 provides layout dimensions, box composition, STIX Two Math
-//! metrics, a tokenizer, and the math symbol catalog. Unsupported constructs
+//! metrics, a tokenizer, the math symbol catalog, and color-model resolution. Unsupported constructs
 //! return [`Error`] — never a fake render.
 //!
 //! No hardware `f32` / `f64` is used in layout arithmetic.
@@ -27,6 +27,7 @@
 #![deny(clippy::float_arithmetic)]
 #![deny(clippy::undocumented_unsafe_blocks)]
 
+mod color;
 mod dim;
 mod error;
 mod font;
@@ -34,6 +35,7 @@ mod layout;
 mod parser;
 mod symbols;
 
+pub use color::{named_color, parse_color_spec, Color, ColorTable};
 pub use dim::{Dim, DIM_PREC};
 pub use error::{Error, FontError, ParseError};
 pub use font::{

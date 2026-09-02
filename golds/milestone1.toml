@@ -208,3 +208,110 @@ kind = "symbol"
 op = "category_count"
 input = "Greek"
 expect = "24"
+
+[[gold]]
+name = "tok_textcolor"
+kind = "tokenize"
+input = "\\textcolor{red}{x}"
+expect = "cmd:textcolor { char:r char:e char:d } { char:x }"
+
+[[gold]]
+name = "tok_color_scope"
+kind = "tokenize"
+input = "{\\color{blue}x+y}+z"
+expect = "{ cmd:color { char:b char:l char:u char:e } char:x char:+ char:y } char:+ char:z"
+
+[[gold]]
+name = "tok_colorbox"
+kind = "tokenize"
+input = "\\colorbox{yellow}{\\frac{1}{2}}"
+expect = "cmd:colorbox { char:y char:e char:l char:l char:o char:w } { cmd:frac { char:1 } { char:2 } }"
+
+[[gold]]
+name = "tok_definecolor"
+kind = "tokenize"
+input = "\\definecolor{mygreen}{rgb}{0.0,0.6,0.0}"
+expect = "cmd:definecolor { char:m char:y char:g char:r char:e char:e char:n } { char:r char:g char:b } { char:0 char:. char:0 char:, char:0 char:. char:6 char:, char:0 char:. char:0 }"
+
+[[gold]]
+name = "color_named_red"
+kind = "color"
+op = "named"
+input = "red"
+expect = "#ff0000"
+
+[[gold]]
+name = "color_named_blue"
+kind = "color"
+op = "named"
+input = "blue"
+expect = "#0000ff"
+
+[[gold]]
+name = "color_dvips_royalblue"
+kind = "color"
+op = "named"
+input = "RoyalBlue"
+expect = "#0080ff"
+
+[[gold]]
+name = "color_named_count"
+kind = "color"
+op = "named_count"
+expect = "76"
+
+[[gold]]
+name = "color_rgb_mygreen"
+kind = "color"
+op = "model"
+model = "rgb"
+input = "0.0,0.6,0.0"
+expect = "#009900"
+
+[[gold]]
+name = "color_html"
+kind = "color"
+op = "model"
+model = "HTML"
+input = "3366ff"
+expect = "#3366ff"
+
+[[gold]]
+name = "color_gray"
+kind = "color"
+op = "model"
+model = "gray"
+input = "0.5"
+expect = "#808080"
+
+[[gold]]
+name = "color_cmyk_red"
+kind = "color"
+op = "model"
+model = "cmyk"
+input = "0,1,1,0"
+expect = "#ff0000"
+
+[[gold]]
+name = "color_spot_unsupported"
+kind = "color"
+op = "error"
+model = "spot"
+input = "0.5"
+expect = "unsupported"
+
+[[gold]]
+name = "color_unknown_name"
+kind = "color"
+op = "error_named"
+input = "notacolor"
+expect = "unsupported"
+
+[[gold]]
+name = "color_define_mygreen"
+kind = "color"
+op = "define"
+lhs = "mygreen"
+model = "rgb"
+input = "0.0,0.6,0.0"
+expect = "#009900"

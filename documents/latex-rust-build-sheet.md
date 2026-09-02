@@ -88,6 +88,10 @@ MathNode
 ├── Limit(sub)                     — \lim
 ├── OverUnder(base, over, under)   — \overset \underset
 ├── Accent(base, accent)           — \hat \bar \vec \dot \ddot
+├── Color(spec, body)              — \color after this point in a group
+├── TextColor(spec, body)          — \textcolor{}{}
+├── ColorBox(fill, body)           — \colorbox{}{}
+├── FColorBox(border, fill, body)  — \fcolorbox{}{}{}
 ├── Text(string, style)            — \text{} \mathrm{} \mathbf{}
 ├── Space(SpaceKind)               — \, \; \quad \qquad
 ├── Operator(name, limits)         — \sin \cos \log named ops
@@ -256,6 +260,28 @@ Font metrics are stored as zenith-float `Dim` values — no hardware float in th
 | `\nonumber \notag` | ⬜ | |
 | `\label \ref` | ⬜ | Within document |
 
+### 4.8 Color
+
+Color is in scope for v1.0 (Milestone 8). Channel math uses `Dim` — never hardware `f32`/`f64`. An unsupported model or unknown name is `Err(Unsupported)`, never a silent default color.
+
+| Capability | Status | Notes |
+|---|---|---|
+| `\color{name}` | ⬜ | Named color — affects all following content in scope |
+| `\textcolor{name}{expr}` | ⬜ | Color applied to expression only |
+| `\colorbox{name}{expr}` | ⬜ | Background color box around expression |
+| `\fcolorbox{border}{bg}{expr}` | ⬜ | Framed color box |
+| `\definecolor{name}{model}{spec}` | ⬜ | Custom color definition |
+| Named colors (standard LaTeX set) | ⬜ | black white red green blue cyan magenta yellow + dvipsnames set |
+| RGB color model `{rgb}{r,g,b}` | ⬜ | Values 0.0–1.0 via `Dim` |
+| HTML hex color model `{HTML}{RRGGBB}` | ⬜ | 6-digit hex |
+| CMYK color model `{cmyk}{c,m,y,k}` | ⬜ | Values 0.0–1.0 via `Dim`; naive `(1-c)(1-k)` to sRGB |
+| Gray model `{gray}{g}` | ⬜ | Value 0.0–1.0 via `Dim` |
+| Color inheritance / scope | ⬜ | Color scoped to current group `{}` |
+| SVG fill / stroke emission | ⬜ | `fill` and `stroke` attributes on path elements |
+| PNG color pass-through | ⬜ | tiny-skia color support |
+| egui color pass-through | ⬜ | egui `Color32` emission |
+| Unsupported color model | ⬜ | Returns `Err(Unsupported)` — never a fake color |
+
 ---
 
 ## 5. What latex-rust Does Not Do
@@ -269,7 +295,8 @@ These are explicitly out of scope. They return `Err(Unsupported)` — never a fa
 - PDF output (separate crate)
 - Font substitution / fallback synthesis
 - Right-to-left math
-- Color (`\color{}`) in v1.0 — planned for v1.1
+
+Unsupported color *models* (for example `spot`) and unknown color names return `Err(Unsupported)`. They are not out of scope as a feature — they are honest failures inside the color system (see §4.8).
 
 ---
 
@@ -295,6 +322,41 @@ box_depth_mu  = "4.1"
 svg_hash = "sha256:abc123..."
 ```
 
+Color golds (hex is the contract until SVG lands; SVG golds then lock `fill`/`stroke`):
+
+```toml
+[[gold]]
+name = "textcolor_red_x"
+input = "\\textcolor{red}{x}"
+kind = "svg"
+notes = "x glyph path has fill:#ff0000"
+
+[[gold]]
+name = "color_scope"
+input = "{\\color{blue} x + y} + z"
+kind = "svg"
+notes = "x and y blue, z default color"
+
+[[gold]]
+name = "definecolor_custom"
+input = "\\definecolor{mygreen}{rgb}{0.0,0.6,0.0}\\textcolor{mygreen}{f(x)}"
+kind = "svg"
+notes = "custom rgb color applied correctly"
+
+[[gold]]
+name = "colorbox_expression"
+input = "\\colorbox{yellow}{\\frac{1}{2}}"
+kind = "svg"
+notes = "yellow background box around fraction"
+
+[[gold]]
+name = "unsupported_color_model"
+input = "\\definecolor{x}{spot}{0.5}"
+kind = "error"
+expect = "Unsupported"
+notes = "spot color model not supported — never a fake color"
+```
+
 Rules:
 - Gold is the contract. Code must pass gold. Gold is never changed to pass code.
 - A render that differs by one pixel from gold is a failure.
@@ -308,12 +370,14 @@ Rules:
 Each milestone ends with a full gold suite pass before the next begins.
 
 ### Milestone 1 — Core Infrastructure
-- [ ] Crate scaffolding, workspace integration
-- [ ] `Dim` type wrapping zenith-float for layout math
-- [ ] Font metric loader (STIX Two Math)
-- [ ] `MathBox` type and basic composition
-- [ ] Parser skeleton — tokenizer only
-- [ ] Gold runner infrastructure
+- [x] Crate scaffolding (`latex-rust`, dual license, GitHub)
+- [x] `Dim` type wrapping zenith-float for layout math
+- [x] Font metric loader (STIX Two Math)
+- [x] `MathBox` type and basic composition
+- [x] Parser skeleton — tokenizer only
+- [x] Gold runner infrastructure
+- [x] Math symbol catalog (`data/symbols.tsv`)
+- [x] Color model parser + named/dvipsnames table (spec in §4.8; SVG in Milestone 8)
 
 ### Milestone 2 — Parser Complete
 - [ ] Full tokenizer
@@ -360,18 +424,30 @@ Each milestone ends with a full gold suite pass before the next begins.
 - [ ] Cases environment
 - [ ] Gold tests for all environments
 
-### Milestone 8 — PNG Renderer (feature = "png")
+### Milestone 8 — Color Support
+- [x] Color model parser — named, rgb, HTML hex, cmyk, gray (`parse_color_spec`, golds)
+- [x] Standard named color table — 8 LaTeX names + 68 dvipsnames (`data/dvipsnames.tsv`)
+- [x] `\definecolor` custom color registration (`ColorTable::define`)
+- [ ] Color AST nodes — `ColorNode`, `TextColorNode`, `ColorBoxNode`, `FColorBoxNode`
+- [ ] Color scope propagation through layout engine
+- [ ] SVG renderer — `fill` and `stroke` attribute emission on colored glyphs
+- [ ] PNG renderer — tiny-skia color pass-through
+- [ ] egui renderer — `Color32` emission
+- [~] Gold tests for every color capability (hex / tokenize / unsupported locked; SVG `fill` golds wait on Milestone 4+8 render)
+- [ ] Full corpus pass before Milestone 9
+
+### Milestone 9 — PNG Renderer (feature = "png")
 - [ ] tiny-skia integration
 - [ ] DPI-aware rasterization
 - [ ] Gold tests for pixel output
 
-### Milestone 9 — egui Renderer (feature = "egui")
+### Milestone 10 — egui Renderer (feature = "egui")
 - [ ] egui Shape emission
 - [ ] Zero SVG intermediate
 - [ ] Integration test with egui test harness
 - [ ] Gold tests for shape output
 
-### Milestone 10 — Polish and Release
+### Milestone 11 — Polish and Release
 - [ ] Full documentation (rustdoc on every public item)
 - [ ] README with examples
 - [ ] CHANGELOG
@@ -388,6 +464,8 @@ Each milestone ends with a full gold suite pass before the next begins.
 | `ttf-parser` | TrueType glyph extraction | No |
 | `tiny-skia` | PNG rasterization | Yes (feature = "png") |
 | `egui` | egui primitive emission | Yes (feature = "egui") |
+
+Color uses these crates only: CSS `fill`/`stroke` strings in SVG, `tiny-skia` color when the `png` feature is on, `egui::Color32` when the `egui` feature is on. No extra dependency.
 
 No other dependencies. No JavaScript. No webview. No runtime.
 
@@ -414,6 +492,7 @@ KaTeX cold start in a browser is typically 200-400ms. latex-rust target is < 10m
 - Font metrics stored and computed in `Dim`
 - TeX Appendix G spacing table implemented exactly
 - Unsupported input always returns `Err(Unsupported)` — never a fake render
+- Color channels are `Dim` (or integer hex). Unsupported color models never synthesize a color
 - A wrong render is worse than `Err(Unsupported)`
 
 ---

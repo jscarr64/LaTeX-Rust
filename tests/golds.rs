@@ -1,14 +1,15 @@
 //! Gold runner: `golds/milestone1.toml` is the contract.
 
 use latex_rust::{
-    category_count, format_tokens, lookup, symbols, tokenize, Dim, Error, MathBox, MathFont,
-    ParseError, STIX_TWO_MATH_OTF, STIX_TWO_MATH_SHA256,
+    category_count, format_tokens, lookup, named_color, parse_color_spec, symbols, tokenize,
+    ColorTable, Dim, Error, MathBox, MathFont, ParseError, STIX_TWO_MATH_OTF, STIX_TWO_MATH_SHA256,
 };
 
 struct Rec {
     name: String,
     kind: String,
     op: String,
+    model: String,
     input: String,
     lhs: String,
     rhs: String,
@@ -27,6 +28,7 @@ impl Default for Rec {
             name: String::new(),
             kind: String::new(),
             op: String::new(),
+            model: String::new(),
             input: String::new(),
             lhs: String::new(),
             rhs: String::new(),
@@ -108,6 +110,7 @@ fn load_golds() -> Vec<Rec> {
             "name" => rec.name = v,
             "kind" => rec.kind = v,
             "op" => rec.op = v,
+            "model" => rec.model = v,
             "input" => rec.input = v,
             "lhs" => rec.lhs = v,
             "rhs" => rec.rhs = v,
@@ -264,6 +267,62 @@ fn milestone1_golds() {
                     );
                 }
                 other => panic!("{}: unknown symbol op {other}", rec.name),
+            },
+            "color" => match rec.op.as_str() {
+                "named" => {
+                    let c = named_color(&rec.input).expect(&rec.name);
+                    assert_eq!(c.css_hex(), rec.expect, "{}", rec.name);
+                }
+                "named_count" => {
+                    assert_eq!(
+                        ColorTable::new().len().to_string(),
+                        rec.expect,
+                        "{}",
+                        rec.name
+                    );
+                }
+                "model" => {
+                    let c = parse_color_spec(&rec.model, &rec.input, None).expect(&rec.name);
+                    assert_eq!(c.css_hex(), rec.expect, "{}", rec.name);
+                }
+                "define" => {
+                    let mut t = ColorTable::new();
+                    let c = t.define(&rec.lhs, &rec.model, &rec.input).expect(&rec.name);
+                    assert_eq!(c.css_hex(), rec.expect, "{}", rec.name);
+                    assert_eq!(
+                        t.get(&rec.lhs).expect("lookup").css_hex(),
+                        rec.expect,
+                        "{}",
+                        rec.name
+                    );
+                }
+                "error" => {
+                    let err = parse_color_spec(&rec.model, &rec.input, None).expect_err(&rec.name);
+                    assert!(
+                        matches!(err, Error::Unsupported { .. }),
+                        "{}: {err}",
+                        rec.name
+                    );
+                    assert!(
+                        err.to_string().to_ascii_lowercase().contains(&rec.expect),
+                        "{}: {err}",
+                        rec.name
+                    );
+                }
+                "error_named" => {
+                    let err = named_color(&rec.input).expect_err(&rec.name);
+                    assert!(
+                        matches!(err, Error::Unsupported { .. }),
+                        "{}: {err}",
+                        rec.name
+                    );
+                    assert!(
+                        err.to_string().to_ascii_lowercase().contains(&rec.expect),
+                        "{}: {err}",
+                        rec.name
+                    );
+                }
+                other => panic!("{}: unknown color op {other}", rec.name),
             },
             other => panic!("{}: unknown kind {other}", rec.name),
         }

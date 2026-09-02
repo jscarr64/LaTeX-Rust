@@ -67,6 +67,11 @@ rationals. Glyph outlines and SVG emission are later milestones.
 Math-mode commands ship as `data/symbols.tsv` (226 entries, from the keyboard
 symbol table). Look up with `latex_rust::lookup`.
 
+Color is in v1.0 (see `documents/latex-rust-color-addition.md`, merged into the
+build sheet). Resolve with `named_color` / `parse_color_spec`. Channel values
+use `Dim`. `spot` and unknown names return `Err` — never a fake color. SVG
+`fill` lands with the renderer.
+
 ## License
 
 MIT OR Apache-2.0. STIX Two Math remains under the SIL Open Font License 1.1.

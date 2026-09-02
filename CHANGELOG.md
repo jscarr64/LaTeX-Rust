@@ -8,4 +8,5 @@
 - `MathBox` with hpack / vpack composition.
 - STIX Two Math 2.13 metric loader (`units_per_em`, advances, extents).
 - LaTeX math tokenizer (no AST yet).
-- Gold runner and golds for dim, box, font, and tokenize.
+- Color model parser: named + dvipsnames, rgb / HTML / cmyk / gray via `Dim`; unknown models `Err(Unsupported)`.
+- Gold runner and golds for dim, box, font, tokenize, symbols, and color models.
