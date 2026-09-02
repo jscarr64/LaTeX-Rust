@@ -45,16 +45,20 @@ latex-rust is a pure Rust crate that:
 
 ```
 latex-rust
-├── parser/          LaTeX → AST
-├── layout/          AST → Box model (TeX-faithful)
-├── font/            Font metric tables, TrueType loader
-├── render/
+├── src/parser/      LaTeX → AST
+├── src/layout/      AST → Box model (TeX-faithful)
+├── src/font/        Font metric tables, TrueType loader
+├── src/render/
 │   ├── svg/         Box model → SVG
-│   ├── png/         Box model → PNG (via tiny-skia)
-│   └── egui/        Box model → egui primitives (feature-gated)
+│   ├── png/         Box model → PNG (via tiny-skia; Err until M9)
+│   └── egui/        Box model → egui primitives (Err until M10)
 ├── golds/           Gold test vectors
 └── benches/         Layout and render benchmarks
 ```
+
+These are public crate modules (`latex_rust::parser`, `layout`, `font`, `render`).
+The same names are re-exported at the crate root. Embedded font *files* stay in
+`fonts/` (STIX Two Math OFL); `src/font/` is the loader.
 
 ### 3.1 Parser
 
@@ -144,15 +148,15 @@ Font metrics are stored as zenith-float `Dim` values — no hardware float in th
 - Scales perfectly at any size
 - Primary output format
 
-**PNG renderer (feature = "png"):**
-- Uses `tiny-skia` for rasterization
-- DPI-aware
-- Optional feature — not compiled by default
+**PNG renderer (`src/render/png`, feature `png`):**
+- Entry points exist now and return `Err(Unsupported)` until Milestone 9
+- Milestone 9 uses `tiny-skia` for rasterization; DPI-aware
+- Feature `png` is reserved for the `tiny-skia` dependency — not pulled today
 
-**egui renderer (feature = "egui"):**
-- Emits egui `Shape` primitives directly
-- Zero SVG intermediate
-- Designed for Accumath UI integration
+**egui renderer (`src/render/egui`, feature `egui`):**
+- Entry points exist now and return `Err(Unsupported)` until Milestone 10
+- Milestone 10 emits egui `Shape` primitives directly (no SVG intermediate)
+- Feature `egui` is reserved for the egui dependency — not pulled today
 
 ---
 

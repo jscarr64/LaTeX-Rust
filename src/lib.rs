@@ -1,5 +1,8 @@
 //! LaTeX-Rust: pure Rust LaTeX math renderer.
 //!
+//! Crate layout follows the build-sheet architecture:
+//! [`parser`], [`mod@layout`], [`font`], [`render`] (`svg` / `png` / `egui`).
+//!
 //! Milestone 6 covers TeX-exact accent placement, extensible decorations from
 //! MATH variants and glyph assembly, cancel diagonals, and boxed frames.
 //! Milestone 5 covers the math-symbol catalog, TeX atom classes, and Unicode
@@ -43,12 +46,17 @@ mod atoms;
 mod color;
 mod dim;
 mod error;
-mod font;
-mod layout;
-mod parser;
 mod style_map;
-mod svg;
 mod symbols;
+
+/// OpenType MATH metrics and the embedded STIX Two Math face.
+pub mod font;
+/// AST → TeX-faithful [`MathBox`](layout::MathBox).
+pub mod layout;
+/// LaTeX math → [`MathNode`](parser::MathNode) AST.
+pub mod parser;
+/// Box model → SVG, PNG, or egui primitives.
+pub mod render;
 
 pub use atoms::symbol_atom_kind;
 pub use color::{named_color, parse_color_spec, Color, ColorTable};
@@ -62,6 +70,8 @@ pub use parser::{
     format_tokens, parse, parse_with_colors, preprocess, tokenize, AccentKind, AtomKind, DelimSize,
     Delimiter, IntegralKind, MathNode, MatrixStyle, PhantomKind, SpaceKind, TextStyle, Token,
 };
+pub use render::egui::render_egui;
+pub use render::png::{latex_to_png, render_png, PngOptions};
+pub use render::svg::{latex_to_svg, render_svg, SvgOptions};
 pub use style_map::styled_char;
-pub use svg::{latex_to_svg, render_svg, SvgOptions};
 pub use symbols::{category_count, glyph_char, lookup, symbols, SymbolEntry, SymbolKind};

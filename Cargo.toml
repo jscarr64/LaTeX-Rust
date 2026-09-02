@@ -17,6 +17,7 @@ include = [
     "data/**",
     "fonts/**",
     "golds/**",
+    "benches/**",
     "LICENSE-MIT",
     "LICENSE-APACHE",
     "README.md",
@@ -32,10 +33,18 @@ path = "src/lib.rs"
 [features]
 default = ["std"]
 std = ["zenith-float/std"]
+# Milestone 9: tiny-skia raster backend (`src/render/png`).
+png = []
+# Milestone 10: egui Shape backend (`src/render/egui`).
+egui = []
 
 [dependencies]
 ttf-parser = "0.25"
 zenith-float = "1.0"
+
+[[bench]]
+name = "layout"
+harness = false
 
 [package.metadata.docs.rs]
 all-features = true

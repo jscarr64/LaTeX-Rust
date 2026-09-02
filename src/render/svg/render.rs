@@ -2,13 +2,13 @@
 
 use std::collections::HashMap;
 
+use super::outline;
 use crate::color::Color;
 use crate::dim::Dim;
 use crate::error::{Error, FontError};
 use crate::font::MathFont;
 use crate::layout::{layout, BoxContent, MathBox, MathStyle};
 use crate::parser::parse;
-use crate::svg::outline;
 
 /// Options for [`render_svg`].
 #[derive(Clone, Debug)]

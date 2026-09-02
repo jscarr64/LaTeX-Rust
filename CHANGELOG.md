@@ -2,6 +2,13 @@
 
 ## 0.1.0 (unreleased)
 
+### Architecture (build sheet §3)
+
+- Crate modules match the sheet: `parser/`, `layout/`, `font/`, `render/svg`,
+  `render/png`, `render/egui`, plus `golds/` and `benches/`. Crate-root names
+  still re-export the public API. PNG and egui entry points return `Unsupported`
+  until those milestones.
+
 ### Milestone 6 — Accents and decorations
 
 - Single-character accents use TeX placement: cramped nucleus, italic / MATH

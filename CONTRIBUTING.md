@@ -16,6 +16,9 @@ when that file is present. Do not invent a second symbol list.
   [zenith-float](https://crates.io/crates/zenith-float) 1.0).
 - If it cannot be done in Rust, return `Err`. Do not call something else.
 - No hardware `f32` / `f64` in layout math. Use `Dim`.
+- Crate layout follows `documents/latex-rust-build-sheet.md` §3:
+  `src/parser`, `src/layout`, `src/font`, `src/render/{svg,png,egui}`,
+  `golds/`, `benches/`.
 - Run `cargo test` after each addition before starting the next.
 - Dual-license new files MIT OR Apache-2.0. Do not relicense the STIX font.
 - Open issues and pull requests at <https://github.com/jscarr64/LaTeX-Rust>.

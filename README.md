@@ -11,7 +11,18 @@ the Rust standard library plus the crates listed below.
 It parses LaTeX math into a typed AST, lays the AST out with a TeX-faithful box
 model whose dimensions are [zenith-float](https://crates.io/crates/zenith-float)
 `Dim` values (no hardware `f32`/`f64` in the layout path), and renders to SVG.
-PNG and egui backends are planned as optional features.
+PNG and egui live under `src/render/` and return `Err` until those milestones.
+
+```
+src/parser/     LaTeX → AST
+src/layout/     AST → box model
+src/font/       STIX Two Math metrics / TrueType loader
+src/render/svg  box model → SVG
+src/render/png  box model → PNG (Unsupported until Milestone 9)
+src/render/egui box model → egui (Unsupported until Milestone 10)
+golds/          gold tests
+benches/        layout / SVG timings
+```
 
 This crate does not typeset documents. Text-mode LaTeX, TikZ, chemistry, and PDF
 are out of scope and return `Err` — never a fake render.
