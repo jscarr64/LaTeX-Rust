@@ -8,18 +8,12 @@
 /// Normalize raw math input for the tokenizer.
 #[must_use]
 pub fn preprocess(raw_input: &str) -> String {
-    let mut input = raw_input.trim().to_string();
+    let input = raw_input.trim().to_string();
     if input.is_empty() {
         return input;
     }
 
-    while (input.ends_with('.') || input.ends_with(',') || input.ends_with(';'))
-        && !input.ends_with("...")
-    {
-        input.pop();
-        input = input.trim().to_string();
-    }
-
+    let mut input = input;
     input = input.replace(r"{ (}", "(").replace(r"{ )}", ")");
     input = input.replace(r"{ ( }", "(").replace(r"{ ) }", ")");
     input = input.replace(r"{[}", "[").replace(r"{]}", "]");
@@ -180,8 +174,8 @@ mod tests {
     }
 
     #[test]
-    fn trailing_period_stripped() {
-        assert_eq!(preprocess("x^2."), "x^2");
+    fn trailing_period_kept() {
+        assert_eq!(preprocess("x^2."), "x^2.");
     }
 
     #[test]

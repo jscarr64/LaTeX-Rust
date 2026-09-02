@@ -1,0 +1,14 @@
+---
+description: LaTeX-Rust is 100% Rust with software layout math only.
+alwaysApply: true
+---
+
+# 100% Rust
+
+This crate is **100% Rust**. Do not add C/C++, JavaScript, Python, or FFI into a foreign numeric library for calculations.
+
+- Dependencies used for numerics must themselves be Rust (`zenith-float`).
+- No hardware `f32` / `f64` in layout or parse arithmetic. Use `Dim` (zenith-float `ExactNum`).
+- No `libm`, no LLVM/Cranelift float codegen, no `as f64` / `From<f64>` as a numeric terminal.
+- Tests, gold runners, and codegen stay in Rust. Do not add scripts in another language to the crate.
+- Unsupported input returns `Err`. Never invent a render.

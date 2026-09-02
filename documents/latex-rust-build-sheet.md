@@ -380,11 +380,11 @@ Each milestone ends with a full gold suite pass before the next begins.
 - [x] Color model parser + named/dvipsnames table (spec in §4.8; SVG in Milestone 8)
 
 ### Milestone 2 — Parser Complete
-- [ ] Full tokenizer
-- [ ] `MathNode` AST complete
-- [ ] Parser produces correct AST for all §4 node types
-- [ ] `ParseError` for all unsupported input
-- [ ] Gold tests for every node type
+- [x] Full tokenizer
+- [x] `MathNode` AST complete
+- [x] Parser produces correct AST for all §4 node types
+- [x] `ParseError` for all unsupported input
+- [x] Gold tests for every node type
 
 ### Milestone 3 — Layout Engine
 - [ ] Style machine (display / text / script / scriptscript / cramped)
@@ -428,12 +428,12 @@ Each milestone ends with a full gold suite pass before the next begins.
 - [x] Color model parser — named, rgb, HTML hex, cmyk, gray (`parse_color_spec`, golds)
 - [x] Standard named color table — 8 LaTeX names + 68 dvipsnames (`data/dvipsnames.tsv`)
 - [x] `\definecolor` custom color registration (`ColorTable::define`)
-- [ ] Color AST nodes — `ColorNode`, `TextColorNode`, `ColorBoxNode`, `FColorBoxNode`
+- [x] Color AST nodes — `Color`, `TextColor`, `ColorBox`, `FColorBox` (`golds/parse.toml`)
 - [ ] Color scope propagation through layout engine
 - [ ] SVG renderer — `fill` and `stroke` attribute emission on colored glyphs
 - [ ] PNG renderer — tiny-skia color pass-through
 - [ ] egui renderer — `Color32` emission
-- [~] Gold tests for every color capability (hex / tokenize / unsupported locked; SVG `fill` golds wait on Milestone 4+8 render)
+- [~] Gold tests for every color capability (hex / tokenize / parse AST locked; SVG `fill` golds wait on Milestone 4+8 render)
 - [ ] Full corpus pass before Milestone 9
 
 ### Milestone 9 — PNG Renderer (feature = "png")

@@ -18,9 +18,11 @@ are out of scope and return `Err` — never a fake render.
 
 ## Status
 
-**Milestone 1** (core infrastructure): `Dim`, `MathBox`, STIX Two Math metric
-loader, tokenizer, gold runner. Parser, layout engine, and SVG follow the build
-sheet in `documents/latex-rust-build-sheet.md`.
+**Milestone 2** (parser complete): LaTeX math → typed `MathNode` AST, gold-locked in
+`golds/parse.toml`. Unknown commands and unmatched delimiters return `Err`.
+**Milestone 1** still covers `Dim`, `MathBox`, STIX Two Math metrics, the tokenizer,
+and color-model resolution. Layout and SVG follow the build sheet in
+`documents/latex-rust-build-sheet.md`.
 
 ## Install
 
@@ -43,7 +45,10 @@ that crate next to this one, or point Cargo at your checkout with `[patch]`.
 ## Quick start
 
 ```rust
-use latex_rust::{tokenize, MathFont, Dim, MathBox};
+use latex_rust::{parse, tokenize, MathFont, Dim, MathBox};
+
+let ast = parse(r"\frac{1}{2}").expect("parse");
+assert_eq!(ast.gold(), r#"(frac (atom Ord "1") (atom Ord "2"))"#);
 
 let tokens = tokenize(r"\frac{1}{2}").expect("tokens");
 let font = MathFont::stix_two_math().expect("STIX Two Math");

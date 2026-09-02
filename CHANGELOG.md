@@ -2,6 +2,12 @@
 
 ## 0.1.0 (unreleased)
 
+### Milestone 2 — Parser complete
+
+- `src/parser/`: preprocess, tokenize, Pratt-style scripts, TeX math-list parse to `MathNode`.
+- `ParseError::{Unsupported, Unknown, Malformed, UnmatchedDelimiter}` name the command or construct.
+- Golds in `golds/parse.toml` for every node type, font style, accent, named/large operator, matrix and multiline environment, color models, and `\left`/`\right` pairs.
+
 ### Milestone 1 — Core infrastructure
 
 - `Dim` wrapping zenith-float `ExactNum` for all layout arithmetic.
