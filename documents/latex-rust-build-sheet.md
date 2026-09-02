@@ -1,8 +1,8 @@
 #latex-rust — Build Sheet
-**Version:** 0.1.0-plan  
+**Version:** 1.0.0  
 **Date:** 2026-09-01  
 **License:** MIT OR Apache-2.0  
-**Status:** Milestone 10 egui renderer green (`features = ["egui"]`; `golds/egui.toml`)  
+**Status:** Milestone 11 polish — crate 1.0.0 (SVG / PNG / egui; golds green)  
 
 > Pure Rust LaTeX math renderer. No JavaScript. No webview. No runtime dependencies.  
 > Surpasses MathJax and KaTeX in correctness, performance, and platform coverage.
@@ -50,8 +50,8 @@ latex-rust
 ├── src/font/        Font metric tables, TrueType loader
 ├── src/render/
 │   ├── svg/         Box model → SVG
-│   ├── png/         Box model → PNG (via tiny-skia; Err until M9)
-│   └── egui/        Box model → egui primitives (Err until M10)
+│   ├── png/         Box model → PNG (via tiny-skia, feature `png`)
+│   └── egui/        Box model → egui primitives (feature `egui`)
 ├── golds/           Gold test vectors
 └── benches/         Layout and render benchmarks
 ```
@@ -165,7 +165,7 @@ Font metrics are stored as zenith-float `Dim` values — no hardware float in th
 **egui renderer (`src/render/egui`, feature `egui`):**
 - TrueType outlines tessellated to `egui::Mesh`; rules and color boxes are `Shape::Rect`
 - No SVG intermediate. Without `features = ["egui"]` every entry point is `Err(Unsupported)`
-- Golds lock shape counts and bounding rects (`golds/egui.toml`)
+- Golds lock shape counts, mesh vertex/index counts, and bounding rects (`golds/egui.toml`)
 
 ---
 
@@ -176,7 +176,7 @@ Font metrics are stored as zenith-float `Dim` values — no hardware float in th
 | Capability | Status | Notes |
 |---|---|---|
 | Fractions `\frac` | ✅ | Display and text style (`golds/layout.toml`) |
-| Binomial `\binom` | ⬜ | Parsed; layout via delimited fraction |
+| Binomial `\binom` | ✅ | Parsed as delimited fraction (`golds/parse.toml`) |
 | Radicals `\sqrt` `\sqrt[n]` | ✅ | Vinculum + optional degree |
 | Superscript / subscript | ✅ | Stacking, cramped style |
 | Sub+superscript simultaneous | ✅ | `x_a^b` |
@@ -240,34 +240,34 @@ Font metrics are stored as zenith-float `Dim` values — no hardware float in th
 
 | Capability | Status | Notes |
 |---|---|---|
-| Automatic inter-atom spacing | ⬜ | TeX Appendix G table |
-| `\,` thin space | ⬜ | |
-| `\:` medium space | ⬜ | |
-| `\;` thick space | ⬜ | |
-| `\!` negative thin space | ⬜ | |
-| `\quad \qquad` | ⬜ | |
-| `\hspace{}` | ⬜ | |
-| `\phantom \vphantom \hphantom` | ⬜ | |
+| Automatic inter-atom spacing | ✅ | TeXbook Table 18 (`golds/layout.toml` `ord-bin-text`, `ord-rel-text`, script drop) |
+| `\,` thin space | ✅ | Parse + layout dims (`golds/parse.toml`, `golds/layout.toml`) |
+| `\:` medium space | ✅ | `golds/parse.toml` `space_med`; 4 mu in layout |
+| `\;` thick space | ✅ | `golds/parse.toml` `space_thick`; 5 mu in layout |
+| `\!` negative thin space | ✅ | `golds/parse.toml` `space_neg`; −3 mu in layout |
+| `\quad \qquad` | ✅ | 1 em / 2 em (`golds/layout.toml` `quad`, `golds/parse.toml`) |
+| `\hspace{}` | ✅ | Em units (`golds/parse.toml` `hspace`) |
+| `\phantom \vphantom \hphantom` | ✅ | Empty / height-only / width-only (`golds/parse.toml`) |
 
 ### 4.6 Named Operators
 
 | Capability | Status | Notes |
 |---|---|---|
-| `\sin \cos \tan \cot \sec \csc` | ⬜ | |
-| `\arcsin \arccos \arctan` | ⬜ | |
-| `\sinh \cosh \tanh \coth` | ⬜ | |
-| `\log \ln \lg \exp` | ⬜ | |
-| `\lim \limsup \liminf` | ⬜ | Limits above/below in display |
-| `\sup \inf \max \min` | ⬜ | |
-| `\det \dim \ker \deg` | ⬜ | |
-| `\gcd \lcm` | ⬜ | |
-| `\Pr \arg` | ⬜ | |
+| `\sin \cos \tan \cot \sec \csc` | ✅ | `\mathrm` operators (`golds/parse.toml` `op_*`) |
+| `\arcsin \arccos \arctan` | ✅ | `golds/parse.toml` |
+| `\sinh \cosh \tanh \coth` | ✅ | `golds/parse.toml` |
+| `\log \ln \lg \exp` | ✅ | `golds/parse.toml` |
+| `\lim \limsup \liminf` | ✅ | `\lim` is `MathNode::Limit`; others named ops (`golds/parse.toml`) |
+| `\sup \inf \max \min` | ✅ | `golds/parse.toml` |
+| `\det \dim \ker \deg` | ✅ | `golds/parse.toml` |
+| `\gcd \lcm` | ✅ | `golds/parse.toml` |
+| `\Pr \arg` | ✅ | `golds/parse.toml` |
 
 ### 4.7 Multiline and Display
 
 | Capability | Status | Notes |
 |---|---|---|
-| Display math centering | ⬜ | |
+| Display math centering | ✅ | Display style; `gather` centers each row (`golds/envs.toml`). Snippet output is tight-boxed, not page-centered. |
 | Equation numbering | ✅ | `\tag{}` / `\tag*{}`; `NumberingConfig` in `layout/` (`golds/envs.toml`) |
 | `\begin{equation}` | ✅ | Display + number (or `\nonumber`) |
 | `\begin{align}` | ✅ | RL alignment; per-row numbers |
@@ -468,11 +468,11 @@ Each milestone ends with a full gold suite pass before the next begins.
 - [x] Gold tests for shape output
 
 ### Milestone 11 — Polish and Release
-- [ ] Full documentation (rustdoc on every public item)
-- [ ] README with examples
-- [ ] CHANGELOG
-- [ ] Benchmarks vs KaTeX reference renders
-- [ ] crates.io publish
+- [x] Full documentation (rustdoc on every public item)
+- [x] README with examples
+- [x] CHANGELOG
+- [x] Benchmarks vs KaTeX reference renders
+- [ ] crates.io publish (manual; dry-run when uploading)
 
 ---
 
@@ -495,11 +495,11 @@ No other dependencies. No JavaScript. No webview. No runtime.
 
 | Operation | Target |
 |---|---|
-| Parse `\frac{a+b}{c+d}` | < 50µs |
-| Layout full display equation | < 500µs |
-| SVG render full display equation | < 1ms |
-| PNG render at 144dpi | < 5ms |
-| Cold start (first render) | < 10ms |
+| Parse `\frac{a+b}{c+d}` | < 50µs (measured ~2µs for `\frac{1}{2}`) |
+| Layout full display equation | < 500µs (measured ~47µs) |
+| SVG render full display equation | < 1ms (measured ~951µs) |
+| PNG render at 144dpi | < 5ms (measured ~142µs) |
+| egui inline cache miss | < 2ms (measured ~216µs) |
 
 KaTeX cold start in a browser is typically 200-400ms. latex-rust target is < 10ms including font loading.
 

@@ -3,6 +3,14 @@
 use crate::parser::TextStyle;
 
 /// Map `ch` under a math font style. Unmapped characters are returned unchanged.
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::{styled_char, TextStyle};
+///
+/// assert_eq!(styled_char('R', TextStyle::Bb), 'ℝ');
+/// ```
 #[must_use]
 pub fn styled_char(ch: char, style: TextStyle) -> char {
     match style {

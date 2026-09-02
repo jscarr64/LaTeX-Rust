@@ -3,6 +3,12 @@
 use core::fmt;
 
 /// Crate-level error.
+///
+/// Unsupported input is never rendered. [`Error::Parse`] wraps tokenizer/parser
+/// failures; [`Error::Font`] wraps face/glyph failures; [`Error::Unsupported`]
+/// is a construct or feature out of scope; [`Error::Malformed`] is a bad value
+/// that parsed as the wrong shape; [`Error::InvalidOption`] is a render option
+/// out of range.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Error {
     /// Tokenizer or parser rejected the input.

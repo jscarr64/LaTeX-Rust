@@ -1,6 +1,18 @@
 //! TeX math style (Appendix G).
 
 /// Math style, including cramped variants.
+///
+/// Display and text are script-level 0; `\scriptstyle` is 1; `\scriptscriptstyle`
+/// is 2. Cramped variants are used under radicals and in denominators.
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::MathStyle;
+///
+/// assert_eq!(MathStyle::Display.numerator().gold(), "text");
+/// assert!(MathStyle::Display.cramp().is_cramped());
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MathStyle {
     /// Display math (`$$`, `\[`).
@@ -138,7 +150,7 @@ mod tests {
         );
         assert_eq!(MathStyle::Text.cramp().gold(), "text-cramped");
         assert_eq!(MathStyle::Script.into_script().gold(), "scriptscript");
-        assert_eq!(MathStyle::Display.cramp().is_cramped(), true);
+        assert!(MathStyle::Display.cramp().is_cramped());
         assert_eq!(MathStyle::Display.script_level(), 0);
         assert_eq!(MathStyle::Script.script_level(), 1);
         assert_eq!(MathStyle::ScriptScript.script_level(), 2);

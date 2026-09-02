@@ -1,23 +1,16 @@
-//! LaTeX-Rust: pure Rust LaTeX math renderer.
+//! LaTeX-Rust: a pure Rust LaTeX **math** renderer.
 //!
-//! Crate layout follows the build-sheet architecture:
-//! [`parser`], [`mod@layout`], [`font`], [`render`] (`svg` / `png` / `egui`).
+//! Parse a math string to a typed AST, lay it out with a TeX-faithful box
+//! model whose dimensions are zenith-float [`Dim`] values (no hardware `f32` /
+//! `f64` in layout arithmetic), and render to SVG, PNG (`features = ["png"]`),
+//! or egui shapes (`features = ["egui"]`).
 //!
-//! Milestone 10 emits egui `Shape` meshes behind `features = ["egui"]` with no
-//! SVG intermediate. Milestone 9 rasterizes a [`MathBox`] to PNG via `tiny-skia`
-//! behind `features = ["png"]`. Milestone 8 covers math-mode color: named / rgb /
-//! RGB / HTML / cmyk / gray, `\definecolor`, group scope, and SVG `fill` /
-//! `stroke`. Milestone 7 covers
-//! multiline environments, equation numbering, `{array}` column specs,
-//! `\substack`, and `\intertext`. Milestone 6 covers TeX-exact accent placement,
-//! extensible decorations from MATH variants and glyph assembly, cancel
-//! diagonals, and boxed frames.
-//! Milestone 5 covers the math-symbol catalog, TeX atom classes, and Unicode
-//! math alphabets (`\mathbb`, `\mathcal`, …) through STIX Two Math. Milestone 4
-//! renders a [`MathBox`] to SVG. Unsupported constructs return [`Error`] — never
-//! a fake render.
+//! Crate layout follows the build-sheet architecture: [`parser`],
+//! [`mod@layout`], [`font`], [`render`] (`svg` / `png` / `egui`).
 //!
-//! No hardware `f32` / `f64` is used in layout arithmetic.
+//! Unsupported constructs return [`Error`] — never a fake render.
+//!
+//! # Examples
 //!
 //! ```
 //! use latex_rust::{parse, layout, tokenize, lookup, MathFont, MathStyle, Dim, MathBox};
@@ -48,6 +41,7 @@
 #![deny(missing_docs)]
 #![deny(clippy::float_arithmetic)]
 #![deny(clippy::undocumented_unsafe_blocks)]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 mod atoms;
 mod color;

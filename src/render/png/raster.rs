@@ -106,6 +106,7 @@ fn px(d: &Dim) -> f32 {
     f32::from_bits(d.to_ieee32_bits())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn emit(
     bx: &MathBox,
     font: &MathFont,
@@ -198,8 +199,10 @@ fn emit(
             let Some(path) = pb.finish() else {
                 return Ok(());
             };
-            let mut stroke = Stroke::default();
-            stroke.width = px(&(thickness.clone() * em_px));
+            let stroke = Stroke {
+                width: px(&(thickness.clone() * em_px)),
+                ..Stroke::default()
+            };
             pixmap.stroke_path(&path, &paint(fill), &stroke, Transform::identity(), None);
             Ok(())
         }
@@ -218,8 +221,10 @@ fn emit(
             let rh = (&h_ink - &t).max(&Dim::zero());
             if !rw.is_zero() && !rh.is_zero() {
                 if let Some(rect) = Rect::from_xywh(px(&x), px(&y), px(&rw), px(&rh)) {
-                    let mut st = Stroke::default();
-                    st.width = px(&t);
+                    let st = Stroke {
+                        width: px(&t),
+                        ..Stroke::default()
+                    };
                     let border = stroke.unwrap_or(fill);
                     pixmap.stroke_path(
                         &PathBuilder::from_rect(rect),
@@ -271,7 +276,7 @@ fn glyph_path(
 }
 
 fn outline_path(font: &MathFont, glyph_id: u16) -> Result<Path, Error> {
-    let face = font.face()?;
+    let face = font.face();
     let mut b = DimOutline {
         pb: PathBuilder::new(),
     };

@@ -14,6 +14,19 @@ use crate::error::Error;
 const DVIPS: &str = include_str!("../data/dvipsnames.tsv");
 
 /// 8-bit sRGB color. Values are integers; conversion from unit intervals uses `Dim`.
+///
+/// SVG `fill` / `stroke`, PNG (`tiny-skia`), and egui (`Color32`) all convert
+/// through [`Color::to_rgba8`].
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::Color;
+///
+/// let c = Color::rgb(255, 0, 0);
+/// assert_eq!(c.css_hex(), "#ff0000");
+/// assert_eq!(c.to_rgba8(), [255, 0, 0, 255]);
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Color {
     /// Red 0–255.
@@ -26,6 +39,13 @@ pub struct Color {
 
 impl Color {
     /// Opaque sRGB triple.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use latex_rust::Color;
+    /// assert_eq!(Color::rgb(0, 0, 0).css_hex(), "#000000");
+    /// ```
     #[must_use]
     pub const fn rgb(r: u8, g: u8, b: u8) -> Self {
         Self { r, g, b }
@@ -62,6 +82,17 @@ const BASE: &[(&str, Color)] = &[
 ];
 
 /// Named-color registry, including `\definecolor` overrides.
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::ColorTable;
+///
+/// let mut t = ColorTable::new();
+/// assert!(!t.is_empty());
+/// t.define("ok", "named", "red").unwrap();
+/// assert_eq!(t.get("ok").unwrap().css_hex(), "#ff0000");
+/// ```
 #[derive(Clone, Debug)]
 pub struct ColorTable {
     named: BTreeMap<String, Color>,
@@ -84,6 +115,12 @@ impl ColorTable {
     #[must_use]
     pub fn len(&self) -> usize {
         self.named.len()
+    }
+
+    /// True when no names are registered.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.named.is_empty()
     }
 
     /// Look up a named color. Unknown names are [`Error::Unsupported`].
@@ -140,6 +177,30 @@ fn load_dvips() -> Vec<(String, Color)> {
 /// Parse `{model}{spec}` as in `\definecolor` / `\color[model]{spec}`.
 ///
 /// `named` uses `table` when provided, otherwise a fresh standard table.
+///
+/// # Arguments
+///
+/// * `model` — `named`, `rgb`, `RGB`, `HTML`, `cmyk`, or `gray`.
+/// * `spec` — model-specific components (comma-separated, or a name / hex).
+/// * `table` — optional named-color registry for the `named` model.
+///
+/// # Returns
+///
+/// An opaque sRGB [`Color`].
+///
+/// # Errors
+///
+/// * [`Error::Unsupported`] — unknown model or unknown named color.
+/// * [`Error::Malformed`] — wrong component count or out-of-range value.
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::parse_color_spec;
+///
+/// let c = parse_color_spec("RGB", "255,0,0", None).unwrap();
+/// assert_eq!(c.css_hex(), "#ff0000");
+/// ```
 pub fn parse_color_spec(
     model: &str,
     spec: &str,
@@ -199,6 +260,27 @@ fn builtin() -> &'static ColorTable {
 }
 
 /// Named color from the standard table (`red`, `RoyalBlue`, …).
+///
+/// # Arguments
+///
+/// * `name` — LaTeX or dvipsnames identifier (case-sensitive as stored).
+///
+/// # Returns
+///
+/// The registered sRGB color.
+///
+/// # Errors
+///
+/// [`Error::Unsupported`] when the name is not in the table.
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::named_color;
+///
+/// assert_eq!(named_color("red").unwrap().css_hex(), "#ff0000");
+/// assert!(named_color("not-a-color").is_err());
+/// ```
 pub fn named_color(name: &str) -> Result<Color, Error> {
     builtin().get(name)
 }

@@ -20,13 +20,70 @@ use crate::parser::{
 use crate::style_map::styled_char;
 use crate::symbols::lookup;
 
-/// Layout `node` in `style` using STIX Two Math metrics.
+/// Lay out `node` in `style` using STIX Two Math metrics.
+///
+/// Every dimension on the returned [`MathBox`] is a [`Dim`](crate::Dim). Missing
+/// glyphs and unsupported constructs are errors — never a substitute glyph.
+///
+/// # Arguments
+///
+/// * `node` — parsed math tree.
+/// * `font` — face providing MATH constants and glyph metrics.
+/// * `style` — TeX math style (`Display`, `Text`, scripts).
+///
+/// # Returns
+///
+/// A box tree ready for SVG, PNG, or egui emission.
+///
+/// # Errors
+///
+/// * [`Error::Font`] — glyph missing from the face.
+/// * [`Error::Unsupported`] — construct or MATH table the engine will not fake.
+/// * [`Error::Malformed`] — invalid structure discovered during layout.
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::{layout, parse, MathFont, MathStyle};
+///
+/// let ast = parse(r"\frac{1}{2}").unwrap();
+/// let font = MathFont::stix_two_math().unwrap();
+/// let boxed = layout(&ast, &font, MathStyle::Text).unwrap();
+/// assert!(!boxed.width.is_zero());
+/// ```
 pub fn layout(node: &MathNode, font: &MathFont, style: MathStyle) -> Result<MathBox, Error> {
     let mut state = NumberingState::default();
     layout_with_numbering(node, font, style, &mut state)
 }
 
-/// Layout with a caller-owned equation counter and label table.
+/// Lay out with a caller-owned equation counter and `\label` / `\ref` table.
+///
+/// # Arguments
+///
+/// * `node` — parsed math tree.
+/// * `font` — face providing MATH constants and glyph metrics.
+/// * `style` — TeX math style.
+/// * `state` — counter and label map; survives across calls.
+///
+/// # Returns
+///
+/// A box tree. Numbers assigned for this tree are recorded in `state`.
+///
+/// # Errors
+///
+/// Same as [`layout`].
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::{layout_with_numbering, parse, MathFont, MathStyle, NumberingState};
+///
+/// let ast = parse(r"\begin{equation}x\end{equation}").unwrap();
+/// let font = MathFont::stix_two_math().unwrap();
+/// let mut state = NumberingState::default();
+/// let boxed = layout_with_numbering(&ast, &font, MathStyle::Display, &mut state).unwrap();
+/// assert!(!boxed.width.is_zero());
+/// ```
 pub fn layout_with_numbering(
     node: &MathNode,
     font: &MathFont,
@@ -605,15 +662,11 @@ impl Engine<'_> {
         for gid in self.font.vertical_variants(base.glyph_id) {
             let cand = self.glyph_id(ch, gid, style)?;
             let span = &cand.height + &cand.depth;
-            if span.cmp(needed).is_some_and(|o| o != Ordering::Less)
-                && (best_span.cmp(needed).is_some_and(|o| o == Ordering::Less)
-                    || span.cmp(&best_span).is_some_and(|o| o == Ordering::Less))
-            {
-                best_span = span;
-                best = cand;
-            } else if best_span.cmp(needed).is_some_and(|o| o == Ordering::Less)
-                && span.cmp(&best_span).is_some_and(|o| o == Ordering::Greater)
-            {
+            let meets = span.cmp(needed).is_some_and(|o| o != Ordering::Less);
+            let best_short = best_span.cmp(needed).is_some_and(|o| o == Ordering::Less);
+            let tighter = span.cmp(&best_span).is_some_and(|o| o == Ordering::Less);
+            let taller = span.cmp(&best_span).is_some_and(|o| o == Ordering::Greater);
+            if (meets && (best_short || tighter)) || (best_short && taller) {
                 best_span = span;
                 best = cand;
             }
@@ -1233,10 +1286,8 @@ impl Engine<'_> {
                     let mut parts = Vec::new();
                     let row = pad_row(math_rows[mi].clone(), ncols);
                     for (j, cell) in row.into_iter().enumerate() {
-                        if j > 0 {
-                            if j % 2 == 0 {
-                                parts.push(MathBox::kern(pair_sep.clone()));
-                            }
+                        if j > 0 && j % 2 == 0 {
+                            parts.push(MathBox::kern(pair_sep.clone()));
                         }
                         let align = if j % 2 == 0 {
                             ColSpec::Right
@@ -1513,6 +1564,7 @@ impl Engine<'_> {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn grid(
         &self,
         rows: &[Vec<MathNode>],

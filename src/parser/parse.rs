@@ -14,12 +14,62 @@ use crate::dim::Dim;
 use crate::error::{Error, ParseError};
 use crate::symbols::{lookup, SymbolKind as CatalogKind};
 
-/// Parse a math string into an AST using a fresh color table.
+/// Parse a LaTeX math string into a [`MathNode`] using a fresh color table.
+///
+/// Accepts raw math, `$...$`, `$$...$$`, `\(...\)`, or `\[...\]`. Binding of
+/// `_` / `^` / primes is Pratt-style (tight postfix on the nucleus).
+///
+/// # Arguments
+///
+/// * `input` — math source, with or without delimiter fences.
+///
+/// # Returns
+///
+/// The typed AST, or a [`ParseError`] naming the problem.
+///
+/// # Errors
+///
+/// * [`ParseError::Unknown`] — command is not in the catalog.
+/// * [`ParseError::Unsupported`] — known construct this crate will not invent.
+/// * [`ParseError::Malformed`] — syntactically invalid input.
+/// * [`ParseError::UnmatchedDelimiter`] — `\left` without `\right` (or vice versa).
+/// * [`ParseError::TrailingBackslash`] — input ended with a stray `\`.
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::parse;
+///
+/// let ast = parse(r"\frac{1}{2}").unwrap();
+/// assert_eq!(ast.gold(), r#"(frac (atom Ord "1") (atom Ord "2"))"#);
+/// ```
 pub fn parse(input: &str) -> Result<MathNode, ParseError> {
     parse_with_colors(input).map(|(n, _)| n)
 }
 
 /// Parse a math string, returning the AST and the color table after `\definecolor`.
+///
+/// # Arguments
+///
+/// * `input` — math source, with or without delimiter fences.
+///
+/// # Returns
+///
+/// The AST and the color table including any `\definecolor` names from `input`.
+///
+/// # Errors
+///
+/// Same as [`parse`].
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::parse_with_colors;
+///
+/// let (ast, table) = parse_with_colors(r"\definecolor{ok}{named}{red}x").unwrap();
+/// assert!(table.get("ok").is_ok());
+/// let _ = ast;
+/// ```
 pub fn parse_with_colors(input: &str) -> Result<(MathNode, ColorTable), ParseError> {
     let sanitized = preprocess(input);
     let tokens = tokenize(&sanitized)?;

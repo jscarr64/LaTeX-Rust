@@ -1,13 +1,23 @@
 //! TrueType outline → triangle mesh in font units (y-up).
 //!
-//! Curve flattening and ear clipping use [`Dim`](crate::Dim) only. `f32` from
-//! `ttf-parser` is converted to [`Dim`] immediately.
+//! `ttf-parser` delivers `f32` outline points; those bits become [`Dim`]
+//! immediately, then integer millifont-units for flatten / earcut (render path,
+//! not layout). Vertices are stored as [`Dim`] for emission.
+
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
 
 use ttf_parser::{GlyphId, OutlineBuilder};
 
 use crate::dim::Dim;
 use crate::error::{Error, FontError};
 use crate::font::MathFont;
+
+/// Sub-font-unit scale for integer flatten / earcut.
+const SCALE: i64 = 64;
+const FLAT_STEPS: i64 = 8;
+
+type Ipt = (i64, i64);
 
 /// Cached tessellation: font-unit vertices (y-up) and triangle indices.
 #[derive(Clone, Debug)]
@@ -16,8 +26,27 @@ pub(super) struct GlyphTris {
     pub indices: Vec<u32>,
 }
 
+fn glyph_cache() -> &'static Mutex<HashMap<u16, GlyphTris>> {
+    static CACHE: OnceLock<Mutex<HashMap<u16, GlyphTris>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Tessellate `glyph_id`, reusing a process-wide triangle cache on later calls.
 pub(super) fn tessellate(font: &MathFont, glyph_id: u16) -> Result<GlyphTris, Error> {
-    let face = font.face()?;
+    if let Ok(guard) = glyph_cache().lock() {
+        if let Some(t) = guard.get(&glyph_id) {
+            return Ok(t.clone());
+        }
+    }
+    let tris = tessellate_uncached(font, glyph_id)?;
+    if let Ok(mut guard) = glyph_cache().lock() {
+        guard.insert(glyph_id, tris.clone());
+    }
+    Ok(tris)
+}
+
+fn tessellate_uncached(font: &MathFont, glyph_id: u16) -> Result<GlyphTris, Error> {
+    let face = font.face();
     let mut b = ContourBuilder::new();
     if face.outline_glyph(GlyphId(glyph_id), &mut b).is_none() {
         return Err(FontError::MissingGlyph { ch: '\u{FFFD}' }.into());
@@ -33,7 +62,7 @@ pub(super) fn tessellate(font: &MathFont, glyph_id: u16) -> Result<GlyphTris, Er
     for poly in polys {
         let tris = earcut(&poly)?;
         let base = vertices.len() as u32;
-        vertices.extend(poly);
+        vertices.extend(poly.into_iter().map(from_fix));
         for [a, b, c] in tris {
             indices.push(base + a);
             indices.push(base + b);
@@ -48,10 +77,36 @@ pub(super) fn tessellate(font: &MathFont, glyph_id: u16) -> Result<GlyphTris, Er
     Ok(GlyphTris { vertices, indices })
 }
 
+fn from_fix(p: Ipt) -> (Dim, Dim) {
+    let s = Dim::from_i64(SCALE);
+    (Dim::from_i64(p.0) / &s, Dim::from_i64(p.1) / s)
+}
+
+fn floor_i64(d: &Dim) -> i64 {
+    if d.is_nan() {
+        return 0;
+    }
+    let neg = matches!(d.cmp(&Dim::zero()), Some(core::cmp::Ordering::Less));
+    let abs = d.abs();
+    let n = i64::from(abs.floor_to_u32().unwrap_or(0));
+    if !neg {
+        n
+    } else if abs.eq_dim(&Dim::from_i64(n)) {
+        -n
+    } else {
+        -n - 1
+    }
+}
+
+fn to_fix(x: f32) -> i64 {
+    let d = Dim::from_ieee32_bits(x.to_bits()) * Dim::from_i64(SCALE);
+    floor_i64(&d)
+}
+
 struct ContourBuilder {
-    contours: Vec<Vec<(Dim, Dim)>>,
-    current: Vec<(Dim, Dim)>,
-    last: Option<(Dim, Dim)>,
+    contours: Vec<Vec<Ipt>>,
+    current: Vec<Ipt>,
+    last: Option<Ipt>,
 }
 
 impl ContourBuilder {
@@ -63,27 +118,24 @@ impl ContourBuilder {
         }
     }
 
-    fn pt(x: f32, y: f32) -> (Dim, Dim) {
-        (
-            Dim::from_ieee32_bits(x.to_bits()),
-            Dim::from_ieee32_bits(y.to_bits()),
-        )
+    fn pt(x: f32, y: f32) -> Ipt {
+        (to_fix(x), to_fix(y))
     }
 
-    fn push(&mut self, p: (Dim, Dim)) {
+    fn push(&mut self, p: Ipt) {
         if let Some(last) = self.current.last() {
-            if last.0.eq_dim(&p.0) && last.1.eq_dim(&p.1) {
+            if *last == p {
                 return;
             }
         }
         self.current.push(p);
-        self.last = Some(self.current[self.current.len() - 1].clone());
+        self.last = Some(p);
     }
 
     fn close_current(&mut self) {
         if self.current.len() >= 3 {
-            if let (Some(first), Some(last)) = (self.current.first(), self.current.last()) {
-                if first.0.eq_dim(&last.0) && first.1.eq_dim(&last.1) {
+            if let (Some(&first), Some(&last)) = (self.current.first(), self.current.last()) {
+                if first == last {
                     self.current.pop();
                 }
             }
@@ -111,22 +163,22 @@ impl OutlineBuilder for ContourBuilder {
     }
 
     fn quad_to(&mut self, x1: f32, y1: f32, x: f32, y: f32) {
-        let Some(p0) = self.last.clone() else {
+        let Some(p0) = self.last else {
             return;
         };
         let p1 = Self::pt(x1, y1);
         let p2 = Self::pt(x, y);
-        flatten_quad(&p0, &p1, &p2, self);
+        flatten_quad(p0, p1, p2, self);
     }
 
     fn curve_to(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x: f32, y: f32) {
-        let Some(p0) = self.last.clone() else {
+        let Some(p0) = self.last else {
             return;
         };
         let p1 = Self::pt(x1, y1);
         let p2 = Self::pt(x2, y2);
         let p3 = Self::pt(x, y);
-        flatten_cubic(&p0, &p1, &p2, &p3, self);
+        flatten_cubic(p0, p1, p2, p3, self);
     }
 
     fn close(&mut self) {
@@ -134,98 +186,73 @@ impl OutlineBuilder for ContourBuilder {
     }
 }
 
-const FLAT_STEPS: i64 = 8;
+fn lerp(a: Ipt, b: Ipt, t_num: i64, t_den: i64) -> Ipt {
+    (
+        a.0 + (b.0 - a.0) * t_num / t_den,
+        a.1 + (b.1 - a.1) * t_num / t_den,
+    )
+}
 
-fn flatten_quad(p0: &(Dim, Dim), p1: &(Dim, Dim), p2: &(Dim, Dim), b: &mut ContourBuilder) {
-    let n = Dim::from_i64(FLAT_STEPS);
+fn eval_quad(p0: Ipt, p1: Ipt, p2: Ipt, t_num: i64, t_den: i64) -> Ipt {
+    let a = lerp(p0, p1, t_num, t_den);
+    let b = lerp(p1, p2, t_num, t_den);
+    lerp(a, b, t_num, t_den)
+}
+
+fn eval_cubic(p0: Ipt, p1: Ipt, p2: Ipt, p3: Ipt, t_num: i64, t_den: i64) -> Ipt {
+    let a = lerp(p0, p1, t_num, t_den);
+    let b = lerp(p1, p2, t_num, t_den);
+    let c = lerp(p2, p3, t_num, t_den);
+    let d = lerp(a, b, t_num, t_den);
+    let e = lerp(b, c, t_num, t_den);
+    lerp(d, e, t_num, t_den)
+}
+
+fn flatten_quad(p0: Ipt, p1: Ipt, p2: Ipt, b: &mut ContourBuilder) {
     for i in 1..=FLAT_STEPS {
-        let t = Dim::from_i64(i) / &n;
-        b.push(eval_quad(p0, p1, p2, &t));
+        b.push(eval_quad(p0, p1, p2, i, FLAT_STEPS));
     }
 }
 
-fn flatten_cubic(
-    p0: &(Dim, Dim),
-    p1: &(Dim, Dim),
-    p2: &(Dim, Dim),
-    p3: &(Dim, Dim),
-    b: &mut ContourBuilder,
-) {
-    let n = Dim::from_i64(FLAT_STEPS);
+fn flatten_cubic(p0: Ipt, p1: Ipt, p2: Ipt, p3: Ipt, b: &mut ContourBuilder) {
     for i in 1..=FLAT_STEPS {
-        let t = Dim::from_i64(i) / &n;
-        b.push(eval_cubic(p0, p1, p2, p3, &t));
+        b.push(eval_cubic(p0, p1, p2, p3, i, FLAT_STEPS));
     }
 }
 
-fn lerp(a: &(Dim, Dim), b: &(Dim, Dim), t: &Dim) -> (Dim, Dim) {
-    let omt = Dim::one() - t;
-    (&(&a.0 * &omt) + &(&b.0 * t), &(&a.1 * &omt) + &(&b.1 * t))
-}
-
-fn eval_quad(p0: &(Dim, Dim), p1: &(Dim, Dim), p2: &(Dim, Dim), t: &Dim) -> (Dim, Dim) {
-    let a = lerp(p0, p1, t);
-    let b = lerp(p1, p2, t);
-    lerp(&a, &b, t)
-}
-
-fn eval_cubic(
-    p0: &(Dim, Dim),
-    p1: &(Dim, Dim),
-    p2: &(Dim, Dim),
-    p3: &(Dim, Dim),
-    t: &Dim,
-) -> (Dim, Dim) {
-    let a = lerp(p0, p1, t);
-    let b = lerp(p1, p2, t);
-    let c = lerp(p2, p3, t);
-    let d = lerp(&a, &b, t);
-    let e = lerp(&b, &c, t);
-    lerp(&d, &e, t)
-}
-
-fn signed_area(poly: &[(Dim, Dim)]) -> Dim {
+fn signed_area(poly: &[Ipt]) -> i64 {
     let n = poly.len();
-    let mut a = Dim::zero();
+    let mut a = 0i64;
     for i in 0..n {
         let j = (i + 1) % n;
-        a = &a + &(&(&poly[i].0 * &poly[j].1) - &(&poly[j].0 * &poly[i].1));
+        a += poly[i].0 * poly[j].1 - poly[j].0 * poly[i].1;
     }
     a
 }
 
-fn is_pos(d: &Dim) -> bool {
-    matches!(d.cmp(&Dim::zero()), Some(core::cmp::Ordering::Greater))
+fn dist2(a: Ipt, b: Ipt) -> i64 {
+    let dx = a.0 - b.0;
+    let dy = a.1 - b.1;
+    dx * dx + dy * dy
 }
 
-fn is_neg(d: &Dim) -> bool {
-    matches!(d.cmp(&Dim::zero()), Some(core::cmp::Ordering::Less))
-}
-
-fn dist2(a: &(Dim, Dim), b: &(Dim, Dim)) -> Dim {
-    let dx = &a.0 - &b.0;
-    let dy = &a.1 - &b.1;
-    &(&dx * &dx) + &(&dy * &dy)
-}
-
-fn point_in_poly(poly: &[(Dim, Dim)], p: &(Dim, Dim)) -> bool {
+fn point_in_poly(poly: &[Ipt], p: Ipt) -> bool {
     let mut inside = false;
     let n = poly.len();
     for i in 0..n {
-        let a = &poly[i];
-        let b = &poly[(i + 1) % n];
-        let a_below = !is_pos(&(&a.1 - &p.1));
-        let b_above = is_pos(&(&b.1 - &p.1));
-        let b_below = !is_pos(&(&b.1 - &p.1));
-        let a_above = is_pos(&(&a.1 - &p.1));
+        let a = poly[i];
+        let b = poly[(i + 1) % n];
+        let a_below = a.1 <= p.1;
+        let b_above = b.1 > p.1;
+        let b_below = b.1 <= p.1;
+        let a_above = a.1 > p.1;
         if (a_below && b_above) || (b_below && a_above) {
-            let dy = &b.1 - &a.1;
-            if dy.is_zero() {
+            let dy = b.1 - a.1;
+            if dy == 0 {
                 continue;
             }
-            let t = &(&p.1 - &a.1) / &dy;
-            let xint = &a.0 + &(&t * &(&b.0 - &a.0));
-            if is_pos(&(&xint - &p.0)) {
+            let xint = a.0 + (p.1 - a.1) * (b.0 - a.0) / dy;
+            if xint > p.0 {
                 inside = !inside;
             }
         }
@@ -233,53 +260,47 @@ fn point_in_poly(poly: &[(Dim, Dim)], p: &(Dim, Dim)) -> bool {
     inside
 }
 
-fn combine_contours(contours: Vec<Vec<(Dim, Dim)>>) -> Result<Vec<Vec<(Dim, Dim)>>, Error> {
+fn combine_contours(contours: Vec<Vec<Ipt>>) -> Result<Vec<Vec<Ipt>>, Error> {
     if contours.is_empty() {
         return Ok(Vec::new());
     }
-    let areas: Vec<Dim> = contours.iter().map(|c| signed_area(c)).collect();
+    let areas: Vec<i64> = contours.iter().map(|c| signed_area(c)).collect();
     let mut outer_idx = Vec::new();
     let mut hole_idx = Vec::new();
     for (i, a) in areas.iter().enumerate() {
-        if a.is_zero() {
+        if *a == 0 {
             continue;
         }
-        if is_neg(a) {
-            // TrueType often uses CW outers (negative in y-up). Treat the
-            // first non-zero contour's sign as outer.
+        if *a < 0 {
             hole_idx.push(i);
         } else {
             outer_idx.push(i);
         }
     }
-    // If everything went into holes, flip the classification.
     if outer_idx.is_empty() && !hole_idx.is_empty() {
         outer_idx = hole_idx;
         hole_idx = Vec::new();
     }
-    // Reclassify: largest |area| contours of the majority sign are outers.
     if outer_idx.is_empty() {
         return Ok(contours);
     }
-    let outer_sign_pos = is_pos(&areas[outer_idx[0]]);
+    let outer_sign_pos = areas[outer_idx[0]] > 0;
     outer_idx.clear();
     hole_idx.clear();
     for (i, a) in areas.iter().enumerate() {
-        if a.is_zero() {
+        if *a == 0 {
             continue;
         }
-        let pos = is_pos(a);
-        if pos == outer_sign_pos {
+        if (*a > 0) == outer_sign_pos {
             outer_idx.push(i);
         } else {
             hole_idx.push(i);
         }
     }
-    let mut outers: Vec<Vec<(Dim, Dim)>> =
-        outer_idx.into_iter().map(|i| contours[i].clone()).collect();
+    let mut outers: Vec<Vec<Ipt>> = outer_idx.into_iter().map(|i| contours[i].clone()).collect();
     for h in hole_idx {
         let hole = &contours[h];
-        let Some(pt) = hole.first() else {
+        let Some(&pt) = hole.first() else {
             continue;
         };
         let mut host = 0usize;
@@ -292,11 +313,10 @@ fn combine_contours(contours: Vec<Vec<(Dim, Dim)>>) -> Result<Vec<Vec<(Dim, Dim)
             }
         }
         if !found {
-            // Attach to the outer with largest |area|.
-            let mut best = Dim::zero();
+            let mut best = 0i64;
             for (oi, outer) in outers.iter().enumerate() {
                 let aa = signed_area(outer).abs();
-                if is_pos(&(&aa - &best)) {
+                if aa > best {
                     best = aa;
                     host = oi;
                 }
@@ -307,17 +327,17 @@ fn combine_contours(contours: Vec<Vec<(Dim, Dim)>>) -> Result<Vec<Vec<(Dim, Dim)
     Ok(outers)
 }
 
-fn insert_hole(outer: &mut Vec<(Dim, Dim)>, hole: &[(Dim, Dim)]) {
+fn insert_hole(outer: &mut Vec<Ipt>, hole: &[Ipt]) {
     if hole.len() < 3 || outer.len() < 3 {
         return;
     }
     let mut best_i = 0usize;
     let mut best_j = 0usize;
-    let mut best_d = dist2(&outer[0], &hole[0]);
-    for (i, op) in outer.iter().enumerate() {
-        for (j, hp) in hole.iter().enumerate() {
+    let mut best_d = dist2(outer[0], hole[0]);
+    for (i, &op) in outer.iter().enumerate() {
+        for (j, &hp) in hole.iter().enumerate() {
             let d = dist2(op, hp);
-            if matches!(d.cmp(&best_d), Some(core::cmp::Ordering::Less)) {
+            if d < best_d {
                 best_d = d;
                 best_i = i;
                 best_j = j;
@@ -328,36 +348,32 @@ fn insert_hole(outer: &mut Vec<(Dim, Dim)>, hole: &[(Dim, Dim)]) {
     spliced.extend_from_slice(&outer[..=best_i]);
     let hn = hole.len();
     for k in 0..hn {
-        spliced.push(hole[(best_j + k) % hn].clone());
+        spliced.push(hole[(best_j + k) % hn]);
     }
-    spliced.push(hole[best_j].clone());
-    spliced.push(outer[best_i].clone());
+    spliced.push(hole[best_j]);
+    spliced.push(outer[best_i]);
     spliced.extend_from_slice(&outer[best_i + 1..]);
     *outer = spliced;
 }
 
-fn cross(a: &(Dim, Dim), b: &(Dim, Dim), c: &(Dim, Dim)) -> Dim {
-    let bax = &b.0 - &a.0;
-    let bay = &b.1 - &a.1;
-    let cax = &c.0 - &a.0;
-    let cay = &c.1 - &a.1;
-    &(&bax * &cay) - &(&bay * &cax)
+fn cross(a: Ipt, b: Ipt, c: Ipt) -> i64 {
+    (b.0 - a.0) * (c.1 - a.1) - (b.1 - a.1) * (c.0 - a.0)
 }
 
-fn triangle_contains(a: &(Dim, Dim), b: &(Dim, Dim), c: &(Dim, Dim), p: &(Dim, Dim)) -> bool {
+fn triangle_contains(a: Ipt, b: Ipt, c: Ipt, p: Ipt) -> bool {
     let c1 = cross(a, b, p);
     let c2 = cross(b, c, p);
     let c3 = cross(c, a, p);
-    (is_pos(&c1) && is_pos(&c2) && is_pos(&c3)) || (is_neg(&c1) && is_neg(&c2) && is_neg(&c3))
+    (c1 > 0 && c2 > 0 && c3 > 0) || (c1 < 0 && c2 < 0 && c3 < 0)
 }
 
-fn earcut(poly: &[(Dim, Dim)]) -> Result<Vec<[u32; 3]>, Error> {
+fn earcut(poly: &[Ipt]) -> Result<Vec<[u32; 3]>, Error> {
     let n0 = poly.len();
     if n0 < 3 {
         return Ok(Vec::new());
     }
     let area = signed_area(poly);
-    let ccw = is_pos(&area);
+    let ccw = area > 0;
     let mut idx: Vec<usize> = (0..n0).collect();
     if !ccw {
         idx.reverse();
@@ -378,11 +394,10 @@ fn earcut(poly: &[(Dim, Dim)]) -> Result<Vec<[u32; 3]>, Error> {
             let prev = idx[(i + m - 1) % m];
             let cur = idx[i];
             let next = idx[(i + 1) % m];
-            let a = &poly[prev];
-            let b = &poly[cur];
-            let c = &poly[next];
-            // Convex in CCW polygon: cross > 0.
-            if !is_pos(&cross(a, b, c)) {
+            let a = poly[prev];
+            let b = poly[cur];
+            let c = poly[next];
+            if cross(a, b, c) <= 0 {
                 continue;
             }
             let mut empty = true;
@@ -390,7 +405,7 @@ fn earcut(poly: &[(Dim, Dim)]) -> Result<Vec<[u32; 3]>, Error> {
                 if k == (i + m - 1) % m || k == i || k == (i + 1) % m {
                     continue;
                 }
-                if triangle_contains(a, b, c, &poly[vi]) {
+                if triangle_contains(a, b, c, poly[vi]) {
                     empty = false;
                     break;
                 }

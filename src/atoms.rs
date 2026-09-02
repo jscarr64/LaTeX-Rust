@@ -4,6 +4,15 @@ use crate::parser::AtomKind;
 
 /// Atom class for a control-sequence name (`times`, `leq`, `langle`) or a
 /// single-character operator (`+`, `=`).
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::{symbol_atom_kind, AtomKind};
+///
+/// assert_eq!(symbol_atom_kind("times"), AtomKind::Bin);
+/// assert_eq!(symbol_atom_kind("sum"), AtomKind::Op);
+/// ```
 #[must_use]
 pub fn symbol_atom_kind(name: &str) -> AtomKind {
     match name {

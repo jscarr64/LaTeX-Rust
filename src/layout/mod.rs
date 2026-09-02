@@ -17,6 +17,10 @@ use crate::error::Error;
 use crate::font::MathFont;
 
 /// What a box contains.
+///
+/// Glyphs carry an OpenType id from the math face. Lists compose children.
+/// Color wrappers do not change dimensions. [`BoxContent::Line`] and
+/// [`BoxContent::Frame`] are decorations from cancel / boxed constructs.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BoxContent {
     /// Empty box (strut or placeholder).
@@ -67,6 +71,18 @@ pub enum BoxContent {
 }
 
 /// TeX-style box: width, height above baseline, depth below, italic correction.
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::{Dim, MathBox};
+///
+/// let packed = MathBox::hpack(vec![
+///     MathBox::rule(Dim::one(), Dim::zero(), Dim::zero()),
+///     MathBox::rule(Dim::ratio(1, 2), Dim::zero(), Dim::zero()),
+/// ]);
+/// assert_eq!(packed.width, Dim::ratio(3, 2));
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MathBox {
     /// Width.

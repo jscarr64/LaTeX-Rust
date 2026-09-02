@@ -71,6 +71,7 @@ fn color32(c: Color) -> Color32 {
     Color32::from_rgba_unmultiplied(r, g, b, a)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn emit(
     bx: &MathBox,
     font: &MathFont,

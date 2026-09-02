@@ -2,6 +2,7 @@
 
 use latex_rust::{latex_to_svg, MathFont, SvgOptions};
 
+#[derive(Default)]
 struct Rec {
     name: String,
     kind: String,
@@ -13,23 +14,6 @@ struct Rec {
     lines: String,
     fill: String,
     contains: String,
-}
-
-impl Default for Rec {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            kind: String::new(),
-            style: String::new(),
-            input: String::new(),
-            expect: String::new(),
-            paths: String::new(),
-            rects: String::new(),
-            lines: String::new(),
-            fill: String::new(),
-            contains: String::new(),
-        }
-    }
 }
 
 fn unescape(s: &str) -> String {

@@ -5,6 +5,7 @@ use latex_rust::{
     ParseError,
 };
 
+#[derive(Default)]
 struct Rec {
     name: String,
     kind: String,
@@ -13,20 +14,6 @@ struct Rec {
     expect: String,
     error: String,
     key: String,
-}
-
-impl Default for Rec {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            kind: String::new(),
-            style: String::new(),
-            input: String::new(),
-            expect: String::new(),
-            error: String::new(),
-            key: String::new(),
-        }
-    }
 }
 
 fn unescape(s: &str) -> String {

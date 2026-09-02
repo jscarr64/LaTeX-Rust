@@ -5,6 +5,7 @@ use latex_rust::{
     Error, MathBox, MathFont, MathNode, MathStyle, SvgOptions, SymbolKind, TextStyle,
 };
 
+#[derive(Default)]
 struct Rec {
     name: String,
     kind: String,
@@ -12,19 +13,6 @@ struct Rec {
     expect: String,
     class: String,
     lhs: String,
-}
-
-impl Default for Rec {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            kind: String::new(),
-            input: String::new(),
-            expect: String::new(),
-            class: String::new(),
-            lhs: String::new(),
-        }
-    }
 }
 
 fn unescape(s: &str) -> String {

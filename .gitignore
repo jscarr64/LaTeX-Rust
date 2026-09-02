@@ -2,3 +2,8 @@
 **/*.rs.bk
 .tools/
 Cargo.lock
+.DS_Store
+**/.DS_Store
+*.orig
+*.swp
+*~

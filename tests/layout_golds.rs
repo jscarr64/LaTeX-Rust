@@ -2,24 +2,13 @@
 
 use latex_rust::{layout, parse, BoxContent, Color, MathBox, MathFont, MathStyle};
 
+#[derive(Default)]
 struct Rec {
     name: String,
     kind: String,
     style: String,
     input: String,
     expect: String,
-}
-
-impl Default for Rec {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            kind: String::new(),
-            style: String::new(),
-            input: String::new(),
-            expect: String::new(),
-        }
-    }
 }
 
 fn unescape(s: &str) -> String {

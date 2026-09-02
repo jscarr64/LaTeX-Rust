@@ -7,6 +7,7 @@ use latex_rust::{
 };
 use tiny_skia::Pixmap;
 
+#[derive(Default)]
 struct Rec {
     name: String,
     kind: String,
@@ -18,23 +19,6 @@ struct Rec {
     height_px: String,
     sha256: String,
     background: String,
-}
-
-impl Default for Rec {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            kind: String::new(),
-            style: String::new(),
-            input: String::new(),
-            expect: String::new(),
-            dpi: String::new(),
-            width_px: String::new(),
-            height_px: String::new(),
-            sha256: String::new(),
-            background: String::new(),
-        }
-    }
 }
 
 fn unescape(s: &str) -> String {

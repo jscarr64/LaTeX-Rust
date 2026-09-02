@@ -27,6 +27,17 @@ pub enum NumberFormat {
 }
 
 /// Counter style for a render (or a sequence of [`layout_with_numbering`](super::layout_with_numbering) calls).
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::{NumberFormat, NumberStyle, NumberingConfig};
+///
+/// let cfg = NumberingConfig::new();
+/// assert_eq!(cfg.style, NumberStyle::Arabic);
+/// assert_eq!(cfg.start, 1);
+/// assert_eq!(cfg.format, NumberFormat::Parenthesized);
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NumberingConfig {
     /// Digit / roman / letter.
@@ -56,6 +67,15 @@ impl NumberingConfig {
 }
 
 /// Mutable numbering / label table. Survives across `layout_with_numbering` calls.
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::{NumberingConfig, NumberingState};
+///
+/// let state = NumberingState::new(NumberingConfig::new());
+/// assert!(state.label("eq:1").is_none());
+/// ```
 #[derive(Clone, Debug)]
 pub struct NumberingState {
     config: NumberingConfig,

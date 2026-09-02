@@ -1,7 +1,7 @@
 //! egui primitive backend. Milestone 10; optional feature `egui`.
 //!
-//! Without the feature every entry point is [`Error::Unsupported`](crate::Error::Unsupported).
-//! With `features = ["egui"]` a [`MathBox`](crate::MathBox) becomes `egui::Shape`
+//! Without the feature every entry point is [`Error::Unsupported`].
+//! With `features = ["egui"]` a [`MathBox`] becomes `egui::Shape`
 //! meshes and rects — no SVG intermediate.
 
 #[cfg(feature = "egui")]
@@ -16,6 +16,19 @@ use crate::font::MathFont;
 use crate::layout::MathBox;
 
 /// Options for [`shapes`] / [`paint_egui`].
+///
+/// Default: 14 pt, black fill, text style.
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::{Color, Dim, EguiOptions};
+///
+/// let mut opt = EguiOptions::new();
+/// opt.font_size_pt = Dim::from_i64(14);
+/// opt.color = Color::rgb(0, 0, 0);
+/// opt.display = false;
+/// ```
 #[derive(Clone, Debug)]
 pub struct EguiOptions {
     /// Em size in points (same meaning as [`crate::SvgOptions::font_size_pt`]).
@@ -44,17 +57,45 @@ impl EguiOptions {
     }
 }
 
-/// Emit egui shapes for `tree`.
+/// Probe the egui backend: tessellate `tree` or return [`Error::Unsupported`].
 ///
-/// Without `features = ["egui"]` this is [`Error::Unsupported`].
-/// With the feature, use [`shapes`] for the real backend.
+/// Without `features = ["egui"]` this is [`Error::Unsupported`]. With the
+/// feature, use [`shapes`] to keep the emitted primitives.
+///
+/// # Arguments
+///
+/// * `tree` — box model from [`crate::layout()`].
+/// * `font` — face that supplied the glyph ids on `tree`.
+///
+/// # Returns
+///
+/// `Ok(())` when the feature is on and tessellation succeeds.
+///
+/// # Errors
+///
+/// * [`Error::Unsupported`] — `egui` feature off, or a box that cannot tessellate.
+/// * [`Error::Font`] — missing glyph outline.
+/// * [`Error::InvalidOption`] — non-positive font size (feature on).
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::{render_egui, MathBox, MathFont};
+///
+/// let font = MathFont::stix_two_math().unwrap();
+/// let r = render_egui(&MathBox::empty(), &font);
+/// #[cfg(not(feature = "egui"))]
+/// assert!(r.is_err());
+/// #[cfg(feature = "egui")]
+/// assert!(r.is_ok());
+/// ```
 pub fn render_egui(tree: &MathBox, font: &MathFont) -> Result<(), Error> {
     #[cfg(not(feature = "egui"))]
     {
         let _ = (tree, font);
-        return Err(Error::Unsupported {
+        Err(Error::Unsupported {
             what: "egui renderer".into(),
-        });
+        })
     }
     #[cfg(feature = "egui")]
     {
@@ -66,7 +107,42 @@ pub fn render_egui(tree: &MathBox, font: &MathFont) -> Result<(), Error> {
 /// `MathBox` → egui shapes and the layout bounding rect.
 ///
 /// `pixels_per_point` is egui's device pixel ratio. Zero or negative is
-/// [`Error::InvalidOption`].
+/// [`Error::InvalidOption`]. Glyph tessellation is cached process-wide so a
+/// later render of the same glyphs is a cache hit.
+///
+/// # Arguments
+///
+/// * `tree` — box model from [`crate::layout()`].
+/// * `font` — face that supplied the glyph ids on `tree`.
+/// * `options` — em size and default fill.
+/// * `origin` — top-left of the layout rect, in egui points.
+/// * `pixels_per_point` — device pixel ratio (must be positive).
+///
+/// # Returns
+///
+/// Shape list and the bounding `Rect` of the expression.
+///
+/// # Errors
+///
+/// * [`Error::InvalidOption`] — non-positive `pixels_per_point` or font size.
+/// * [`Error::Font`] — missing glyph outline.
+/// * [`Error::Unsupported`] — tessellation produced no triangles.
+///
+/// # Examples
+///
+/// ```
+/// # #[cfg(feature = "egui")]
+/// # {
+/// use latex_rust::{layout, parse, shapes, EguiOptions, MathFont, MathStyle};
+///
+/// let ast = parse(r"x").unwrap();
+/// let font = MathFont::stix_two_math().unwrap();
+/// let tree = layout(&ast, &font, MathStyle::Text).unwrap();
+/// let (shapes, rect) = shapes(&tree, &font, &EguiOptions::new(), egui::Pos2::ZERO, 1.0).unwrap();
+/// assert!(!shapes.is_empty());
+/// assert!(rect.width() > 0.0);
+/// # }
+/// ```
 #[cfg(feature = "egui")]
 pub fn shapes(
     tree: &MathBox,
@@ -79,6 +155,35 @@ pub fn shapes(
 }
 
 /// Parse, lay out, and emit egui shapes.
+///
+/// # Arguments
+///
+/// * `latex` — math source (see [`crate::parse()`]).
+/// * `font` — face used for layout and outlines.
+/// * `options` — em size, fill, and display vs text style.
+/// * `origin` — top-left of the layout rect, in egui points.
+/// * `pixels_per_point` — device pixel ratio (must be positive).
+///
+/// # Returns
+///
+/// Shape list and the bounding `Rect` of the expression.
+///
+/// # Errors
+///
+/// Same as [`crate::parse()`] plus [`shapes`].
+///
+/// # Examples
+///
+/// ```
+/// # #[cfg(feature = "egui")]
+/// # {
+/// use latex_rust::{latex_to_shapes, EguiOptions, MathFont};
+///
+/// let font = MathFont::stix_two_math().unwrap();
+/// let (shapes, _) = latex_to_shapes(r"x", &font, &EguiOptions::new(), egui::Pos2::ZERO, 1.0).unwrap();
+/// assert!(!shapes.is_empty());
+/// # }
+/// ```
 #[cfg(feature = "egui")]
 pub fn latex_to_shapes(
     latex: &str,
@@ -100,6 +205,29 @@ pub fn latex_to_shapes(
 }
 
 /// Paint shapes through an egui [`egui::Painter`].
+///
+/// Uses `painter.ctx().pixels_per_point()` as the device pixel ratio.
+///
+/// # Arguments
+///
+/// * `tree` — box model from [`crate::layout()`].
+/// * `font` — face that supplied the glyph ids on `tree`.
+/// * `options` — em size and default fill.
+/// * `painter` — destination painter.
+/// * `origin` — top-left of the layout rect, in egui points.
+///
+/// # Returns
+///
+/// The bounding `Rect` of the painted expression.
+///
+/// # Errors
+///
+/// Same as [`shapes`].
+///
+/// # Examples
+///
+/// This entry point needs a live `egui::Painter` from an egui app. See [`shapes`]
+/// for a harness-free equivalent.
 #[cfg(feature = "egui")]
 pub fn paint_egui(
     tree: &MathBox,

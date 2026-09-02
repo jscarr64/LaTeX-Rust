@@ -6,6 +6,7 @@ use latex_rust::{
     latex_to_shapes, render_egui, shapes, BoxContent, Color, Dim, EguiOptions, MathBox, MathFont,
 };
 
+#[derive(Default)]
 struct Rec {
     name: String,
     kind: String,
@@ -19,27 +20,9 @@ struct Rec {
     rect_count: String,
     rect_width_px: String,
     rect_height_px: String,
+    vertex_count: String,
+    index_count: String,
     color: String,
-}
-
-impl Default for Rec {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            kind: String::new(),
-            style: String::new(),
-            input: String::new(),
-            expect: String::new(),
-            font_size_pt: String::new(),
-            pixels_per_point: String::new(),
-            shape_count: String::new(),
-            mesh_count: String::new(),
-            rect_count: String::new(),
-            rect_width_px: String::new(),
-            rect_height_px: String::new(),
-            color: String::new(),
-        }
-    }
 }
 
 fn unescape(s: &str) -> String {
@@ -106,6 +89,8 @@ fn load_golds() -> Vec<Rec> {
             "rect_count" => rec.rect_count = v,
             "rect_width_px" => rec.rect_width_px = v,
             "rect_height_px" => rec.rect_height_px = v,
+            "vertex_count" => rec.vertex_count = v,
+            "index_count" => rec.index_count = v,
             "color" => rec.color = v,
             _ => panic!("unknown gold field {k}"),
         }
@@ -137,6 +122,26 @@ fn emit_for(font: &MathFont, rec: &Rec) -> (Vec<Shape>, egui::Rect) {
     let (opt, ppp) = options_for(rec);
     latex_to_shapes(&rec.input, font, &opt, Pos2::ZERO, ppp)
         .unwrap_or_else(|e| panic!("{}: {e}", rec.name))
+}
+
+fn mesh_stats(shapes: &[Shape]) -> (usize, usize) {
+    let mut vertices = 0usize;
+    let mut indices = 0usize;
+    for s in shapes {
+        if let Shape::Mesh(m) = s {
+            assert!(
+                m.vertices.len() >= 3,
+                "mesh must tessellate to at least one triangle's vertices"
+            );
+            assert!(
+                m.indices.len() >= 3 && m.indices.len() % 3 == 0,
+                "mesh must have triangle indices"
+            );
+            vertices += m.vertices.len();
+            indices += m.indices.len();
+        }
+    }
+    (vertices, indices)
 }
 
 fn count_kind(shapes: &[Shape]) -> (usize, usize, usize) {
@@ -193,17 +198,33 @@ fn egui_golds() {
         match rec.kind.as_str() {
             "egui" => {
                 let (shapes, rect) = emit_for(&font, &rec);
-                let (mesh, rct, _) = count_kind(&shapes);
-                if rec.shape_count.is_empty() {
-                    dumps.push(format!(
-                        "{} shapes={} mesh={} rect={} w={} h={}",
-                        rec.name,
-                        shapes.len(),
-                        mesh,
-                        rct,
-                        fmt_px(rect.width()),
-                        fmt_px(rect.height())
-                    ));
+                let (mesh, rct, other) = count_kind(&shapes);
+                let (vertices, indices) = if mesh > 0 {
+                    mesh_stats(&shapes)
+                } else {
+                    (0, 0)
+                };
+                assert_eq!(other, 0, "{}: unexpected non-mesh/rect shapes", rec.name);
+                let dump = format!(
+                    "{} shapes={} mesh={} rect={} verts={} idxs={} w={} h={}",
+                    rec.name,
+                    shapes.len(),
+                    mesh,
+                    rct,
+                    vertices,
+                    indices,
+                    fmt_px(rect.width()),
+                    fmt_px(rect.height())
+                );
+                if rec.shape_count.is_empty()
+                    || rec.mesh_count.is_empty()
+                    || rec.rect_count.is_empty()
+                    || rec.rect_width_px.is_empty()
+                    || rec.rect_height_px.is_empty()
+                    || rec.vertex_count.is_empty()
+                    || rec.index_count.is_empty()
+                {
+                    dumps.push(dump);
                     continue;
                 }
                 assert_eq!(
@@ -212,28 +233,32 @@ fn egui_golds() {
                     "{}: shape_count",
                     rec.name
                 );
-                if !rec.mesh_count.is_empty() {
-                    assert_eq!(mesh.to_string(), rec.mesh_count, "{}: mesh_count", rec.name);
-                }
-                if !rec.rect_count.is_empty() {
-                    assert_eq!(rct.to_string(), rec.rect_count, "{}: rect_count", rec.name);
-                }
-                if !rec.rect_width_px.is_empty() {
-                    assert_eq!(
-                        fmt_px(rect.width()),
-                        rec.rect_width_px,
-                        "{}: rect_width",
-                        rec.name
-                    );
-                }
-                if !rec.rect_height_px.is_empty() {
-                    assert_eq!(
-                        fmt_px(rect.height()),
-                        rec.rect_height_px,
-                        "{}: rect_height",
-                        rec.name
-                    );
-                }
+                assert_eq!(mesh.to_string(), rec.mesh_count, "{}: mesh_count", rec.name);
+                assert_eq!(rct.to_string(), rec.rect_count, "{}: rect_count", rec.name);
+                assert_eq!(
+                    vertices.to_string(),
+                    rec.vertex_count,
+                    "{}: vertex_count",
+                    rec.name
+                );
+                assert_eq!(
+                    indices.to_string(),
+                    rec.index_count,
+                    "{}: index_count",
+                    rec.name
+                );
+                assert_eq!(
+                    fmt_px(rect.width()),
+                    rec.rect_width_px,
+                    "{}: rect_width",
+                    rec.name
+                );
+                assert_eq!(
+                    fmt_px(rect.height()),
+                    rec.rect_height_px,
+                    "{}: rect_height",
+                    rec.name
+                );
                 if rec.color == "red" {
                     assert_eq!(
                         first_mesh_hex(&shapes).as_deref(),

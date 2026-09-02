@@ -11,6 +11,17 @@ use crate::layout::{layout, BoxContent, MathBox, MathStyle};
 use crate::parser::parse;
 
 /// Options for [`render_svg`].
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::{Color, Dim, SvgOptions};
+///
+/// let mut opt = SvgOptions::new();
+/// opt.font_size_pt = Dim::from_i64(12);
+/// opt.color = Color::rgb(0, 0, 0);
+/// opt.display = false;
+/// ```
 #[derive(Clone, Debug)]
 pub struct SvgOptions {
     /// Em size in points (SVG `width`/`height` use `pt`).
@@ -39,7 +50,35 @@ impl SvgOptions {
     }
 }
 
-/// Parse, lay out, and render `latex` to SVG using the embedded STIX Two Math face.
+/// Parse, lay out, and render `latex` to a self-contained SVG document.
+///
+/// Glyphs are `<path>` elements from STIX Two Math outlines. Rules are `<rect>`.
+///
+/// # Arguments
+///
+/// * `latex` — math source (see [`crate::parse()`]).
+/// * `font` — face used for layout and outlines.
+/// * `options` — em size, default fill, and display vs text style.
+///
+/// # Returns
+///
+/// An SVG 1.1 document string.
+///
+/// # Errors
+///
+/// * [`Error::Parse`] — tokenizer or parser rejected `latex`.
+/// * [`Error::Font`] — a required glyph is missing.
+/// * [`Error::Unsupported`] — construct this renderer will not invent.
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::{latex_to_svg, MathFont, SvgOptions};
+///
+/// let font = MathFont::stix_two_math().unwrap();
+/// let svg = latex_to_svg(r"\frac{1}{2}", &font, &SvgOptions::new()).unwrap();
+/// assert!(svg.contains("<svg"));
+/// ```
 pub fn latex_to_svg(latex: &str, font: &MathFont, options: &SvgOptions) -> Result<String, Error> {
     let ast = parse(latex)?;
     let style = if options.display {
@@ -51,7 +90,34 @@ pub fn latex_to_svg(latex: &str, font: &MathFont, options: &SvgOptions) -> Resul
     render_svg(&tree, font, options)
 }
 
-/// Render `tree` to a self-contained SVG document. Glyph outlines come from `font`.
+/// Render a laid-out [`MathBox`] to a self-contained SVG document.
+///
+/// # Arguments
+///
+/// * `tree` — box model from [`crate::layout()`].
+/// * `font` — face that supplied the glyph ids on `tree`.
+/// * `options` — em size and default fill (`display` is ignored here).
+///
+/// # Returns
+///
+/// An SVG 1.1 document string.
+///
+/// # Errors
+///
+/// * [`Error::Font`] — outline missing for a glyph id on `tree`.
+/// * [`Error::Unsupported`] — a box the SVG backend cannot emit.
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::{layout, parse, render_svg, MathFont, MathStyle, SvgOptions};
+///
+/// let ast = parse(r"x").unwrap();
+/// let font = MathFont::stix_two_math().unwrap();
+/// let tree = layout(&ast, &font, MathStyle::Text).unwrap();
+/// let svg = render_svg(&tree, &font, &SvgOptions::new()).unwrap();
+/// assert!(svg.contains("<path"));
+/// ```
 pub fn render_svg(tree: &MathBox, font: &MathFont, options: &SvgOptions) -> Result<String, Error> {
     let em_pt = options.font_size_pt.clone();
     let fu_pt = &em_pt / &Dim::from_i64(i64::from(font.units_per_em()));
@@ -89,6 +155,7 @@ pub fn render_svg(tree: &MathBox, font: &MathFont, options: &SvgOptions) -> Resu
     Ok(out)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn emit(
     bx: &MathBox,
     font: &MathFont,

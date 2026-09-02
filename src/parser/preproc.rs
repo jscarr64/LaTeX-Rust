@@ -6,6 +6,18 @@
 //! accents are left intact.
 
 /// Normalize raw math input for the tokenizer.
+///
+/// Rewrites that preserve math meaning: `{a \over b}` → `\frac`, `{n \choose k}`
+/// → `\binom`, `\tfrac`/`\dfrac` → `\frac`, plain-TeX font switches, `\mbox` →
+/// `\text`.
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::preprocess;
+///
+/// assert!(preprocess(r"{a \over b}").contains(r"\frac"));
+/// ```
 #[must_use]
 pub fn preprocess(raw_input: &str) -> String {
     let input = raw_input.trim().to_string();

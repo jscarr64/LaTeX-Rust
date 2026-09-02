@@ -4,6 +4,7 @@ use latex_rust::{
     latex_to_svg, layout, parse, BoxContent, MathBox, MathFont, MathStyle, ParseError, SvgOptions,
 };
 
+#[derive(Default)]
 struct Rec {
     name: String,
     kind: String,
@@ -14,22 +15,6 @@ struct Rec {
     rects: String,
     lines: String,
     error: String,
-}
-
-impl Default for Rec {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            kind: String::new(),
-            style: String::new(),
-            input: String::new(),
-            expect: String::new(),
-            paths: String::new(),
-            rects: String::new(),
-            lines: String::new(),
-            error: String::new(),
-        }
-    }
 }
 
 fn unescape(s: &str) -> String {

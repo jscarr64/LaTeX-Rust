@@ -1,29 +1,33 @@
 [package]
 name = "latex-rust"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
-rust-version = "1.74"
+rust-version = "1.76"
 authors = ["Jeffrey S Carr <jscarr@gmail.com>"]
 license = "MIT OR Apache-2.0"
-description = "Pure-Rust LaTeX math renderer. Parse to AST, TeX-faithful layout in zenith-float, emit SVG. No JavaScript, no webview, no runtime."
+description = "Pure-Rust LaTeX math renderer. Parse to AST, TeX-faithful layout in zenith-float, emit SVG, PNG, or egui shapes. No JavaScript, no webview, no runtime."
 readme = "README.md"
 repository = "https://github.com/jscarr64/LaTeX-Rust"
 homepage = "https://github.com/jscarr64/LaTeX-Rust"
 documentation = "https://docs.rs/latex-rust"
-keywords = ["latex", "math", "svg", "tex", "renderer"]
-categories = ["encoding", "graphics", "mathematics", "parser-implementations"]
+keywords = ["latex", "math", "rendering", "svg", "rust"]
+categories = ["rendering", "science", "mathematics"]
 include = [
     "src/**",
     "data/**",
     "fonts/**",
-    "golds/**",
-    "benches/**",
     "LICENSE-MIT",
     "LICENSE-APACHE",
     "README.md",
     "CONTRIBUTING.md",
     "CHANGELOG.md",
     "NOTICE",
+]
+exclude = [
+    "golds/",
+    "benches/",
+    "benches/fixtures/",
+    "documents/",
 ]
 
 [lib]
@@ -33,9 +37,9 @@ path = "src/lib.rs"
 [features]
 default = ["std"]
 std = ["zenith-float/std"]
-# Milestone 9: tiny-skia raster backend (`src/render/png`).
+# PNG raster backend (`src/render/png`).
 png = ["dep:tiny-skia"]
-# Milestone 10: egui Shape backend (`src/render/egui`).
+# egui Shape backend (`src/render/egui`).
 egui = ["dep:egui"]
 
 [dependencies]
@@ -47,6 +51,7 @@ egui = { version = "0.28", optional = true }
 [[bench]]
 name = "layout"
 harness = false
+required-features = []
 
 [package.metadata.docs.rs]
 all-features = true

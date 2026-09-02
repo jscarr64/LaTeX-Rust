@@ -28,6 +28,16 @@ fn wrap(n: ExactNum) -> Dim {
 ///
 /// Values are zenith-float software floats. One unit is one em at the current
 /// math style unless a method says otherwise.
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::Dim;
+///
+/// let half = Dim::ratio(1, 2);
+/// assert!(half.eq_dim(&(&Dim::one() / &Dim::from_i64(2))));
+/// assert!(!Dim::zero().eq_dim(&Dim::one()));
+/// ```
 #[derive(Clone, Debug)]
 pub struct Dim {
     inner: Arc<ExactNum>,
@@ -210,7 +220,11 @@ impl Dim {
     }
 
     /// Compare two dimensions. `None` if either is NaN.
+    ///
+    /// Named `cmp` after zenith-float's partial compare. [`Ord`] is not
+    /// implemented because NaN has no total order.
     #[must_use]
+    #[allow(clippy::should_implement_trait)]
     pub fn cmp(&self, other: &Self) -> Option<Ordering> {
         match self.inner.cmp(&other.inner) {
             Some(0) => Some(Ordering::Equal),

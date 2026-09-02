@@ -49,6 +49,15 @@ impl fmt::Display for Token {
 }
 
 /// Format a token stream as a gold-stable string.
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::{format_tokens, tokenize};
+///
+/// let t = tokenize(r"a^2").unwrap();
+/// assert_eq!(format_tokens(&t), "char:a ^ char:2");
+/// ```
 #[must_use]
 pub fn format_tokens(tokens: &[Token]) -> String {
     let mut out = String::new();
@@ -65,6 +74,27 @@ pub fn format_tokens(tokens: &[Token]) -> String {
 ///
 /// Supported delimiters are tokenized, not interpreted:
 /// `$...$`, `$$...$$`, `\[...\]`, `\(...\)`.
+///
+/// # Arguments
+///
+/// * `input` — math source.
+///
+/// # Returns
+///
+/// The token list in source order.
+///
+/// # Errors
+///
+/// [`ParseError::TrailingBackslash`] if `input` ends with a stray `\`.
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::{tokenize, Token};
+///
+/// let t = tokenize(r"\frac{1}{2}").unwrap();
+/// assert!(matches!(&t[0], Token::Command(s) if s == "frac"));
+/// ```
 pub fn tokenize(input: &str) -> Result<Vec<Token>, ParseError> {
     let mut chars = input.chars().peekable();
     let mut out = Vec::new();

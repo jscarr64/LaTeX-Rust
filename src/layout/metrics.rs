@@ -6,6 +6,17 @@ use crate::font::MathFont;
 use crate::layout::style::MathStyle;
 
 /// MATH-table parameters used by the layout engine.
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::{MathFont, MathParams, MathStyle};
+///
+/// let font = MathFont::stix_two_math().unwrap();
+/// let p = MathParams::from_font(&font).unwrap();
+/// assert!(!p.axis_height.is_zero());
+/// assert!(!p.em(MathStyle::Text).is_zero());
+/// ```
 #[derive(Clone, Debug)]
 pub struct MathParams {
     /// σ1: x-height (em).
@@ -92,8 +103,12 @@ pub struct MathParams {
 
 impl MathParams {
     /// Load MATH constants from `font`. Missing MATH is [`Error::Unsupported`].
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Unsupported`] if the face has no MATH table or constants.
     pub fn from_font(font: &MathFont) -> Result<Self, Error> {
-        let face = font.face()?;
+        let face = font.face();
         let math = face.tables().math.ok_or_else(|| Error::Unsupported {
             what: "OpenType MATH table".into(),
         })?;
@@ -103,10 +118,7 @@ impl MathParams {
         let upem = font.units_per_em();
         let fu = |v: i16| Dim::from_font_units(i64::from(v), upem);
         let fu_u = |v: u16| Dim::from_font_units(i64::from(v), upem);
-        let xh = face
-            .x_height()
-            .map(|v| fu(v))
-            .unwrap_or_else(|| Dim::ratio(1, 2));
+        let xh = face.x_height().map(fu).unwrap_or_else(|| Dim::ratio(1, 2));
         Ok(Self {
             x_height: xh,
             quad: Dim::one(),

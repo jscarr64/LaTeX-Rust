@@ -522,6 +522,17 @@ impl DelimSize {
 }
 
 /// Typed math-mode syntax tree.
+///
+/// Produced by [`crate::parse()`]. [`MathNode::gold`] is the gold-stable debug form.
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::parse;
+///
+/// let n = parse("x^2").unwrap();
+/// assert!(n.gold().contains("sup"));
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MathNode {
     /// Single character with a TeX atom class.

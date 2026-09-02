@@ -4,6 +4,9 @@
 //! converted immediately to [`Dim`](crate::Dim) via zenith-float `Ieee32` — they
 //! are never used as layout arithmetic terminals.
 
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
+
 use ttf_parser::{GlyphId, OutlineBuilder};
 
 use crate::dim::Dim;
@@ -73,9 +76,30 @@ impl OutlineBuilder for PathBuilder {
     }
 }
 
+fn path_cache() -> &'static Mutex<HashMap<u16, String>> {
+    static CACHE: OnceLock<Mutex<HashMap<u16, String>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
 /// Outline of `glyph_id` as SVG path data, or [`FontError::MissingGlyph`] if empty.
+///
+/// Glyph `d` strings are cached process-wide; the decimal form is still
+/// zenith-float so golds are unchanged.
 pub fn glyph_path_d(font: &MathFont, glyph_id: u16) -> Result<String, Error> {
-    let face = font.face()?;
+    if let Ok(guard) = path_cache().lock() {
+        if let Some(d) = guard.get(&glyph_id) {
+            return Ok(d.clone());
+        }
+    }
+    let d = glyph_path_d_uncached(font, glyph_id)?;
+    if let Ok(mut guard) = path_cache().lock() {
+        guard.insert(glyph_id, d.clone());
+    }
+    Ok(d)
+}
+
+fn glyph_path_d_uncached(font: &MathFont, glyph_id: u16) -> Result<String, Error> {
+    let face = font.face();
     let mut b = PathBuilder { d: String::new() };
     let bbox = face.outline_glyph(GlyphId(glyph_id), &mut b);
     if bbox.is_none() && b.d.is_empty() {

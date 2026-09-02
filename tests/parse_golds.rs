@@ -2,24 +2,13 @@
 
 use latex_rust::{parse, symbols, ParseError, SymbolKind};
 
+#[derive(Default)]
 struct Rec {
     name: String,
     kind: String,
     error: String,
     input: String,
     expect: String,
-}
-
-impl Default for Rec {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            kind: String::new(),
-            error: String::new(),
-            input: String::new(),
-            expect: String::new(),
-        }
-    }
 }
 
 fn unescape(s: &str) -> String {

@@ -5,6 +5,7 @@ use latex_rust::{
     ColorTable, Dim, Error, MathBox, MathFont, ParseError, STIX_TWO_MATH_OTF, STIX_TWO_MATH_SHA256,
 };
 
+#[derive(Default)]
 struct Rec {
     name: String,
     kind: String,
@@ -20,27 +21,6 @@ struct Rec {
     expect_width: String,
     expect_height: String,
     expect_depth: String,
-}
-
-impl Default for Rec {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            kind: String::new(),
-            op: String::new(),
-            model: String::new(),
-            input: String::new(),
-            lhs: String::new(),
-            rhs: String::new(),
-            widths: String::new(),
-            heights: String::new(),
-            depths: String::new(),
-            expect: String::new(),
-            expect_width: String::new(),
-            expect_height: String::new(),
-            expect_depth: String::new(),
-        }
-    }
 }
 
 fn unescape(s: &str) -> String {

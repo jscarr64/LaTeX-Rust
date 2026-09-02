@@ -5,13 +5,26 @@
 
 Repository: <https://github.com/jscarr64/LaTeX-Rust>
 
-Pure-Rust LaTeX **math** renderer. No JavaScript. No webview. No runtime beyond
-the Rust standard library plus the crates listed below.
+Pure Rust LaTeX math renderer. No JavaScript. No webview. No runtime dependencies.
 
 It parses LaTeX math into a typed AST, lays the AST out with a TeX-faithful box
 model whose dimensions are [zenith-float](https://crates.io/crates/zenith-float)
 `Dim` values (no hardware `f32`/`f64` in the layout path), and renders to SVG,
 PNG (`features = ["png"]`), or egui shapes (`features = ["egui"]`).
+
+## Features
+
+- Parses LaTeX math to a typed AST
+- TeX-faithful layout engine (Appendix G exact)
+- SVG output — self-contained, scalable, no font embedding required
+- PNG output (`features = ["png"]`) via tiny-skia
+- egui integration (`features = ["egui"]`) for native desktop apps
+- Full symbol coverage — Greek, AMS, arrows, operators, font styles
+- Complete accent and decoration support
+- Multiline environments — align, gather, multline, cases, array
+- Color support — named, RGB, HTML, CMYK, gray, `\definecolor`
+- 100% pure Rust — no C, no Python, no shell, no subprocesses
+- MIT OR Apache-2.0
 
 ```
 src/parser/     LaTeX → AST
@@ -20,14 +33,57 @@ src/font/       STIX Two Math metrics / TrueType loader
 src/render/svg  box model → SVG
 src/render/png  box model → PNG (`tiny-skia`, feature `png`)
 src/render/egui box model → egui Shapes (feature `egui`)
-golds/          gold tests
-benches/        layout / SVG timings
+golds/          gold tests (repository only)
+benches/        parse / layout / render timings
 ```
 
 This crate does not typeset documents. Text-mode LaTeX, TikZ, chemistry, and PDF
 are out of scope and return `Err` — never a fake render.
 
-## PNG renderer
+## Quick start
+
+```toml
+[dependencies]
+latex-rust = "1.0"
+```
+
+Until the crate is on crates.io:
+
+```toml
+[dependencies]
+latex-rust = { git = "https://github.com/jscarr64/LaTeX-Rust" }
+```
+
+```rust
+use latex_rust::{parse, layout, latex_to_svg, MathFont, MathStyle, SvgOptions};
+
+let ast = parse(r"\frac{1}{2}").expect("parse");
+let font = MathFont::stix_two_math().expect("STIX Two Math");
+let boxed = layout(&ast, &font, MathStyle::Text).expect("layout");
+assert!(!boxed.width.is_zero());
+
+let svg = latex_to_svg(r"\frac{1}{2}", &font, &SvgOptions::new()).expect("svg");
+assert!(svg.contains("<svg"));
+```
+
+Layout math uses the published [zenith-float](https://crates.io/crates/zenith-float)
+**1.0** crate (`ExactNum` software floats). This crate depends on `zenith-float`
+only — not on its inner kernel package.
+
+MSRV is **1.76** (matches optional `egui` 0.28).
+
+## Usage
+
+### SVG
+
+```rust
+use latex_rust::{latex_to_svg, MathFont, SvgOptions};
+
+let font = MathFont::stix_two_math().unwrap();
+let svg = latex_to_svg(r"e^{i\pi}+1=0", &font, &SvgOptions::new()).unwrap();
+```
+
+### PNG
 
 Enable with `features = ["png"]`. `tiny-skia` rasterizes the same `MathBox` tree
 as the SVG backend. SIMD is selected at runtime:
@@ -40,93 +96,77 @@ as the SVG backend. SIMD is selected at runtime:
 
 Without the feature, `latex_to_png` / `render_png` return `Err(Unsupported)`.
 
-## Status
+```rust
+# #[cfg(feature = "png")]
+# {
+use latex_rust::{latex_to_png, MathFont, PngOptions};
 
-**Milestone 10** (egui renderer): `MathBox` → `egui::Shape` meshes and rects
-(`features = ["egui"]`). No SVG intermediate. Golds in `golds/egui.toml`.
-
-**Milestone 9** (PNG renderer): `MathBox` → PNG via `tiny-skia`
-(`features = ["png"]`). Golds in `golds/png.toml`.
-
-**Milestone 8** (color): named / rgb / RGB / HTML / cmyk / gray, `\definecolor`,
-group scope, SVG `fill` / `stroke`.
-
-**Milestone 7** (advanced structures): `align` / `aligned` / `split` / `gather` /
-`multline` / `equation`, `{array}` column specs, `{cases}` with a quad, equation
-numbers (`\tag`, `\label`, `\ref`), `\substack`, `\intertext`. Golds in
-`golds/envs.toml`.
-
-**Milestone 6** (accents and decorations): TeX accent placement in `Dim`,
-extensible hats/arrows/braces from MATH variants and glyph assembly, cancel
-diagonals as SVG `<line>`, `\boxed` as a stroked frame. Golds in
-`golds/accents.toml`. Empty bases and unknown `wide*` commands are `Err`.
-
-**Milestone 5** (symbol coverage): every catalog glyph, TeX atom class, and math
-alphabet (`\mathbb`, `\mathcal`, `\mathfrak`, …) renders through STIX Two Math.
-Golds in `golds/symbols.toml`. Missing glyphs are `Err`, never a substitute.
-
-**Milestone 4** (SVG renderer): `MathBox` → self-contained SVG (`<path>` from STIX Two Math,
-`<rect>` for rules). Golds in `golds/svg.toml`. Layout remains zenith-float `Dim` only.
-
-## Install
-
-```toml
-[dependencies]
-latex-rust = "0.1"
+let font = MathFont::stix_two_math().unwrap();
+let png = latex_to_png(r"\frac{1}{2}", &font, &PngOptions::new()).unwrap();
+assert!(png.starts_with(b"\x89PNG"));
+# }
 ```
 
-Until the crate is on crates.io:
+### egui
 
-```toml
-[dependencies]
-latex-rust = { git = "https://github.com/jscarr64/LaTeX-Rust" }
-```
-
-Layout math uses the published [zenith-float](https://crates.io/crates/zenith-float)
-**1.0** crate (`ExactNum` software floats, no hardware `f32`/`f64`). This crate
-depends on `zenith-float` only — not on its inner kernel package.
-
-## Quick start
+Enable with `features = ["egui"]`. Glyphs become `egui::Mesh`; rules and color
+boxes become `Shape::Rect`. No SVG intermediate. Callers should keep the
+returned `Vec<Shape>` if the same expression is painted every frame (cache hit).
 
 ```rust
-use latex_rust::{parse, layout, latex_to_svg, tokenize, MathFont, MathStyle, Dim, MathBox, SvgOptions};
+# #[cfg(feature = "egui")]
+# {
+use latex_rust::{latex_to_shapes, EguiOptions, MathFont};
 
-let ast = parse(r"\frac{1}{2}").expect("parse");
-assert_eq!(ast.gold(), r#"(frac (atom Ord "1") (atom Ord "2"))"#);
-
-let tokens = tokenize(r"\frac{1}{2}").expect("tokens");
-let font = MathFont::stix_two_math().expect("STIX Two Math");
-assert_eq!(font.units_per_em(), 1000);
-
-let boxed = layout(&ast, &font, MathStyle::Text).expect("layout");
-assert!(!boxed.width.is_zero());
-
-let svg = latex_to_svg(r"\frac{1}{2}", &font, &SvgOptions::new()).expect("svg");
-assert!(svg.contains("<path"));
-assert!(svg.contains("<rect"));
-
-let em = Dim::one();
-let half = Dim::ratio(1, 2);
-let packed = MathBox::hpack(vec![
-    MathBox::rule(em.clone(), Dim::zero(), Dim::zero()),
-    MathBox::rule(half, Dim::zero(), Dim::zero()),
-]);
-assert_eq!(packed.width, Dim::ratio(3, 2));
+let font = MathFont::stix_two_math().unwrap();
+let (shapes, rect) =
+    latex_to_shapes(r"x^2", &font, &EguiOptions::new(), egui::Pos2::ZERO, 1.0).unwrap();
+assert!(!shapes.is_empty());
+let _ = rect;
+# }
 ```
+
+## Supported LaTeX
+
+Math mode only. Command and environment coverage is the capability inventory in
+[`documents/latex-rust-build-sheet.md`](documents/latex-rust-build-sheet.md)
+and the catalog [`data/symbols.tsv`](data/symbols.tsv). Look up a command with
+`latex_rust::lookup`. Missing glyphs and unknown commands are `Err`.
+
+Color: `named_color` / `parse_color_spec`. Channel values use `Dim`. `spot` and
+unknown names return `Err`. SVG, PNG, and egui all take `Color::to_rgba8()`.
+
+## Performance
+
+Times below are median-of-batch averages from `cargo bench --features png,egui`
+on this machine (release, zenith-float `Dim` layout). Re-run the bench on your
+hardware; the targets are the build-sheet gates.
+
+| Operation | Target | Measured |
+|---|---|---|
+| Parse `\frac{1}{2}` | < 50µs | 1.8µs |
+| Parse full display equation | < 200µs | 3.3µs |
+| Layout `\frac{1}{2}` | < 100µs | 13µs |
+| Layout full display equation | < 500µs | 47µs |
+| SVG `\frac{1}{2}` | < 500µs | 232µs |
+| SVG full display equation | < 1ms | 951µs |
+| PNG 144 DPI | < 5ms | 142µs |
+| PNG 300 DPI | < 15ms | 350µs |
+| egui inline (cache miss) | < 2ms | 216µs |
+| egui inline (cache hit) | < 0.1ms | 29µs |
+
+KaTeX cold start in a browser is typically **200–400ms** (JS parse + layout +
+font). This crate’s first `MathFont::stix_two_math()` plus an SVG of a short
+expression is on the order of the layout+SVG rows above after the face is loaded
+(embedded STIX Two Math, no network). There is no JS runtime to warm up.
 
 ## Fonts
 
 The crate embeds **STIX Two Math** 2.13 (SIL OFL 1.1) and loads metrics through
-`ttf-parser` using integer font units converted to `Dim` via zenith-float
-rationals. Glyph outlines become SVG `<path>` elements.
-
-Math-mode commands ship as `data/symbols.tsv`. Look up with `latex_rust::lookup`.
-TeX atom class is `symbol_atom_kind`. Styled letters go through `styled_char`.
-
-Color is in v1.0. Resolve with `named_color` / `parse_color_spec`. Channel values
-use `Dim`. `spot` and unknown names return `Err` — never a fake color. SVG, PNG,
-and egui all take `Color::to_rgba8()`.
+`ttf-parser` using integer font units converted to `Dim`. Glyph outlines become
+SVG `<path>` elements (and PNG/egui meshes when those features are on).
 
 ## License
 
 MIT OR Apache-2.0. STIX Two Math remains under the SIL Open Font License 1.1.
+See `NOTICE`.

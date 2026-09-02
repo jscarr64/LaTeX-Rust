@@ -1,70 +1,28 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## [1.0.0] — 2026-09-02
 
-### Milestone 7 — Advanced structures
+### Added
 
-- `align` / `aligned` / `split` use right-left column pairs at `&`. `gather`
-  centers each row; `multline` is left / center / right; `equation` is display
-  with a number. `\nonumber`, `\tag{}` / `\tag*{}`, `\label` / `\ref` (two-pass).
-- `{array}` keeps the `lcr|` preamble and `\hline`. `{cases}` uses a quad
-  between columns. `\substack` stacks script-style limits. `\intertext` is a
-  full-width text row.
-- Numbering lives in `layout/` (`NumberingConfig`, `layout_with_numbering`).
-  Golds in `golds/envs.toml`. Mismatched `\begin`/`\end` is `Malformed`; unknown
-  environments are `Unsupported`.
+- Complete LaTeX math parser (`parse`, gold-stable `MathNode`)
+- TeX-faithful layout engine (Appendix G style, Table 18 spacing, zenith-float `Dim`)
+- SVG renderer (`render_svg` / `latex_to_svg`) — self-contained SVG 1.1, no font embedding
+- PNG renderer (feature `png`) via `tiny-skia` 0.11, DPI-aware, transparent background by default
+- egui renderer (feature `egui`) — TrueType tessellation to `egui::Shape` meshes, no SVG intermediate
+- Math-mode symbol catalog (Greek, AMS, arrows, operators, font styles) locked to `data/symbols.tsv`
+- Full accent and decoration support (TeX placement, extensible hats/arrows/braces, cancel, boxed)
+- Multiline environments — `align`, `aligned`, `split`, `gather`, `multline`, `equation`, `{array}`, `{cases}`
+- Color support — named, rgb, RGB, HTML, cmyk, gray, `\definecolor`, group scope, `\fcolorbox` borders
+- zenith-float 1.0 integration for arbitrary-precision layout math (no hardware `f32`/`f64` in layout)
+
+### Milestone notes
+
+Milestones 1–10 landed as 0.1.0 development commits. This release packages that
+surface as 1.0.0: rustdoc, README benchmarks, clippy/fmt, and crates.io metadata.
+The crate is publish-ready; crates.io upload is a separate step.
 
 ### Architecture (build sheet §3)
 
-- Crate modules match the sheet: `parser/`, `layout/`, `font/`, `render/svg`,
-  `render/png`, `render/egui`, plus `golds/` and `benches/`. Crate-root names
-  still re-export the public API. PNG and egui entry points return `Unsupported`
-  until those milestones.
-
-### Milestone 6 — Accents and decorations
-
-- Single-character accents use TeX placement: cramped nucleus, italic / MATH
-  `top_accent_attachment` skew, `accent_base_height` (flattened when already
-  cramped). `\vec` is right-aligned; `\acute` / `\grave` sit off center.
-- Extensible `\widehat` / `\widetilde` / over- and under-arrows / over- and
-  underbrace stretch with MATH horizontal variants, then glyph assembly
-  (connectors as negative kern). `\overline` / `\underline` remain rules at
-  exact base width.
-- `\cancel` / `\bcancel` / `\xcancel` / `\cancelto` emit `BoxContent::Line`.
-  `\boxed` / `\fbox` emit a stroked `BoxContent::Frame`.
-- Golds in `golds/accents.toml`. Empty `\hat{}` is `Malformed`; `\widebox{x}` is
-  `Unsupported`.
-
-### Milestone 5 — Symbol coverage
-
-- Catalog grew to every TeX/AMS math glyph STIX Two Math can draw. Fake keyboard placeholders (`[ ]` for `\square`, ASCII `F` for `\mathbb{F}`) are real Unicode now.
-- `styled_char` maps `\mathbb` / `\mathcal` / `\mathfrak` / `\mathscr` / `\mathrm` / `\mathbf` / `\mathit` / `\mathsf` / `\mathtt` / `\boldsymbol` onto the Mathematical Alphanumeric Symbols block. Missing font glyphs stay `Err`.
-- `symbol_atom_kind` locks TeX Table 18 classes. `\not` overlays a slash and keeps the nucleus class. `\xrightarrow` uses horizontal MATH variants when the label is wider than the arrow.
-- Golds in `golds/symbols.toml` plus a catalog corpus in `tests/symbol_golds.rs`.
-
-### Milestone 4 — SVG renderer
-
-- `render_svg` / `latex_to_svg`: `MathBox` → self-contained SVG 1.1. Glyphs are `<path>` from STIX Two Math outlines; rules are `<rect>`; `\textcolor` / `\colorbox` set `fill`.
-- Outline points from `ttf-parser` enter as IEEE-32 bits and become `Dim` immediately. Layout arithmetic stays zenith-float.
-- Golds in `golds/svg.toml`.
-
-### Milestone 3 — Layout engine
-
-- `layout(&MathNode, &MathFont, MathStyle) -> MathBox` with TeX Appendix G style, Table 18 spacing, fractions, radicals, scripts, `\left\right` / `\big` sizes, operator limits, matrices, and color wrappers.
-- Every dimension is [zenith-float](https://crates.io/crates/zenith-float) 1.0 `Dim`. This crate depends on that published crate, not on its inner kernel package.
-- Golds in `golds/layout.toml`.
-
-### Milestone 2 — Parser complete
-
-- `src/parser/`: preprocess, tokenize, Pratt-style scripts, TeX math-list parse to `MathNode`.
-- `ParseError::{Unsupported, Unknown, Malformed, UnmatchedDelimiter}` name the command or construct.
-- Golds in `golds/parse.toml` for every node type, font style, accent, named/large operator, matrix and multiline environment, color models, and `\left`/`\right` pairs.
-
-### Milestone 1 — Core infrastructure
-
-- `Dim` wrapping zenith-float `ExactNum` for all layout arithmetic.
-- `MathBox` with hpack / vpack composition.
-- STIX Two Math 2.13 metric loader (`units_per_em`, advances, extents).
-- LaTeX math tokenizer (no AST yet).
-- Color model parser: named + dvipsnames, rgb / HTML / cmyk / gray via `Dim`; unknown models `Err(Unsupported)`.
-- Gold runner and golds for dim, box, font, tokenize, symbols, and color models.
+Crate modules: `parser/`, `layout/`, `font/`, `render/svg`, `render/png`,
+`render/egui`, plus `golds/` and `benches/` in the repository (golds and benches
+are not included in the published crate).

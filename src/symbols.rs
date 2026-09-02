@@ -44,6 +44,16 @@ impl SymbolKind {
 }
 
 /// One row of the shipped symbol table.
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::lookup;
+///
+/// let e = lookup(r"\alpha").unwrap();
+/// assert_eq!(e.glyph, "α");
+/// assert_eq!(e.command_name(), "alpha");
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SymbolEntry {
     /// Typical rendered character (may be a placeholder for containers).
@@ -117,6 +127,14 @@ fn catalog() -> &'static [SymbolEntry] {
 }
 
 /// All shipped symbols, in table order.
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::symbols;
+///
+/// assert!(!symbols().is_empty());
+/// ```
 #[must_use]
 pub fn symbols() -> &'static [SymbolEntry] {
     catalog()
@@ -125,6 +143,23 @@ pub fn symbols() -> &'static [SymbolEntry] {
 /// Look up by raw table LaTeX (`\alpha`, `\frac{}{}`) or command name (`alpha`).
 ///
 /// Bare commands (`\aleph`) win over composite rows (`\aleph_0`).
+///
+/// # Arguments
+///
+/// * `query` — control sequence with or without `\`, or a table `latex` cell.
+///
+/// # Returns
+///
+/// The catalog row, or `None` if `query` is not in the table.
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::lookup;
+///
+/// assert_eq!(lookup(r"\alpha").unwrap().glyph, "α");
+/// assert!(lookup(r"\notacommand").is_none());
+/// ```
 #[must_use]
 pub fn lookup(query: &str) -> Option<&'static SymbolEntry> {
     let q = query.trim();
@@ -144,6 +179,14 @@ pub fn lookup(query: &str) -> Option<&'static SymbolEntry> {
 }
 
 /// Single-character catalog glyph for `query`, if the row is a lone code point.
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::glyph_char;
+///
+/// assert_eq!(glyph_char(r"\alpha"), Some('α'));
+/// ```
 #[must_use]
 pub fn glyph_char(query: &str) -> Option<char> {
     let e = lookup(query)?;
@@ -160,6 +203,14 @@ fn is_bare_latex(latex: &str, name: &str) -> bool {
 }
 
 /// Number of entries in a category.
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::category_count;
+///
+/// assert!(category_count("Greek") > 0);
+/// ```
 #[must_use]
 pub fn category_count(category: &str) -> usize {
     catalog().iter().filter(|e| e.category == category).count()

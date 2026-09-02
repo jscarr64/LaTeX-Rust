@@ -17,6 +17,17 @@ pub const STIX_TWO_MATH_SHA256: &str =
 pub const STIX_TWO_MATH_NAME: &str = "STIX Two Math";
 
 /// Horizontal glyph metrics in font units and em.
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::MathFont;
+///
+/// let font = MathFont::stix_two_math().unwrap();
+/// let g = font.glyph('x').unwrap();
+/// assert_eq!(g.ch, 'x');
+/// assert!(!g.advance.is_zero());
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GlyphMetrics {
     /// Character requested.
@@ -34,8 +45,18 @@ pub struct GlyphMetrics {
 }
 
 /// Loaded math face.
+///
+/// # Examples
+///
+/// ```
+/// use latex_rust::MathFont;
+///
+/// let font = MathFont::stix_two_math().unwrap();
+/// assert_eq!(font.units_per_em(), 1000);
+/// ```
 pub struct MathFont {
     raw: &'static [u8],
+    face: Face<'static>,
     units_per_em: u16,
     ascender_fu: i16,
     descender_fu: i16,
@@ -43,6 +64,17 @@ pub struct MathFont {
 
 impl MathFont {
     /// Load the embedded STIX Two Math Regular face.
+    ///
+    /// # Errors
+    ///
+    /// [`crate::FontError::InvalidFace`] if the embedded bytes are not a usable OpenType face.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use latex_rust::MathFont;
+    /// assert!(MathFont::stix_two_math().is_ok());
+    /// ```
     pub fn stix_two_math() -> Result<Self, Error> {
         Self::from_bytes(STIX_TWO_MATH_OTF)
     }
@@ -55,16 +87,25 @@ impl MathFont {
         if units_per_em == 0 {
             return Err(FontError::InvalidFace.into());
         }
+        let ascender_fu = face.ascender();
+        let descender_fu = face.descender();
         Ok(Self {
             raw,
+            face,
             units_per_em,
-            ascender_fu: face.ascender(),
-            descender_fu: face.descender(),
+            ascender_fu,
+            descender_fu,
         })
     }
 
-    pub(crate) fn face(&self) -> Result<Face<'_>, Error> {
-        Face::parse(self.raw, 0).map_err(|_| FontError::InvalidFace.into())
+    pub(crate) fn face(&self) -> &Face<'static> {
+        &self.face
+    }
+
+    /// OpenType bytes this face was parsed from.
+    #[must_use]
+    pub fn bytes(&self) -> &'static [u8] {
+        self.raw
     }
 
     /// `unitsPerEm` from the `head` table.
@@ -100,7 +141,7 @@ impl MathFont {
 
     /// Metrics for `ch`, or [`FontError::MissingGlyph`].
     pub fn glyph(&self, ch: char) -> Result<GlyphMetrics, Error> {
-        let face = self.face()?;
+        let face = self.face();
         let gid = face.glyph_index(ch).ok_or(FontError::MissingGlyph { ch })?;
         let advance_fu = face
             .glyph_hor_advance(gid)
@@ -124,7 +165,7 @@ impl MathFont {
 
     /// Metrics for OpenType glyph id `gid`, tagged with `ch` for the box payload.
     pub fn glyph_id(&self, ch: char, gid: u16) -> Result<GlyphMetrics, Error> {
-        let face = self.face()?;
+        let face = self.face();
         let gid = ttf_parser::GlyphId(gid);
         let advance_fu = face
             .glyph_hor_advance(gid)
@@ -148,9 +189,7 @@ impl MathFont {
 
     /// MATH italic correction for `glyph_id`, or zero.
     pub fn italic_correction(&self, glyph_id: u16) -> Dim {
-        let Ok(face) = self.face() else {
-            return Dim::zero();
-        };
+        let face = self.face();
         let Some(math) = face.tables().math else {
             return Dim::zero();
         };
@@ -168,7 +207,7 @@ impl MathFont {
 
     /// MATH top-accent attachment (em from glyph left), if present.
     pub fn top_accent_attachment(&self, glyph_id: u16) -> Option<Dim> {
-        let face = self.face().ok()?;
+        let face = self.face();
         let math = face.tables().math?;
         let info = math.glyph_info?;
         let table = info.top_accent_attachments?;
@@ -180,9 +219,7 @@ impl MathFont {
     /// Lengths are font units.
     pub fn horizontal_assembly_parts(&self, glyph_id: u16) -> Vec<(u16, u16, u16, u16, bool)> {
         let mut out = Vec::new();
-        let Ok(face) = self.face() else {
-            return out;
-        };
+        let face = self.face();
         let Some(math) = face.tables().math else {
             return out;
         };
@@ -215,9 +252,7 @@ impl MathFont {
     /// Horizontal MATH variants of `glyph_id`, including the base glyph first.
     pub fn horizontal_variants(&self, glyph_id: u16) -> Vec<u16> {
         let mut out = vec![glyph_id];
-        let Ok(face) = self.face() else {
-            return out;
-        };
+        let face = self.face();
         let Some(math) = face.tables().math else {
             return out;
         };
@@ -241,9 +276,7 @@ impl MathFont {
     /// Vertical MATH variants of `glyph_id`, including the base glyph first.
     pub fn vertical_variants(&self, glyph_id: u16) -> Vec<u16> {
         let mut out = vec![glyph_id];
-        let Ok(face) = self.face() else {
-            return out;
-        };
+        let face = self.face();
         let Some(math) = face.tables().math else {
             return out;
         };
