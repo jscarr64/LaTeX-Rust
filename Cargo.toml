@@ -16,18 +16,15 @@ include = [
     "src/**",
     "data/**",
     "fonts/**",
+    "golds/**",
+    "tests/**",
+    "benches/layout.rs",
     "LICENSE-MIT",
     "LICENSE-APACHE",
     "README.md",
     "CONTRIBUTING.md",
     "CHANGELOG.md",
     "NOTICE",
-]
-exclude = [
-    "golds/",
-    "benches/",
-    "benches/fixtures/",
-    "documents/",
 ]
 
 [lib]
