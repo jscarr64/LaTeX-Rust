@@ -1,4 +1,4 @@
-//! `MathNode` → `MathBox`. All sizes are [`Dim`](crate::Dim) (zenith-float 1.0).
+//! `MathNode` → `MathBox`. All sizes are [`Dim`](crate::Dim).
 
 use core::cell::Cell;
 use core::cmp::Ordering;

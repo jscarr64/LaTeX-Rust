@@ -1,11 +1,19 @@
 # Changelog
 
+## [1.0.2] — 2026-09-04
+
+Standalone layout math. This crate does not depend on a numeric library.
+
+- `Dim` is an exact rational (`num/den`). No hardware `f32`/`f64` in layout.
+- SHA-256 of the embedded face is in-tree.
+- Removed the numeric-library dependency from `Cargo.toml`.
+
 ## [1.0.0] — 2026-09-02
 
 ### Added
 
 - Complete LaTeX math parser (`parse`, gold-stable `MathNode`)
-- TeX-faithful layout engine (Appendix G style, Table 18 spacing, zenith-float `Dim`)
+- TeX-faithful layout engine (Appendix G style, Table 18 spacing, `Dim`)
 - SVG renderer (`render_svg` / `latex_to_svg`) — self-contained SVG 1.1, no font embedding
 - PNG renderer (feature `png`) via `tiny-skia` 0.11, DPI-aware, transparent background by default
 - egui renderer (feature `egui`) — TrueType tessellation to `egui::Shape` meshes, no SVG intermediate
@@ -13,7 +21,7 @@
 - Full accent and decoration support (TeX placement, extensible hats/arrows/braces, cancel, boxed)
 - Multiline environments — `align`, `aligned`, `split`, `gather`, `multline`, `equation`, `{array}`, `{cases}`
 - Color support — named, rgb, RGB, HTML, cmyk, gray, `\definecolor`, group scope, `\fcolorbox` borders
-- zenith-float 1.0 integration for arbitrary-precision layout math (no hardware `f32`/`f64` in layout)
+- Exact-rational layout math (no hardware `f32`/`f64` in layout)
 
 ### Milestone notes
 
@@ -30,8 +38,7 @@ Resolved an issue where the docs.rs documentation build was failing due to depre
 Removed:  two temporary build documents Prompt and color addition
 Corrected email address of author from jscarr@gmail.com to jscarr1964@gmail.com
 
-### Architecture (build sheet §3)
+### Architecture
 
 Crate modules: `parser/`, `layout/`, `font/`, `render/svg`, `render/png`,
-`render/egui`, plus `golds/` and `benches/` in the repository (golds and benches
-are not included in the published crate).
+`render/egui`, plus `golds/` and `benches/` in the repository.

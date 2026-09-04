@@ -8,9 +8,9 @@ Repository: <https://github.com/jscarr64/LaTeX-Rust>
 Pure Rust LaTeX math renderer. No JavaScript. No webview. No runtime dependencies.
 
 It parses LaTeX math into a typed AST, lays the AST out with a TeX-faithful box
-model whose dimensions are [zenith-float](https://crates.io/crates/zenith-float)
-`Dim` values (no hardware `f32`/`f64` in the layout path), and renders to SVG,
-PNG (`features = ["png"]`), or egui shapes (`features = ["egui"]`).
+model whose dimensions are exact rationals (`Dim`; no hardware `f32`/`f64` in the
+layout path), and renders to SVG, PNG (`features = ["png"]`), or egui shapes
+(`features = ["egui"]`).
 
 ## Features
 
@@ -40,18 +40,13 @@ benches/        parse / layout / render timings
 This crate does not typeset documents. Text-mode LaTeX, TikZ, chemistry, and PDF
 are out of scope and return `Err` — never a fake render.
 
+Inventory: [capabilities](documents/CAPABILITIES.md). Patches: [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Quick start
 
 ```toml
 [dependencies]
 latex-rust = "1.0"
-```
-
-Until the crate is on crates.io:
-
-```toml
-[dependencies]
-latex-rust = { git = "https://github.com/jscarr64/LaTeX-Rust" }
 ```
 
 ```rust
@@ -66,9 +61,8 @@ let svg = latex_to_svg(r"\frac{1}{2}", &font, &SvgOptions::new()).expect("svg");
 assert!(svg.contains("<svg"));
 ```
 
-Layout math uses the published [zenith-float](https://crates.io/crates/zenith-float)
-**1.0** crate (`ExactNum` software floats). This crate depends on `zenith-float`
-only — not on its inner kernel package.
+Layout math is exact rationals in this crate. It does not depend on a numeric
+library.
 
 MSRV is **1.76** (matches optional `egui` 0.28).
 
@@ -128,10 +122,9 @@ let _ = rect;
 
 ## Supported LaTeX
 
-Math mode only. Command and environment coverage is the capability inventory in
-[`documents/latex-rust-build-sheet.md`](documents/latex-rust-build-sheet.md)
-and the catalog [`data/symbols.tsv`](data/symbols.tsv). Look up a command with
-`latex_rust::lookup`. Missing glyphs and unknown commands are `Err`.
+Math mode only. Command and environment coverage is [`data/symbols.tsv`](data/symbols.tsv).
+Look up a command with `latex_rust::lookup`. Missing glyphs and unknown commands
+are `Err`.
 
 Color: `named_color` / `parse_color_spec`. Channel values use `Dim`. `spot` and
 unknown names return `Err`. SVG, PNG, and egui all take `Color::to_rgba8()`.
@@ -139,8 +132,8 @@ unknown names return `Err`. SVG, PNG, and egui all take `Color::to_rgba8()`.
 ## Performance
 
 Times below are median-of-batch averages from `cargo bench --features png,egui`
-on this machine (release, zenith-float `Dim` layout). Re-run the bench on your
-hardware; the targets are the build-sheet gates.
+on this machine (release, in-crate `Dim` layout). Re-run the bench on your
+hardware.
 
 | Operation | Target | Measured |
 |---|---|---|

@@ -1,8 +1,8 @@
 //! TrueType/CFF outline → SVG path `d` (font units, y-up).
 //!
 //! `ttf-parser` delivers outline points as hardware `f32`. Those bits are
-//! converted immediately to [`Dim`](crate::Dim) via zenith-float `Ieee32` — they
-//! are never used as layout arithmetic terminals.
+//! converted immediately to [`Dim`](crate::Dim) — they are never used as layout
+//! arithmetic terminals.
 
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
@@ -83,8 +83,7 @@ fn path_cache() -> &'static Mutex<HashMap<u16, String>> {
 
 /// Outline of `glyph_id` as SVG path data, or [`FontError::MissingGlyph`] if empty.
 ///
-/// Glyph `d` strings are cached process-wide; the decimal form is still
-/// zenith-float so golds are unchanged.
+/// Glyph `d` strings are cached process-wide.
 pub fn glyph_path_d(font: &MathFont, glyph_id: u16) -> Result<String, Error> {
     if let Ok(guard) = path_cache().lock() {
         if let Some(d) = guard.get(&glyph_id) {

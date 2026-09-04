@@ -297,10 +297,10 @@ impl MathFont {
         out
     }
 
-    /// SHA-256 hex of the raw face bytes (zenith-float SHA-256).
+    /// SHA-256 hex of the raw face bytes.
     #[must_use]
     pub fn sha256_hex(bytes: &[u8]) -> String {
-        let d = zenith_float::sha256(bytes);
+        let d = crate::hash::sha256(bytes);
         let mut s = String::with_capacity(64);
         for b in d {
             s.push_str(&hex_byte(b));

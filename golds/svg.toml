@@ -9,7 +9,7 @@ input = "x"
 paths = "1"
 rects = "0"
 contains = "xmlns=\"http://www.w3.org/2000/svg\""
-expect = "width=\"5.748e+0pt\""
+expect = "width=\"5.748pt\""
 
 [[gold]]
 name = "digit-2"

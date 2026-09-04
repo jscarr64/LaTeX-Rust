@@ -1,8 +1,8 @@
-#latex-rust — Build Sheet
-**Version:** 1.0.0  
-**Date:** 2026-09-01  
+# latex-rust — Capabilities
+**Version:** 1.0.2  
+**Date:** 2026-09-04  
 **License:** MIT OR Apache-2.0  
-**Status:** Milestone 11 polish — crate 1.0.0 (SVG / PNG / egui; golds green)  
+**Status:** Public crate 1.0.2 (SVG / PNG / egui; golds green; in-tree `Dim`)  
 
 > Pure Rust LaTeX math renderer. No JavaScript. No webview. No runtime dependencies.  
 > Surpasses MathJax and KaTeX in correctness, performance, and platform coverage.
@@ -29,14 +29,14 @@ latex-rust is a pure Rust crate that:
 | Language | JavaScript | JavaScript | Pure Rust |
 | Runtime dependency | Node / browser | Node / browser | None |
 | Air-gap compatible | No | No | Yes |
-| Arbitrary precision layout metrics | No | No | Yes (zenith-float) |
+| Exact-rational layout metrics | No | No | Yes (`Dim`) |
 | Native desktop rendering | No | No | Yes |
 | egui integration | No | No | Yes (native) |
 | Android / iOS native | No | No | Yes |
 | Startup time | Slow (JS parse) | Faster but JS | Instant |
 | Memory footprint | Heavy | Moderate | Minimal |
 | Honest error on unsupported input | Partial | Partial | Always |
-| Hardware float in layout math | Yes | Yes | No (zenith-float) |
+| Hardware float in layout math | Yes | Yes | No (`Dim`) |
 | Font metric precision | Limited | Limited | Full TrueType |
 
 ---
@@ -114,7 +114,7 @@ TeX-faithful box model. Every node produces a `Box`:
 
 ```rust
 pub struct MathBox {
-    pub width:   Dim,   // zenith-float arbitrary precision
+    pub width:   Dim,   // exact rational
     pub height:  Dim,   // above baseline
     pub depth:   Dim,   // below baseline
     pub italic:  Dim,   // italic correction
@@ -142,7 +142,7 @@ TeX math requires specific font metrics. latex-rust ships with:
 - Font metric tables compiled to Rust at build time
 - TrueType glyph outlines extracted at render time
 
-Font metrics are stored as zenith-float `Dim` values — no hardware float in the layout path.
+Font metrics are stored as exact-rational `Dim` values — no hardware float in the layout path.
 
 ### 3.5 Renderers
 
@@ -385,13 +385,13 @@ Rules:
 
 ---
 
-## 7. Build Milestones
+## 7. Shipped surface
 
 Each milestone ends with a full gold suite pass before the next begins.
 
 ### Milestone 1 — Core Infrastructure
 - [x] Crate scaffolding (`latex-rust`, dual license, GitHub)
-- [x] `Dim` type wrapping zenith-float for layout math
+- [x] `Dim` type (exact rationals) for layout math
 - [x] Font metric loader (STIX Two Math)
 - [x] `MathBox` type and basic composition
 - [x] Parser skeleton — tokenizer only
@@ -472,7 +472,7 @@ Each milestone ends with a full gold suite pass before the next begins.
 - [x] README with examples
 - [x] CHANGELOG
 - [x] Benchmarks vs KaTeX reference renders
-- [ ] crates.io publish (manual; dry-run when uploading)
+- [x] crates.io
 
 ---
 
@@ -480,7 +480,6 @@ Each milestone ends with a full gold suite pass before the next begins.
 
 | Crate | Purpose | Optional |
 |---|---|---|
-| `zenith-float` | Arbitrary precision layout math | No |
 | `ttf-parser` | TrueType glyph extraction | No |
 | `tiny-skia` | PNG rasterization | Yes (feature = "png") |
 | `egui` | egui primitive emission | Yes (feature = "egui") |
@@ -508,7 +507,7 @@ KaTeX cold start in a browser is typically 200-400ms. latex-rust target is < 10m
 ## 10. Correctness Standard
 
 - No hardware float (`f32` / `f64`) in any layout calculation
-- All dimension arithmetic uses `zenith-float` `Dim` type
+- All dimension arithmetic uses in-tree exact-rational `Dim`
 - Font metrics stored and computed in `Dim`
 - TeX Appendix G spacing table implemented exactly
 - Unsupported input always returns `Err(Unsupported)` — never a fake render
@@ -517,7 +516,7 @@ KaTeX cold start in a browser is typically 200-400ms. latex-rust target is < 10m
 
 ---
 
-## 11. Licensing and Relationship to Accumath
+## 11. Licensing
 
 latex-rust is MIT OR Apache-2.0. It is a standalone crate.
 

@@ -1,7 +1,7 @@
 //! Parse, layout, SVG, PNG, and egui timings (run with `cargo bench`).
 //!
-//! PNG and egui rows require `--features png,egui`. Targets are from the
-//! build sheet; a miss panics so a slow regression fails the bench.
+//! PNG and egui rows require `--features png,egui`. A miss panics so a slow
+//! regression fails the bench.
 
 use std::time::{Duration, Instant};
 

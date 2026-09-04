@@ -1,4 +1,4 @@
-//! TeX-faithful math box model. Dimensions are [`Dim`](crate::Dim) from zenith-float 1.0.
+//! TeX-faithful math box model. Dimensions are [`Dim`](crate::Dim).
 
 mod engine;
 mod metrics;

@@ -1,11 +1,11 @@
 //! LaTeX-Rust: a pure Rust LaTeX **math** renderer.
 //!
 //! Parse a math string to a typed AST, lay it out with a TeX-faithful box
-//! model whose dimensions are zenith-float [`Dim`] values (no hardware `f32` /
+//! model whose dimensions are exact rational [`Dim`] values (no hardware `f32` /
 //! `f64` in layout arithmetic), and render to SVG, PNG (`features = ["png"]`),
 //! or egui shapes (`features = ["egui"]`).
 //!
-//! Crate layout follows the build-sheet architecture: [`parser`],
+//! Crate layout: [`parser`],
 //! [`mod@layout`], [`font`], [`render`] (`svg` / `png` / `egui`).
 //!
 //! Unsupported constructs return [`Error`] — never a fake render.
@@ -47,6 +47,7 @@ mod atoms;
 mod color;
 mod dim;
 mod error;
+mod hash;
 mod style_map;
 mod symbols;
 
