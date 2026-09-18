@@ -422,6 +422,36 @@ input = "\\mathit{R}"
 expect = "(text it \"R\")"
 
 [[gold]]
+name = "font_rm_script_base"
+kind = "ast"
+input = "\\mathrm{rad\\,s^{-1}}"
+expect = "(row (text rm \"rad\") (space thin) (sup (text rm \"s\") (row (atom Bin \"-\") (text rm \"1\"))))"
+
+[[gold]]
+name = "font_rm_script"
+kind = "ast"
+input = "\\mathrm{x^a}"
+expect = "(sup (text rm \"x\") (text rm \"a\"))"
+
+[[gold]]
+name = "font_bf_fraction"
+kind = "ast"
+input = "\\mathbf{\\frac{a}{b}}"
+expect = "(frac (text bf \"a\") (text bf \"b\"))"
+
+[[gold]]
+name = "font_rm_radical"
+kind = "ast"
+input = "\\mathrm{\\sqrt{n}}"
+expect = "(sqrt (text rm \"n\"))"
+
+[[gold]]
+name = "font_bf_delimited"
+kind = "ast"
+input = "\\mathbf{\\left(x\\right)}"
+expect = "(delim ( (text bf \"x\") ))"
+
+[[gold]]
 name = "font_sf"
 kind = "ast"
 input = "\\mathsf{R}"
