@@ -147,6 +147,12 @@ fn milestone1_golds() {
                     let g = Dim::from_mu(&Dim::parse(&rec.lhs));
                     assert!(g.eq_dim(&Dim::parse(&rec.expect)), "{}", rec.name);
                 }
+                "as_ratio" => {
+                    let (n, d) = Dim::parse(&rec.lhs)
+                        .as_ratio()
+                        .unwrap_or_else(|| panic!("{}: NaN", rec.name));
+                    assert_eq!(format!("{n}/{d}"), rec.expect, "{}", rec.name);
+                }
                 "font_units" => {
                     let units: i64 = rec.lhs.parse().expect("units");
                     let upem: u16 = rec.rhs.parse().expect("upem");

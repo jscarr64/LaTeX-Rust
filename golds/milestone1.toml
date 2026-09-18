@@ -99,6 +99,20 @@ lhs = "18"
 expect = "1"
 
 [[gold]]
+name = "dim_as_ratio"
+kind = "dim"
+op = "as_ratio"
+lhs = "0.5"
+expect = "1/2"
+
+[[gold]]
+name = "dim_as_ratio_repeating"
+kind = "dim"
+op = "as_ratio"
+lhs = "0.125"
+expect = "1/8"
+
+[[gold]]
 name = "dim_font_units"
 kind = "dim"
 op = "font_units"
