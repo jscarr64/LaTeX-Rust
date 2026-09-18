@@ -13,6 +13,7 @@ use crate::layout::numbering::NumberingState;
 use crate::layout::space::{atom_space_mu, convert_bin, space_width};
 use crate::layout::style::MathStyle;
 use crate::layout::{BoxContent, MathBox};
+use crate::parser::MAX_NESTING_DEPTH;
 use crate::parser::{
     AccentKind, AtomKind, ColSpec, DelimSize, Delimiter, EnvRow, IntegralKind, MathNode,
     MatrixStyle, PhantomKind, SpaceKind, TextStyle,
@@ -97,6 +98,7 @@ pub fn layout_with_numbering(
         params,
         numbers: state,
         idx: Cell::new(start),
+        depth: Cell::new(0),
     }
     .layout(node, style)
 }
@@ -106,6 +108,8 @@ struct Engine<'a> {
     params: MathParams,
     numbers: &'a NumberingState,
     idx: Cell<usize>,
+    /// Current nesting depth, bounded by [`MAX_NESTING_DEPTH`].
+    depth: Cell<usize>,
 }
 
 struct Item {
@@ -118,7 +122,26 @@ impl Engine<'_> {
         Ok(self.item(node, style)?.bx)
     }
 
+    /// Lay out `node` one level deeper, refusing to descend past
+    /// [`MAX_NESTING_DEPTH`].
+    ///
+    /// `parse` bounds the depth of any tree it builds, so this catches only a
+    /// tree assembled by hand. It exists because `layout` is public and must
+    /// not overflow the caller's stack whatever it is handed.
     fn item(&self, node: &MathNode, style: MathStyle) -> Result<Item, Error> {
+        let depth = self.depth.get();
+        if depth >= MAX_NESTING_DEPTH {
+            return Err(Error::Unsupported {
+                what: format!("tree nests deeper than {MAX_NESTING_DEPTH} levels"),
+            });
+        }
+        self.depth.set(depth + 1);
+        let out = self.item_inner(node, style);
+        self.depth.set(depth);
+        out
+    }
+
+    fn item_inner(&self, node: &MathNode, style: MathStyle) -> Result<Item, Error> {
         match node {
             MathNode::Atom(c, k) => {
                 let bx = self.glyph(*c, style)?;

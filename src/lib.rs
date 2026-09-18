@@ -74,7 +74,7 @@ pub use layout::{
 pub use parser::{
     format_tokens, parse, parse_with_colors, preprocess, tokenize, AccentKind, AtomKind, ColSpec,
     DelimSize, Delimiter, EnvRow, EqNumber, IntegralKind, MathNode, MatrixStyle, PhantomKind,
-    SpaceKind, TextStyle, Token,
+    SpaceKind, TextStyle, Token, MAX_NESTING_DEPTH,
 };
 #[cfg(feature = "egui")]
 pub use render::egui::{latex_to_shapes, paint_egui, shapes};

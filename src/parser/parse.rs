@@ -14,6 +14,24 @@ use crate::dim::Dim;
 use crate::error::{Error, ParseError};
 use crate::symbols::{lookup, SymbolKind as CatalogKind};
 
+/// Deepest nesting [`parse`] and [`layout`](crate::layout()) accept.
+///
+/// Both recurse over the structure of the input, so their stack use grows with
+/// how deeply it nests. Past this depth they return an error rather than
+/// consume unbounded stack: input this deep is pathological, and a crate that
+/// refuses to invent a render should not abort the process either.
+///
+/// The count is of parser recursion levels rather than of LaTeX constructs, and
+/// a braced argument costs two of them — one for the argument and one for the
+/// group — so this limit admits `\frac{1}{…}` nested 31 deep. Real mathematics
+/// rarely nests beyond five levels.
+///
+/// Measured on macOS with the deepest input the limit admits: an optimised
+/// build is comfortable, and an unoptimised build survives on the 2 MiB stack
+/// of a default `std::thread` worker but overflows on a 1 MiB one. A caller
+/// embedding this crate on a smaller stack should keep its own margin.
+pub const MAX_NESTING_DEPTH: usize = 64;
+
 /// Parse a LaTeX math string into a [`MathNode`] using a fresh color table.
 ///
 /// Accepts raw math, `$...$`, `$$...$$`, `\(...\)`, or `\[...\]`. Binding of
@@ -77,6 +95,7 @@ pub fn parse_with_colors(input: &str) -> Result<(MathNode, ColorTable), ParseErr
     let mut p = Parser {
         tokens,
         pos: 0,
+        depth: 0,
         colors: ColorTable::new(),
     };
     let node = p.parse_list(Stop::eof())?;
@@ -155,6 +174,8 @@ struct Parser {
     tokens: Vec<Token>,
     pos: usize,
     colors: ColorTable,
+    /// Current nesting depth, bounded by [`MAX_NESTING_DEPTH`].
+    depth: usize,
 }
 
 impl Parser {
@@ -197,7 +218,27 @@ impl Parser {
         }
     }
 
+    /// Run `f` one level deeper, refusing to descend past [`MAX_NESTING_DEPTH`].
+    fn nested<T>(
+        &mut self,
+        f: impl FnOnce(&mut Self) -> Result<T, ParseError>,
+    ) -> Result<T, ParseError> {
+        if self.depth >= MAX_NESTING_DEPTH {
+            return Err(ParseError::Malformed(format!(
+                "input nests deeper than {MAX_NESTING_DEPTH} levels"
+            )));
+        }
+        self.depth += 1;
+        let out = f(self);
+        self.depth -= 1;
+        out
+    }
+
     fn parse_list(&mut self, stop: Stop) -> Result<MathNode, ParseError> {
+        self.nested(|p| p.parse_list_inner(stop))
+    }
+
+    fn parse_list_inner(&mut self, stop: Stop) -> Result<MathNode, ParseError> {
         let mut items = Vec::new();
         loop {
             self.skip_ws();
@@ -287,6 +328,10 @@ impl Parser {
     }
 
     fn parse_arg(&mut self) -> Result<MathNode, ParseError> {
+        self.nested(Self::parse_arg_inner)
+    }
+
+    fn parse_arg_inner(&mut self) -> Result<MathNode, ParseError> {
         self.skip_ws();
         match self.peek() {
             Some(Token::BeginGroup) => self.parse_group(),

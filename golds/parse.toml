@@ -1149,3 +1149,9 @@ error = "Malformed"
 input = "\\textcolor[rgb]{0.5}{x}"
 expect = "malformed: color spec `0.5` (need 3 components)"
 
+[[gold]]
+name = "nesting_too_deep"
+kind = "err"
+error = "Malformed"
+input = "{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{x}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}"
+expect = "malformed: input nests deeper than 64 levels"
