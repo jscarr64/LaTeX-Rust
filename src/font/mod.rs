@@ -98,7 +98,28 @@ impl MathFont {
         })
     }
 
-    pub(crate) fn face(&self) -> &Face<'static> {
+    /// The parsed OpenType face.
+    ///
+    /// An external render backend needs glyph outlines and bounding boxes,
+    /// which this crate does not otherwise expose. Reaching the face here
+    /// rather than re-parsing [`Self::bytes`] guarantees that the glyph ids in
+    /// [`BoxContent::Glyph`](crate::BoxContent::Glyph) are resolved against the
+    /// same face, parsed by the same version of `ttf-parser`, that produced
+    /// them. The crate re-exports [`ttf_parser`](crate::ttf_parser) so that a
+    /// consumer can name this type without pinning the version itself.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use latex_rust::{ttf_parser, MathFont};
+    ///
+    /// let font = MathFont::stix_two_math().expect("STIX Two Math");
+    /// let metrics = font.glyph('x').expect("x");
+    /// let id = ttf_parser::GlyphId(metrics.glyph_id);
+    /// assert!(font.face().glyph_bounding_box(id).is_some());
+    /// ```
+    #[must_use]
+    pub fn face(&self) -> &Face<'static> {
         &self.face
     }
 
