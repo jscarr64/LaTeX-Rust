@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.0.3] — 2026-09-19
+
+Coordinated patch with zenith-float, hdf5-rust, and redb-view (pure-Rust FOSS family adjacent to Accumath; Accumath itself stays proprietary).
+
 ## [1.0.2] — 2026-09-04
 
 Standalone layout math. This crate does not depend on a numeric library.
