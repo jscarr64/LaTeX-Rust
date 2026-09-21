@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.0.4] — 2026-09-20
+
+Clippy debt clear (`-D warnings`): `RowKind::Intertext` boxed to shrink enum size.
+
 ## [1.0.3] — 2026-09-19
 
 Coordinated patch with zenith-float, hdf5-rust, and redb-view (pure-Rust FOSS family adjacent to Accumath; Accumath itself stays proprietary).

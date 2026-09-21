@@ -1,6 +1,6 @@
 [package]
 name = "latex-rust"
-version = "1.0.3"
+version = "1.0.4"
 edition = "2021"
 rust-version = "1.76"
 authors = ["Jeffrey S Carr <jscarr1964@gmail.com>"]
