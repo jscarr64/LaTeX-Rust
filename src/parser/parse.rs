@@ -1126,6 +1126,13 @@ fn apply_scripts(nucleus: MathNode, sub: Option<MathNode>, sup: Option<MathNode>
     }
 }
 
+/// Apply a math font style to a whole subformula.
+///
+/// A LaTeX font command such as `\mathrm` switches the font for everything in
+/// its argument, not only for the characters at the top of the argument's list,
+/// so this descends into scripts, fractions, radicals, accents and delimited
+/// bodies as well as rows. Delimiters themselves are `Delimiter` values rather
+/// than nodes and are left alone, as they are in LaTeX.
 fn apply_text_style(node: MathNode, style: TextStyle) -> MathNode {
     match node {
         MathNode::Atom(c, _) if crate::style_map::is_stylable(c) => {
@@ -1148,6 +1155,33 @@ fn apply_text_style(node: MathNode, style: TextStyle) -> MathNode {
         )),
         MathNode::Substack(v) => {
             MathNode::Substack(v.into_iter().map(|n| apply_text_style(n, style)).collect())
+        }
+        MathNode::Superscript(b, sup) => MathNode::Superscript(
+            Box::new(apply_text_style(*b, style)),
+            Box::new(apply_text_style(*sup, style)),
+        ),
+        MathNode::Subscript(b, sub) => MathNode::Subscript(
+            Box::new(apply_text_style(*b, style)),
+            Box::new(apply_text_style(*sub, style)),
+        ),
+        MathNode::SubSup(b, sub, sup) => MathNode::SubSup(
+            Box::new(apply_text_style(*b, style)),
+            Box::new(apply_text_style(*sub, style)),
+            Box::new(apply_text_style(*sup, style)),
+        ),
+        MathNode::Fraction(num, den) => MathNode::Fraction(
+            Box::new(apply_text_style(*num, style)),
+            Box::new(apply_text_style(*den, style)),
+        ),
+        MathNode::Radical(index, body) => MathNode::Radical(
+            index.map(|i| Box::new(apply_text_style(*i, style))),
+            Box::new(apply_text_style(*body, style)),
+        ),
+        MathNode::Accent(body, kind) => {
+            MathNode::Accent(Box::new(apply_text_style(*body, style)), kind)
+        }
+        MathNode::Delimited(open, body, close) => {
+            MathNode::Delimited(open, Box::new(apply_text_style(*body, style)), close)
         }
         other => other,
     }
