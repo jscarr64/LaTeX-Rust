@@ -60,6 +60,10 @@ pub mod parser;
 /// Box model → SVG, PNG, or egui primitives.
 pub mod render;
 
+/// The OpenType parser this crate uses, re-exported so that consumers of
+/// [`MathFont::face`] name the same version.
+pub use ttf_parser;
+
 pub use atoms::symbol_atom_kind;
 pub use color::{named_color, parse_color_spec, Color, ColorTable};
 pub use dim::{Dim, DIM_PREC};

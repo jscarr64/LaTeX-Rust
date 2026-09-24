@@ -259,6 +259,30 @@ impl Dim {
         !self.nan && self.num == 0
     }
 
+    /// The exact rational value in em, as `(numerator, denominator)`, or
+    /// `None` if this dimension is NaN.
+    ///
+    /// The denominator is positive and the fraction is in lowest terms. This is
+    /// the only accessor that does not round: [`Self::to_dec_string`] formats a
+    /// decimal expansion and [`Self::to_ieee32_bits`] rounds to binary32. An
+    /// external renderer that wants to convert at its own pixel boundary,
+    /// rather than take the crate's rounding, should start here.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use latex_rust::Dim;
+    ///
+    /// assert_eq!(Dim::ratio(2, 6).as_ratio(), Some((1, 3)));
+    /// assert_eq!(Dim::ratio(1, -2).as_ratio(), Some((-1, 2)));
+    /// assert_eq!(Dim::zero().as_ratio(), Some((0, 1)));
+    /// assert_eq!(Dim::ratio(1, 0).as_ratio(), None);
+    /// ```
+    #[must_use]
+    pub fn as_ratio(&self) -> Option<(i128, i128)> {
+        (!self.nan).then_some((self.num, self.den))
+    }
+
     /// Decimal string (exact terminating expansion, or scientific).
     #[must_use]
     pub fn to_dec_string(&self) -> String {
