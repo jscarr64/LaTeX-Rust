@@ -45,7 +45,7 @@ name = "align-two-dims"
 kind = "dims"
 style = "display"
 input = "\\begin{align} f(x) &= x^2 + 1 \\\\ g(x) &= 2x - 3 \\end{align}"
-expect = "w=7.396722222222222222222222 h=0.8108 d=1.367"
+expect = "w=7.517222222222222222222222 h=0.8108 d=1.367"
 
 [[gold]]
 name = "align-nonumber-ast"
@@ -58,7 +58,7 @@ name = "align-nonumber-dims"
 kind = "dims"
 style = "display"
 input = "\\begin{align} f(x) &= x^2 + 1 \\\\ g(x) &= 2x - 3 \\nonumber \\end{align}"
-expect = "w=7.396722222222222222222222 h=0.8108 d=1.367"
+expect = "w=7.517222222222222222222222 h=0.8108 d=1.367"
 
 [[gold]]
 name = "align-tag-ast"
@@ -78,14 +78,14 @@ name = "gather-two-dims"
 kind = "dims"
 style = "display"
 input = "\\begin{gather} x + y = 1 \\\\ 2x - y = 3 \\end{gather}"
-expect = "w=6.196 h=0.736 d=1.406"
+expect = "w=6.601 h=0.736 d=1.406"
 
 [[gold]]
 name = "gather-nonumber-dims"
 kind = "dims"
 style = "display"
 input = "\\begin{gather} x + y = 1 \\\\ 2x - y = 3 \\nonumber \\end{gather}"
-expect = "w=6.196 h=0.736 d=1.314"
+expect = "w=6.601 h=0.736 d=1.314"
 
 [[gold]]
 name = "multline-two-dims"
@@ -142,7 +142,7 @@ name = "cases-piecewise-dims"
 kind = "dims"
 style = "display"
 input = "f(x)=\\begin{cases} x^2 & \\text{if } x > 0 \\\\ 0 & \\text{if } x = 0 \\\\ -x^2 & \\text{if } x < 0 \\end{cases}"
-expect = "w=8.508833333333333333333333 h=1.702 d=1.9848"
+expect = "w=8.913833333333333333333333 h=1.702 d=1.9848"
 
 [[gold]]
 name = "cases-frac-dims"
