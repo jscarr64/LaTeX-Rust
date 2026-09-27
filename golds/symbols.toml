@@ -494,3 +494,9 @@ name = "unknown_font_style"
 kind = "err_parse"
 input = "\\mathfoo{x}"
 expect = "unsupported: font style mathfoo"
+
+[[gold]]
+name = "math_minus_a_b"
+kind = "glyph"
+input = "a-b"
+expect = "−"

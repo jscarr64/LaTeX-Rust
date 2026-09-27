@@ -365,3 +365,10 @@ kind = "frame_stroke"
 style = "text"
 input = "\\fcolorbox{red}{yellow}{x}"
 expect = "#ff0000"
+
+[[gold]]
+name = "minus-bin-a-b"
+kind = "dims"
+style = "text"
+input = "a-b"
+expect = "w=2.237444444444444444444444 h=0.705 d=0.012"
