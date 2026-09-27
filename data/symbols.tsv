@@ -115,7 +115,7 @@ lim	Calculus	Operator	\lim_{{} \to {}}	Limits
 ([ ] [ ] ; [ ] [ ])	Matrices	Container	\begin{pmatrix} {} & {} \\ {} & {} \end{pmatrix}	Matrix with Parentheses
 |[ ] [ ] ; [ ] [ ]|	Matrices	Container	\begin{vmatrix} {} & {} \\ {} & {} \end{vmatrix}	Determinant Matrix
 +	General	Symbol	+	Plus
--	General	Symbol	-	Minus
+−	General	Symbol	-	Minus
 ∗	General	Symbol	\ast	Asterisk
 ⋆	General	Symbol	\star	Star
 ∘	General	Symbol	\circ	Function composition (circle)
