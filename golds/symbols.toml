@@ -6,210 +6,210 @@
 name = "greek_alpha"
 kind = "glyph"
 input = "\\alpha"
-expect = "α"
+expect = "𝛼"
 class = "Ord"
 
 [[gold]]
 name = "greek_beta"
 kind = "glyph"
 input = "\\beta"
-expect = "β"
+expect = "𝛽"
 class = "Ord"
 
 [[gold]]
 name = "greek_gamma"
 kind = "glyph"
 input = "\\gamma"
-expect = "γ"
+expect = "𝛾"
 class = "Ord"
 
 [[gold]]
 name = "greek_delta"
 kind = "glyph"
 input = "\\delta"
-expect = "δ"
+expect = "𝛿"
 class = "Ord"
 
 [[gold]]
 name = "greek_epsilon"
 kind = "glyph"
 input = "\\epsilon"
-expect = "ϵ"
+expect = "𝜖"
 class = "Ord"
 
 [[gold]]
 name = "greek_varepsilon"
 kind = "glyph"
 input = "\\varepsilon"
-expect = "ε"
+expect = "𝜀"
 class = "Ord"
 
 [[gold]]
 name = "greek_zeta"
 kind = "glyph"
 input = "\\zeta"
-expect = "ζ"
+expect = "𝜁"
 class = "Ord"
 
 [[gold]]
 name = "greek_eta"
 kind = "glyph"
 input = "\\eta"
-expect = "η"
+expect = "𝜂"
 class = "Ord"
 
 [[gold]]
 name = "greek_theta"
 kind = "glyph"
 input = "\\theta"
-expect = "θ"
+expect = "𝜃"
 class = "Ord"
 
 [[gold]]
 name = "greek_vartheta"
 kind = "glyph"
 input = "\\vartheta"
-expect = "ϑ"
+expect = "𝜗"
 class = "Ord"
 
 [[gold]]
 name = "greek_iota"
 kind = "glyph"
 input = "\\iota"
-expect = "ι"
+expect = "𝜄"
 class = "Ord"
 
 [[gold]]
 name = "greek_kappa"
 kind = "glyph"
 input = "\\kappa"
-expect = "κ"
+expect = "𝜅"
 class = "Ord"
 
 [[gold]]
 name = "greek_varkappa"
 kind = "glyph"
 input = "\\varkappa"
-expect = "ϰ"
+expect = "𝜘"
 class = "Ord"
 
 [[gold]]
 name = "greek_lambda"
 kind = "glyph"
 input = "\\lambda"
-expect = "λ"
+expect = "𝜆"
 class = "Ord"
 
 [[gold]]
 name = "greek_mu"
 kind = "glyph"
 input = "\\mu"
-expect = "μ"
+expect = "𝜇"
 class = "Ord"
 
 [[gold]]
 name = "greek_nu"
 kind = "glyph"
 input = "\\nu"
-expect = "ν"
+expect = "𝜈"
 class = "Ord"
 
 [[gold]]
 name = "greek_xi"
 kind = "glyph"
 input = "\\xi"
-expect = "ξ"
+expect = "𝜉"
 class = "Ord"
 
 [[gold]]
 name = "greek_pi"
 kind = "glyph"
 input = "\\pi"
-expect = "π"
+expect = "𝜋"
 class = "Ord"
 
 [[gold]]
 name = "greek_varpi"
 kind = "glyph"
 input = "\\varpi"
-expect = "ϖ"
+expect = "𝜛"
 class = "Ord"
 
 [[gold]]
 name = "greek_rho"
 kind = "glyph"
 input = "\\rho"
-expect = "ρ"
+expect = "𝜌"
 class = "Ord"
 
 [[gold]]
 name = "greek_varrho"
 kind = "glyph"
 input = "\\varrho"
-expect = "ϱ"
+expect = "𝜚"
 class = "Ord"
 
 [[gold]]
 name = "greek_sigma"
 kind = "glyph"
 input = "\\sigma"
-expect = "σ"
+expect = "𝜎"
 class = "Ord"
 
 [[gold]]
 name = "greek_varsigma"
 kind = "glyph"
 input = "\\varsigma"
-expect = "ς"
+expect = "𝜍"
 class = "Ord"
 
 [[gold]]
 name = "greek_tau"
 kind = "glyph"
 input = "\\tau"
-expect = "τ"
+expect = "𝜏"
 class = "Ord"
 
 [[gold]]
 name = "greek_upsilon"
 kind = "glyph"
 input = "\\upsilon"
-expect = "υ"
+expect = "𝜐"
 class = "Ord"
 
 [[gold]]
 name = "greek_phi"
 kind = "glyph"
 input = "\\phi"
-expect = "ϕ"
+expect = "𝜙"
 class = "Ord"
 
 [[gold]]
 name = "greek_varphi"
 kind = "glyph"
 input = "\\varphi"
-expect = "φ"
+expect = "𝜑"
 class = "Ord"
 
 [[gold]]
 name = "greek_chi"
 kind = "glyph"
 input = "\\chi"
-expect = "χ"
+expect = "𝜒"
 class = "Ord"
 
 [[gold]]
 name = "greek_psi"
 kind = "glyph"
 input = "\\psi"
-expect = "ψ"
+expect = "𝜓"
 class = "Ord"
 
 [[gold]]
 name = "greek_omega"
 kind = "glyph"
 input = "\\omega"
-expect = "ω"
+expect = "𝜔"
 class = "Ord"
 
 [[gold]]

@@ -261,7 +261,7 @@ fn catalog_single_glyphs_layout() {
             }
         };
         let gs = glyphs(&bx);
-        let ch = e.glyph.chars().next().unwrap();
+        let ch = math_italic(e.glyph.chars().next().unwrap());
         if !gs.contains(&ch) {
             failed.push(format!(
                 "{} glyph {ch} not in {gs:?} (ast {})",
@@ -333,4 +333,14 @@ fn font_style_letter_classes() {
         "font-style letter golds failed:\n{}",
         failed.join("\n")
     );
+}
+
+/// Plain math draws lowercase Greek in the Mathematical Italic block (issue #2).
+fn math_italic(c: char) -> char {
+    let lower_greek = ('\u{03B1}'..='\u{03C9}').contains(&c);
+    if lower_greek || matches!(c, 'ϵ' | 'ϑ' | 'ϰ' | 'ϕ' | 'ϱ' | 'ϖ') {
+        styled_char(c, TextStyle::It)
+    } else {
+        c
+    }
 }
