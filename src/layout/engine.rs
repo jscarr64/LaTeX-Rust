@@ -951,7 +951,7 @@ impl Engine<'_> {
         } else {
             self.accent_x_off(&b, &acc, kind)
         };
-        let raise = self.accent_raise(&b, &acc, style);
+        let raise = self.accent_raise(&b, kind, style);
         Ok(Item {
             class: Some(AtomKind::Ord),
             bx: overlay_accent(b, acc, x_off, raise),
@@ -1088,14 +1088,21 @@ impl Engine<'_> {
         }
     }
 
-    fn accent_raise(&self, base: &MathBox, acc: &MathBox, style: MathStyle) -> Dim {
+    /// Vertical shift of an over-accent glyph.
+    ///
+    /// Diacritic glyphs are drawn to sit on a base of `AccentBaseHeight`, so
+    /// TeX's rule applies: lift only by how far the base rises above that
+    /// height. Arrow and brace glyphs sit on the baseline and clear the base.
+    /// The branch is chosen by kind, not glyph advance: STIX spacing
+    /// diacritics (`ˆ`, `˙`, ...) have non-zero advance.
+    fn accent_raise(&self, base: &MathBox, kind: AccentKind, style: MathStyle) -> Dim {
         let s = self.params.scale(style);
         let abh = if style.is_cramped() {
             &self.params.flattened_accent_base_height * &s
         } else {
             &self.params.accent_base_height * &s
         };
-        if acc.width.is_zero() {
+        if is_diacritic_accent(kind) {
             (&base.height - &abh).clamp_nonneg()
         } else {
             base.height.max(&abh)
@@ -1939,6 +1946,26 @@ fn is_stretchy_accent(kind: AccentKind) -> bool {
             | AccentKind::Underleftrightarrow
             | AccentKind::Overbrace
             | AccentKind::Underbrace
+    )
+}
+
+fn is_diacritic_accent(kind: AccentKind) -> bool {
+    matches!(
+        kind,
+        AccentKind::Hat
+            | AccentKind::WideHat
+            | AccentKind::Check
+            | AccentKind::Breve
+            | AccentKind::Acute
+            | AccentKind::Grave
+            | AccentKind::Tilde
+            | AccentKind::WideTilde
+            | AccentKind::Bar
+            | AccentKind::Dot
+            | AccentKind::Ddot
+            | AccentKind::Dddot
+            | AccentKind::Ddddot
+            | AccentKind::Ring
     )
 }
 
