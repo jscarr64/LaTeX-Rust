@@ -146,7 +146,7 @@ impl Engine<'_> {
     fn item_inner(&self, node: &MathNode, style: MathStyle) -> Result<Item, Error> {
         match node {
             MathNode::Atom(c, k) => {
-                let bx = self.glyph(*c, style)?;
+                let bx = self.glyph(math_char(*c), style)?;
                 Ok(Item {
                     bx,
                     class: Some(*k),
@@ -2027,6 +2027,18 @@ fn single_glyph(name: &str) -> Option<char> {
     match (chars.next(), chars.next()) {
         (Some(c), None) => Some(c),
         _ => None,
+    }
+}
+
+/// TeX's math-mode glyph for a bare source character.
+///
+/// `-` in math mode is `\mathchar"2200`, the minus sign, not the text hyphen.
+/// The atom keeps its class, so binary-operator spacing is unchanged; `-`
+/// inside `\text{...}` arrives as [`MathNode::Text`] and is not mapped.
+fn math_char(c: char) -> char {
+    match c {
+        '-' => '\u{2212}',
+        other => other,
     }
 }
 
