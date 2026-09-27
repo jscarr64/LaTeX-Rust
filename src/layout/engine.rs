@@ -146,14 +146,14 @@ impl Engine<'_> {
     fn item_inner(&self, node: &MathNode, style: MathStyle) -> Result<Item, Error> {
         match node {
             MathNode::Atom(c, k) => {
-                let bx = self.glyph(math_char(*c), style)?;
+                let bx = self.glyph(math_italic(math_char(*c)), style)?;
                 Ok(Item {
                     bx,
                     class: Some(*k),
                 })
             }
             MathNode::Symbol(name) => {
-                let ch = symbol_char(name)?;
+                let ch = math_italic(symbol_char(name)?);
                 let bx = self.glyph(ch, style)?;
                 Ok(Item {
                     bx,
@@ -2066,6 +2066,22 @@ fn math_char(c: char) -> char {
     match c {
         '-' => '\u{2212}',
         other => other,
+    }
+}
+
+/// TeX's default math-italic face for a variable letter.
+///
+/// Latin letters and lowercase Greek (with its variant forms) are drawn from
+/// the Mathematical Italic block, as plain TeX's `\fam1` does. Uppercase
+/// Greek, digits and everything else stay upright. Explicit font commands
+/// (`\mathrm`, `\text`, ...) arrive as [`MathNode::Text`] and bypass this.
+fn math_italic(c: char) -> char {
+    let lower_greek = ('\u{03B1}'..='\u{03C9}').contains(&c);
+    if c.is_ascii_alphabetic() || lower_greek || matches!(c, 'ϵ' | 'ϑ' | 'ϰ' | 'ϕ' | 'ϱ' | 'ϖ')
+    {
+        styled_char(c, TextStyle::It)
+    } else {
+        c
     }
 }
 
