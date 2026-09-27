@@ -287,7 +287,7 @@ name = "hat-x"
 kind = "dims"
 style = "text"
 input = "\\hat{x}"
-expect = "w=0.479 h=1.154 d=0.0"
+expect = "w=0.479 h=0.674 d=0.0"
 
 [[gold]]
 name = "overline-x"

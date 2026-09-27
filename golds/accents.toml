@@ -12,7 +12,7 @@ expect = "(accent hat (atom Ord \"x\"))"
 name = "hat-x"
 kind = "dims"
 input = "\\hat{x}"
-expect = "w=0.479 h=1.154 d=0.0"
+expect = "w=0.479 h=0.674 d=0.0"
 
 [[gold]]
 name = "hat-x-svg"
@@ -26,43 +26,43 @@ lines = "0"
 name = "hat-f-italic"
 kind = "dims"
 input = "\\hat{f}"
-expect = "w=0.421 h=1.387 d=0.0"
+expect = "w=0.421 h=0.907 d=0.0"
 
 [[gold]]
 name = "check-x"
 kind = "dims"
 input = "\\check{x}"
-expect = "w=0.479 h=1.158 d=0.0"
+expect = "w=0.479 h=0.678 d=0.0"
 
 [[gold]]
 name = "breve-x"
 kind = "dims"
 input = "\\breve{x}"
-expect = "w=0.479 h=1.163 d=0.0"
+expect = "w=0.479 h=0.683 d=0.0"
 
 [[gold]]
 name = "acute-x"
 kind = "dims"
 input = "\\acute{x}"
-expect = "w=0.479 h=1.154 d=0.0"
+expect = "w=0.479 h=0.674 d=0.0"
 
 [[gold]]
 name = "grave-x"
 kind = "dims"
 input = "\\grave{x}"
-expect = "w=0.479 h=1.154 d=0.0"
+expect = "w=0.479 h=0.674 d=0.0"
 
 [[gold]]
 name = "tilde-x"
 kind = "dims"
 input = "\\tilde{x}"
-expect = "w=0.479 h=1.122 d=0.0"
+expect = "w=0.479 h=0.642 d=0.0"
 
 [[gold]]
 name = "bar-x"
 kind = "dims"
 input = "\\bar{x}"
-expect = "w=0.479 h=1.09 d=0.0"
+expect = "w=0.479 h=0.61 d=0.0"
 
 [[gold]]
 name = "vec-v"
@@ -74,13 +74,13 @@ expect = "w=0.948 h=0.939 d=0.006"
 name = "dot-x"
 kind = "dims"
 input = "\\dot{x}"
-expect = "w=0.479 h=1.153 d=0.0"
+expect = "w=0.479 h=0.673 d=0.0"
 
 [[gold]]
 name = "ddot-x"
 kind = "dims"
 input = "\\ddot{x}"
-expect = "w=0.479 h=1.152 d=0.0"
+expect = "w=0.479 h=0.672 d=0.0"
 
 [[gold]]
 name = "dddot-x"
@@ -98,13 +98,13 @@ expect = "w=0.48 h=0.637 d=0.0"
 name = "mathring-x"
 kind = "dims"
 input = "\\mathring{x}"
-expect = "w=0.479 h=1.209 d=0.0"
+expect = "w=0.479 h=0.729 d=0.0"
 
 [[gold]]
 name = "widehat-xyz"
 kind = "dims"
 input = "\\widehat{x+y+z}"
-expect = "w=3.748888888888888888888888 h=1.232 d=0.235"
+expect = "w=3.748888888888888888888888 h=0.752 d=0.235"
 
 [[gold]]
 name = "widehat-xyz-svg"
@@ -118,7 +118,7 @@ lines = "0"
 name = "widetilde-xyz"
 kind = "dims"
 input = "\\widetilde{xyz}"
-expect = "w=1.42 h=1.122 d=0.235"
+expect = "w=1.42 h=0.642 d=0.235"
 
 [[gold]]
 name = "overline-xy"
