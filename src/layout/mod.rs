@@ -16,6 +16,46 @@ use crate::dim::Dim;
 use crate::error::Error;
 use crate::font::MathFont;
 
+/// Outline scale at which a renderer draws a glyph box.
+///
+/// The layout engine sizes every glyph box as the font's metrics for that
+/// glyph times the style scale: 1 at text size, `ScriptPercentScaleDown` at
+/// script size and `ScriptScriptPercentScaleDown` at scriptscript size. It does
+/// not record the scale on [`BoxContent::Glyph`], because adding a field to
+/// that public variant would break the 1.x API (latex-rust 2.0.0 adds one).
+/// So the renderers recover it from the box: the first of width, height and
+/// depth whose font metric is non-zero is compared exactly (the arithmetic is
+/// exact rational) with the metric times each style scale. A box that matches
+/// none of them, for example one built by hand with other dimensions, or a
+/// glyph the face does not have, is drawn at text size as before.
+pub(crate) fn glyph_scale(font: &MathFont, bx: &MathBox, ch: char, glyph_id: u16) -> Dim {
+    let Ok(m) = font.glyph_id(ch, glyph_id) else {
+        return Dim::one();
+    };
+    let pairs = [
+        (&bx.width, &m.advance),
+        (&bx.height, &m.height),
+        (&bx.depth, &m.depth),
+    ];
+    let Some((actual, metric)) = pairs.into_iter().find(|(_, metric)| !metric.is_zero()) else {
+        return Dim::one();
+    };
+    let same = |a: &Dim, b: &Dim| a.cmp(b) == Some(core::cmp::Ordering::Equal);
+    if same(actual, metric) {
+        return Dim::one();
+    }
+    let Ok(params) = MathParams::from_font(font) else {
+        return Dim::one();
+    };
+    for style in [MathStyle::Script, MathStyle::ScriptScript] {
+        let s = params.scale(style);
+        if same(actual, &(metric * &s)) {
+            return s;
+        }
+    }
+    Dim::one()
+}
+
 /// What a box contains.
 ///
 /// Glyphs carry an OpenType id from the math face. Lists compose children.

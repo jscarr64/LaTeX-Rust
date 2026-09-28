@@ -15,7 +15,7 @@ use crate::color::Color;
 use crate::dim::Dim;
 use crate::error::{Error, FontError};
 use crate::font::MathFont;
-use crate::layout::{BoxContent, MathBox};
+use crate::layout::{glyph_scale, BoxContent, MathBox};
 
 pub(super) fn render(
     tree: &MathBox,
@@ -121,10 +121,11 @@ fn emit(
     let baseline = parent_baseline - &(bx.shift.clone() * em_px);
     match &bx.content {
         BoxContent::Empty | BoxContent::Kern(_) => Ok(()),
-        BoxContent::Glyph { glyph_id, .. } => {
+        BoxContent::Glyph { ch, glyph_id } => {
             let path = glyph_path(font, *glyph_id, cache)?;
-            let sx = px(fu_px);
-            let sy = px(&-fu_px.clone());
+            let k = fu_px * &glyph_scale(font, bx, *ch, *glyph_id);
+            let sx = px(&k);
+            let sy = px(&-k);
             let tx = px(origin_x);
             let ty = px(&baseline);
             let t = Transform::from_row(sx, 0.0, 0.0, sy, tx, ty);
