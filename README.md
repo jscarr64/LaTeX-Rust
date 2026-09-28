@@ -1,5 +1,15 @@
 # LaTeX-Rust
 
+> **Please upgrade to latex-rust 1.0.5 or 2.0.1.** Versions 1.0.0 through 1.0.4
+> abort the process with a stack overflow when given deeply nested input, which
+> matters if you render LaTeX from untrusted sources. 1.0.5 fixes this for 1.x
+> with no API changes (`cargo update -p latex-rust`), and also includes the
+> 2.0.0 rendering fixes, so formulas draw differently from 1.0.4. 2.0.0 has the
+> same fixes plus breaking API changes; see the
+> [2.0.0 release notes](https://github.com/jscarr64/LaTeX-Rust/releases/tag/v2.0.0).
+> 1.0.5 and 2.0.1 also fix the egui backend, which failed with "glyph
+> tessellation" on some glyphs (for example `\partial_t u`).
+
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE-MIT)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE-APACHE)
 
