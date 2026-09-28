@@ -13,7 +13,7 @@ use crate::layout::numbering::NumberingState;
 use crate::layout::space::{atom_space_mu, convert_bin, space_width};
 use crate::layout::style::MathStyle;
 use crate::layout::{BoxContent, MathBox};
-use crate::parser::MAX_NESTING_DEPTH;
+use crate::parser::DEFAULT_MAX_NESTING_DEPTH;
 use crate::parser::{
     AccentKind, AtomKind, ColSpec, DelimSize, Delimiter, EnvRow, IntegralKind, MathNode,
     MatrixStyle, PhantomKind, SpaceKind, TextStyle,
@@ -39,7 +39,9 @@ use crate::symbols::lookup;
 /// # Errors
 ///
 /// * [`Error::Font`] — glyph missing from the face.
-/// * [`Error::Unsupported`] — construct or MATH table the engine will not fake.
+/// * [`Error::Unsupported`] — construct or MATH table the engine will not fake,
+///   or a tree that nests more than 32 levels deep (only possible for a tree
+///   built by hand, since [`parse`](crate::parse()) refuses such input).
 /// * [`Error::Malformed`] — invalid structure discovered during layout.
 ///
 /// # Examples
@@ -108,7 +110,7 @@ struct Engine<'a> {
     params: MathParams,
     numbers: &'a NumberingState,
     idx: Cell<usize>,
-    /// Current nesting depth, bounded by [`MAX_NESTING_DEPTH`].
+    /// Current nesting depth, bounded by [`DEFAULT_MAX_NESTING_DEPTH`].
     depth: Cell<usize>,
 }
 
@@ -123,16 +125,16 @@ impl Engine<'_> {
     }
 
     /// Lay out `node` one level deeper, refusing to descend past
-    /// [`MAX_NESTING_DEPTH`].
+    /// [`DEFAULT_MAX_NESTING_DEPTH`].
     ///
     /// `parse` bounds the depth of any tree it builds, so this catches only a
     /// tree assembled by hand. It exists because `layout` is public and must
     /// not overflow the caller's stack whatever it is handed.
     fn item(&self, node: &MathNode, style: MathStyle) -> Result<Item, Error> {
         let depth = self.depth.get();
-        if depth >= MAX_NESTING_DEPTH {
+        if depth >= DEFAULT_MAX_NESTING_DEPTH {
             return Err(Error::Unsupported {
-                what: format!("tree nests deeper than {MAX_NESTING_DEPTH} levels"),
+                what: format!("tree nests deeper than {DEFAULT_MAX_NESTING_DEPTH} levels"),
             });
         }
         self.depth.set(depth + 1);
@@ -1260,7 +1262,9 @@ impl Engine<'_> {
                     extras.push(RowKind::Hline);
                 }
                 EnvRow::Intertext(n) => {
-                    extras.push(RowKind::Intertext(Box::new(self.layout(n, MathStyle::Text)?)));
+                    extras.push(RowKind::Intertext(Box::new(
+                        self.layout(n, MathStyle::Text)?,
+                    )));
                 }
                 EnvRow::Cells { cells, .. } => {
                     let mut rboxes = Vec::new();
@@ -1346,7 +1350,9 @@ impl Engine<'_> {
                     });
                 }
                 EnvRow::Intertext(n) => {
-                    kinds.push(RowKind::Intertext(Box::new(self.layout(n, MathStyle::Text)?)));
+                    kinds.push(RowKind::Intertext(Box::new(
+                        self.layout(n, MathStyle::Text)?,
+                    )));
                 }
                 EnvRow::Cells { cells, .. } => {
                     let node = if cells.len() == 1 {
@@ -1472,7 +1478,9 @@ impl Engine<'_> {
             match row {
                 EnvRow::Hline => kinds.push(RowKind::Hline),
                 EnvRow::Intertext(n) => {
-                    kinds.push(RowKind::Intertext(Box::new(self.layout(n, MathStyle::Text)?)));
+                    kinds.push(RowKind::Intertext(Box::new(
+                        self.layout(n, MathStyle::Text)?,
+                    )));
                 }
                 EnvRow::Cells { cells, .. } => {
                     let mut rboxes = Vec::new();

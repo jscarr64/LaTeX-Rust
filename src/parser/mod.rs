@@ -12,6 +12,7 @@ pub use ast::{
     AccentKind, AtomKind, ColSpec, DelimSize, Delimiter, EnvRow, EqNumber, IntegralKind, MathNode,
     MatrixStyle, PhantomKind, SpaceKind, TextStyle,
 };
-pub use parse::{parse, parse_with_colors, MAX_NESTING_DEPTH};
+pub(crate) use parse::DEFAULT_MAX_NESTING_DEPTH;
+pub use parse::{parse, parse_with_colors};
 pub use preproc::preprocess;
 pub use token::{format_tokens, tokenize, Token};

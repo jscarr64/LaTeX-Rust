@@ -22,15 +22,23 @@ use crate::symbols::{lookup, SymbolKind as CatalogKind};
 /// refuses to invent a render should not abort the process either.
 ///
 /// The count is of parser recursion levels rather than of LaTeX constructs, and
-/// a braced argument costs two of them — one for the argument and one for the
-/// group — so this limit admits `\frac{1}{…}` nested 31 deep. Real mathematics
+/// a braced argument costs two of them (one for the argument and one for the
+/// group), so the limit admits `\frac{1}{…}` nested 15 deep. Real mathematics
 /// rarely nests beyond five levels.
 ///
-/// Measured on macOS with the deepest input the limit admits: an optimised
-/// build is comfortable, and an unoptimised build survives on the 2 MiB stack
-/// of a default `std::thread` worker but overflows on a 1 MiB one. A caller
-/// embedding this crate on a smaller stack should keep its own margin.
-pub const MAX_NESTING_DEPTH: usize = 64;
+/// Same name and value as the public constant in latex-rust 2.0.0. It is
+/// crate-private here so that 1.0.5 adds no public API.
+///
+/// Measured on Linux x86-64 with the deepest input the limit admits in each
+/// nesting shape, parsed, laid out, rendered and dropped. An optimised build
+/// needs at most about 512 KiB of stack (31 nested `\left(` or 15 nested
+/// `\binom`), so it is safe on a 1 MiB stack and on the 2 MiB default of a
+/// `std::thread` worker. An unoptimised build needs up to about 4 MiB (31
+/// nested `matrix` environments), which fits the 8 MiB main thread but not a
+/// 2 MiB worker. Input past the limit is refused by the parser within about
+/// 100 KiB of stack in an optimised build. A caller on a smaller stack should
+/// render on a thread it has given more stack.
+pub(crate) const DEFAULT_MAX_NESTING_DEPTH: usize = 32;
 
 /// Parse a LaTeX math string into a [`MathNode`] using a fresh color table.
 ///
@@ -49,7 +57,8 @@ pub const MAX_NESTING_DEPTH: usize = 64;
 ///
 /// * [`ParseError::Unknown`] — command is not in the catalog.
 /// * [`ParseError::Unsupported`] — known construct this crate will not invent.
-/// * [`ParseError::Malformed`] — syntactically invalid input.
+/// * [`ParseError::Malformed`] — syntactically invalid input, or input that
+///   nests more than 32 levels deep (`input nests deeper than 32 levels`).
 /// * [`ParseError::UnmatchedDelimiter`] — `\left` without `\right` (or vice versa).
 /// * [`ParseError::TrailingBackslash`] — input ended with a stray `\`.
 ///
@@ -174,7 +183,7 @@ struct Parser {
     tokens: Vec<Token>,
     pos: usize,
     colors: ColorTable,
-    /// Current nesting depth, bounded by [`MAX_NESTING_DEPTH`].
+    /// Current nesting depth, bounded by [`DEFAULT_MAX_NESTING_DEPTH`].
     depth: usize,
 }
 
@@ -218,14 +227,14 @@ impl Parser {
         }
     }
 
-    /// Run `f` one level deeper, refusing to descend past [`MAX_NESTING_DEPTH`].
+    /// Run `f` one level deeper, refusing to descend past [`DEFAULT_MAX_NESTING_DEPTH`].
     fn nested<T>(
         &mut self,
         f: impl FnOnce(&mut Self) -> Result<T, ParseError>,
     ) -> Result<T, ParseError> {
-        if self.depth >= MAX_NESTING_DEPTH {
+        if self.depth >= DEFAULT_MAX_NESTING_DEPTH {
             return Err(ParseError::Malformed(format!(
-                "input nests deeper than {MAX_NESTING_DEPTH} levels"
+                "input nests deeper than {DEFAULT_MAX_NESTING_DEPTH} levels"
             )));
         }
         self.depth += 1;
