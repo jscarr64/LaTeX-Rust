@@ -49,7 +49,8 @@ fn radical_glyph_id(tree: &latex_rust::MathBox) -> u16 {
         .iter()
         .find_map(|child| match &child.content {
             BoxContent::Glyph {
-                ch: '√', glyph_id, ..
+                ch: '√', glyph_id,
+            ..
             } => Some(*glyph_id),
             _ => None,
         })

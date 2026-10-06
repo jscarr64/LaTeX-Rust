@@ -139,15 +139,17 @@ fn egui_script_glyph_mesh_is_scaled() {
             content: BoxContent::glyph('2', glyph_id, scale),
         };
 
-        let (shapes, _) =
-            shapes(&bx, &font, &EguiOptions::new(), Pos2::ZERO, 1.0).expect("shapes");
+        let (shapes, _) = shapes(&bx, &font, &EguiOptions::new(), Pos2::ZERO, 1.0).expect("shapes");
 
         let ys: Vec<f32> = shapes
             .iter()
             .filter_map(|shape| match shape {
-                Shape::Mesh(mesh) => {
-                    Some(mesh.vertices.iter().map(|vertex| vertex.pos.y).collect::<Vec<_>>())
-                }
+                Shape::Mesh(mesh) => Some(
+                    mesh.vertices
+                        .iter()
+                        .map(|vertex| vertex.pos.y)
+                        .collect::<Vec<_>>(),
+                ),
                 _ => None,
             })
             .flatten()

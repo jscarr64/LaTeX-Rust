@@ -57,8 +57,5 @@ fn script_styles_use_open_type_ssty_alternates() {
     assert_ne!(scriptscript, base);
     assert_eq!(glyph_id("2", MathStyle::Text, &font), base);
     assert_eq!(glyph_id("2", MathStyle::Script, &font), script);
-    assert_eq!(
-        glyph_id("2", MathStyle::ScriptScript, &font),
-        scriptscript
-    );
+    assert_eq!(glyph_id("2", MathStyle::ScriptScript, &font), scriptscript);
 }

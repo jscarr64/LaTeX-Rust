@@ -73,8 +73,8 @@ pub use font::{
 };
 pub use layout::{
     layout, layout_with_em_size_pt, layout_with_max_depth, layout_with_numbering,
-    layout_with_numbering_and_em_size_pt, BoxContent, MathBox, MathParams, MathStyle,
-    NumberFormat, NumberStyle, NumberingConfig, NumberingState,
+    layout_with_numbering_and_em_size_pt, BoxContent, MathBox, MathParams, MathStyle, NumberFormat,
+    NumberStyle, NumberingConfig, NumberingState,
 };
 pub use parser::{
     format_tokens, parse, parse_with_colors, parse_with_options, preprocess, tokenize, AccentKind,
