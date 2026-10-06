@@ -1,6 +1,6 @@
 # LaTeX-Rust
 
-> **Please upgrade to latex-rust 2.1.0.** Versions 1.0.0 through 1.0.4 abort
+> **Please upgrade to latex-rust 2.1.1.** Versions 1.0.0 through 1.0.4 abort
 > the process with a stack overflow when given deeply nested input, which
 > matters if you render LaTeX from untrusted sources. 1.0.5 fixes that for 1.x
 > with no API changes (`cargo update -p latex-rust`). 2.0.0 has the same fixes
@@ -9,7 +9,8 @@
 > 1.0.5 and 2.0.1 also fix the egui backend, which failed with "glyph
 > tessellation" on some glyphs (for example `\partial_t u`). 2.1.0 keeps those
 > fixes and corrects TeX and OpenType MATH layout, so some formulas draw
-> differently from 2.0.1.
+> differently from 2.0.1. 2.1.1 keeps that layout and corrects the dvips name
+> `TealBlue` to the upstream CMYK value.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE-MIT)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE-APACHE)
@@ -172,20 +173,47 @@ SVG `<path>` elements (and PNG/egui meshes when those features are on).
 
 ## Notes
 
-2.1.0 is the current release. baselogic contributed the TeX and OpenType MATH
-layout work in pull request 13. His commits are in the history under his name. They cover delimiter sizing with
-a physical `\delimitershortfall`, fraction width without null-delimiter padding,
-radical variant slack, large-operator limits, `ssty` script alternates,
-`SpaceAfterScript`, row math italic correction, AMSMath column spacing,
-display-integral side scripts, and the exact-rational and egui index overflow
-checks.
+2.1.1 is the current release. It keeps the 2.1.0 layout. `TealBlue` now uses
+the upstream dvipsnames CMYK value, and `data/dvipsnames.tsv` carries its LPPL
+notice. baselogic contributed the TeX and OpenType MATH layout work in pull
+request 13. His commits are in the history under his name. They cover delimiter
+sizing with a physical `\delimitershortfall`, fraction width without
+null-delimiter padding, radical variant slack, large-operator limits, `ssty`
+script alternates, `SpaceAfterScript`, row math italic correction, AMSMath
+column spacing, display-integral side scripts, and the exact-rational and egui
+index overflow checks.
 
 Three rules were corrected on top of that work. A wide hat or tilde uses the
 smallest MATH variant that covers the nucleus. AMSMath rows use LaTeX's 12 pt
 `\baselineskip`, plus `\jot` in `aligned`. A radical degree is placed by the
 bottom of its ink.
 
+## Credits
+
+The 68 dvips color names in `data/dvipsnames.tsv` come from `dvipsnam.def` in
+the LaTeX graphics bundle (`drivers.dtx`, `%<*dvipsnames>`). Copyright 1994
+David Carlisle and Sebastian Rahtz; 1995–1999 David Carlisle; 2000–2026 The
+LaTeX Project. Licensed under LPPL-1.3c or later. The table is a modified
+file: a tab-separated extract, rows sorted alphabetically by name, not the
+original `dvipsnam.def`. See `NOTICE`.
+
+STIX Two Math remains under the SIL Open Font License 1.1. See `NOTICE`.
+
+## Acknowledgments
+
+This crate was developed with help from AI assistants by SpaceXAI, Anthropic,
+OpenAI, Google, and Meta.
+
+## Known issues
+
+`ttf-parser` 0.25 is unmaintained (RUSTSEC-2026-0192). `MathFont::face` and the
+re-exported `ttf_parser` types are public API, and layout needs that crate's
+MATH table and outlines. `skrifa` / `read-fonts` is the maintained successor
+and can now read MATH. Its types differ from `ttf_parser::Face`, so swapping
+parsers is a breaking change and stays deferred. This is the only open item.
+
 ## License
 
-MIT OR Apache-2.0. STIX Two Math remains under the SIL Open Font License 1.1.
-See `NOTICE`.
+The Rust source is MIT OR Apache-2.0. STIX Two Math remains under the SIL Open
+Font License 1.1. The dvips color names in `data/dvipsnames.tsv` remain under
+LPPL-1.3c or later. See `NOTICE`.

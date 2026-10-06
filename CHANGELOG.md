@@ -1,5 +1,48 @@
 # Changelog
 
+## [2.1.1] — 2026-10-06
+
+The dvips color names now carry their license, and `TealBlue` matches
+`drivers.dtx`. No API changes.
+
+### Fixed
+
+- `TealBlue` is the upstream dvipsnames CMYK `0.86, 0, 0.34, 0.02`. The
+  table shipped `0.86, 0.09, 0.54, 0.10`, which is not in `drivers.dtx`
+  and has no other documented source. A formula that names `TealBlue`
+  therefore changes color. The other 67 tuples were already the upstream
+  values.
+
+### Added
+
+- `data/dvipsnames.tsv` identifies itself as a modified form of
+  `dvipsnam.def` from the `%<*dvipsnames>` section of `drivers.dtx`
+  (Copyright 1994 David Carlisle and Sebastian Rahtz; 1995-1999 David
+  Carlisle; 2000-2026 The LaTeX Project; LPPL-1.3c or later). The
+  modifications are the tab-separated layout and the alphabetical
+  re-sort. `NOTICE` records the same terms, including where to obtain
+  an unmodified copy of the graphics bundle.
+- `tests/dvipsnames_upstream.rs` checks all 68 CMYK tuples against the
+  values transcribed from `drivers.dtx`.
+
+### Known issues
+
+README and CHANGELOG had no Known issues section. GitHub issues #1
+through #7 and #11 are already fixed in 2.0.0, 2.0.1, and 2.1.0.
+
+`ttf-parser` 0.25 is flagged unmaintained (RUSTSEC-2026-0192, informational,
+no patched release). It stays in 2.1.1. `MathFont::face` returns
+`ttf_parser::Face`, and the crate re-exports `ttf_parser` so embedders
+share that version (issue #7). Layout reads the OpenType MATH table,
+glyph assemblies, and GSUB `ssty` through that face, and the SVG, PNG,
+and egui backends consume its outlines. RustSec points at `skrifa`.
+`read-fonts` merged MATH table support on 2026-09-08 (fontations pull
+request 2105), but those types are not a stand-in for `ttf_parser::Face`,
+and no maintained API-compatible fork is published. Replacing the parser
+would be a breaking change to the public face API and a rewrite of the
+metric and outline paths. That does not belong in a patch. The allowed
+font stack in CONTRIBUTING.md is still `ttf-parser`.
+
 ## [2.1.0] — 2026-10-02
 
 Layout follows more of TeX and the OpenType MATH table. Dimensions of fractions,

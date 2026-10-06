@@ -1,3 +1,44 @@
+# data/dvipsnames.tsv
+#
+# THIS FILE HAS BEEN MODIFIED. It is not the original dvipsnam.def, and it
+# is not a replacement for that file.
+#
+# Source: the `%<*dvipsnames>` section of drivers.dtx in the LaTeX graphics
+# bundle, which generates dvipsnam.def.
+# Checked against
+# https://github.com/latex3/latex2e/blob/develop/required/graphics/drivers.dtx
+# on 2026-10-06.
+#
+# Copyright 1994 David Carlisle and Sebastian Rahtz
+# Copyright 1995-1999 David Carlisle
+# Copyright 2000-2026 The LaTeX Project
+#
+# This file may be distributed and/or modified under the conditions of the
+# LaTeX Project Public License, either version 1.3c of this license or (at
+# your option) any later version.
+# The latest version of this license is in
+#   https://www.latex-project.org/lppl.txt
+# and version 1.3c or later is part of all distributions of LaTeX
+# version 2008 or later.
+#
+# The original authors and The LaTeX Project do not maintain or support
+# this modified file.
+#
+# Modifications from dvipsnam.def / drivers.dtx, by Jeffrey S Carr
+# (2026-09-01; notice and TealBlue correction 2026-10-06):
+# - The \DefineNamedColor lines were rewritten as a tab-separated table
+#   with the header name, c, m, y, k.
+# - Rows were re-sorted alphabetically by name. Upstream keeps the dvips
+#   color-wheel order.
+# - CMYK tuples are the upstream values, including TealBlue
+#   (0.86, 0, 0.34, 0.02).
+#
+# A complete unmodified copy of the Work (the graphics bundle, including
+# drivers.dtx) can be obtained from
+#   https://github.com/latex3/latex2e/tree/develop/required/graphics
+# CTAN path: macros/latex/required/graphics
+#
+# latex-rust also records this file in NOTICE and CHANGELOG.md.
 name	c	m	y	k
 Apricot	0	0.32	0.52	0
 Aquamarine	0.82	0	0.30	0
@@ -57,7 +98,7 @@ Sepia	0	0.83	1	0.70
 SkyBlue	0.62	0	0.12	0
 SpringGreen	0.26	0	0.76	0
 Tan	0.14	0.42	0.56	0
-TealBlue	0.86	0.09	0.54	0.10
+TealBlue	0.86	0	0.34	0.02
 Thistle	0.12	0.59	0	0
 Turquoise	0.85	0	0.20	0
 Violet	0.79	0.88	0	0
