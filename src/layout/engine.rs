@@ -217,9 +217,7 @@ fn layout_impl(
     max_depth: usize,
     em_size_pt: &Dim,
 ) -> Result<MathBox, Error> {
-    if em_size_pt.is_nan()
-        || !matches!(em_size_pt.cmp(&Dim::zero()), Some(Ordering::Greater))
-    {
+    if em_size_pt.is_nan() || !matches!(em_size_pt.cmp(&Dim::zero()), Some(Ordering::Greater)) {
         return Err(Error::InvalidOption {
             what: "em_size_pt must be positive".into(),
         });
@@ -228,8 +226,7 @@ fn layout_impl(
     let params = MathParams::from_font(font)?;
     let script_placement = ScriptPlacementParams::from_font(font)?;
     let substack = SubstackParams::from_font(font, &params)?;
-    let delimiter_shortfall =
-        &Dim::from_i64(TEX_DELIMITER_SHORTFALL_PT) / em_size_pt;
+    let delimiter_shortfall = &Dim::from_i64(TEX_DELIMITER_SHORTFALL_PT) / em_size_pt;
     let start = state.collect(node);
     Engine {
         font,
@@ -279,43 +276,22 @@ impl ScriptPlacementParams {
                 what: "OpenType MATH table".into(),
             })?;
 
-        let constants =
-            math.constants.ok_or_else(|| Error::Unsupported {
-                what: "MATH constants".into(),
-            })?;
+        let constants = math.constants.ok_or_else(|| Error::Unsupported {
+            what: "MATH constants".into(),
+        })?;
 
-        let units_per_em =
-            font.units_per_em();
+        let units_per_em = font.units_per_em();
 
-        let fu = |value: i16| {
-            Dim::from_font_units(
-                i64::from(value),
-                units_per_em,
-            )
-        };
+        let fu = |value: i16| Dim::from_font_units(i64::from(value), units_per_em);
 
         Ok(Self {
-            subscript_top_max: fu(
-                constants.subscript_top_max().value,
-            ),
-            subscript_baseline_drop_min: fu(
-                constants
-                    .subscript_baseline_drop_min()
-                    .value,
-            ),
-            superscript_bottom_min: fu(
-                constants.superscript_bottom_min().value,
-            ),
-            superscript_bottom_max_with_subscript: fu(
-                constants
-                    .superscript_bottom_max_with_subscript()
-                    .value,
-            ),
-            superscript_baseline_drop_max: fu(
-                constants
-                    .superscript_baseline_drop_max()
-                    .value,
-            ),
+            subscript_top_max: fu(constants.subscript_top_max().value),
+            subscript_baseline_drop_min: fu(constants.subscript_baseline_drop_min().value),
+            superscript_bottom_min: fu(constants.superscript_bottom_min().value),
+            superscript_bottom_max_with_subscript: fu(constants
+                .superscript_bottom_max_with_subscript()
+                .value),
+            superscript_baseline_drop_max: fu(constants.superscript_baseline_drop_max().value),
         })
     }
 }
@@ -326,10 +302,7 @@ struct SubstackParams {
 }
 
 impl SubstackParams {
-    fn from_font(
-        font: &MathFont,
-        params: &MathParams,
-    ) -> Result<Self, Error> {
+    fn from_font(font: &MathFont, params: &MathParams) -> Result<Self, Error> {
         let math = font
             .face()
             .tables()
@@ -338,55 +311,26 @@ impl SubstackParams {
                 what: "OpenType MATH table".into(),
             })?;
 
-        let constants =
-            math.constants.ok_or_else(
-                || Error::Unsupported {
-                    what: "MATH constants".into(),
-                },
-            )?;
+        let constants = math.constants.ok_or_else(|| Error::Unsupported {
+            what: "MATH constants".into(),
+        })?;
 
-        let units_per_em =
-            font.units_per_em();
+        let units_per_em = font.units_per_em();
 
-        let fu =
-            |value: i16| {
-                Dim::from_font_units(
-                    i64::from(value),
-                    units_per_em,
-                )
-            };
+        let fu = |value: i16| Dim::from_font_units(i64::from(value), units_per_em);
 
-        let script_scale =
-            params.scale(MathStyle::Script);
+        let script_scale = params.scale(MathStyle::Script);
 
-        let top =
-            fu(
-                constants
-                    .stack_top_shift_up()
-                    .value,
-            );
+        let top = fu(constants.stack_top_shift_up().value);
 
-        let bottom =
-            fu(
-                constants
-                    .stack_bottom_shift_down()
-                    .value,
-            );
+        let bottom = fu(constants.stack_bottom_shift_down().value);
 
-        let gap =
-            fu(
-                constants
-                    .stack_gap_min()
-                    .value,
-            );
+        let gap = fu(constants.stack_gap_min().value);
 
         Ok(Self {
-            baseline_skip:
-                &(&top + &bottom)
-                    * &script_scale,
+            baseline_skip: &(&top + &bottom) * &script_scale,
 
-            line_skip:
-                &gap * &script_scale,
+            line_skip: &gap * &script_scale,
         })
     }
 }
@@ -702,12 +646,8 @@ impl Engine<'_> {
             }
             out.push(laid[i].bx.clone());
 
-            if row_needs_math_italic_kern(&items[i])
-                && !laid[i].bx.italic.is_zero()
-            {
-                out.push(MathBox::kern(
-                    laid[i].bx.italic.clone(),
-                ));
+            if row_needs_math_italic_kern(&items[i]) && !laid[i].bx.italic.is_zero() {
+                out.push(MathBox::kern(laid[i].bx.italic.clone()));
             }
         }
         let class = if n == 1 {
@@ -877,8 +817,7 @@ impl Engine<'_> {
         }
         let s = self.params.scale(style);
         let ss = style.into_script();
-        let simple_character_nucleus =
-            matches!(&base.content, BoxContent::Glyph { .. });
+        let simple_character_nucleus = matches!(&base.content, BoxContent::Glyph { .. });
         let after = &self.params.space_after_script * &self.params.scale(style);
         let mut sup_shift = Dim::zero();
         let mut sub_shift = Dim::zero();
@@ -900,17 +839,13 @@ impl Engine<'_> {
         };
         if simple_character_nucleus {
             if let Some(sp) = &sup_laid {
-                let min_bottom =
-                    &self.script_placement.superscript_bottom_min * &s;
-                sup_shift =
-                    sup_shift.max(&(&sp.depth + &min_bottom));
+                let min_bottom = &self.script_placement.superscript_bottom_min * &s;
+                sup_shift = sup_shift.max(&(&sp.depth + &min_bottom));
             }
 
             if let Some(sb) = &sub_laid {
-                let max_top =
-                    &self.script_placement.subscript_top_max * &s;
-                sub_shift =
-                    sub_shift.max(&(&sb.height - &max_top).clamp_nonneg());
+                let max_top = &self.script_placement.subscript_top_max * &s;
+                sub_shift = sub_shift.max(&(&sb.height - &max_top).clamp_nonneg());
             }
         }
 
@@ -983,42 +918,28 @@ impl Engine<'_> {
             return;
         };
 
-        let gap =
-            &*sup_shift + &*sub_shift - &sp.depth - &sb.height;
-        let min_gap =
-            &self.params.sub_superscript_gap_min * scale;
+        let gap = &*sup_shift + &*sub_shift - &sp.depth - &sb.height;
+        let min_gap = &self.params.sub_superscript_gap_min * scale;
 
         if matches!(gap.cmp(&min_gap), Some(Ordering::Less)) {
-            *sub_shift =
-                &*sub_shift + (&min_gap - &gap);
+            *sub_shift = &*sub_shift + (&min_gap - &gap);
         }
 
         if simple_character_nucleus {
-            let current_bottom =
-                &*sup_shift - &sp.depth;
+            let current_bottom = &*sup_shift - &sp.depth;
             let target_bottom =
-                &self
-                    .script_placement
-                    .superscript_bottom_max_with_subscript
-                * scale;
+                &self.script_placement.superscript_bottom_max_with_subscript * scale;
 
-            if matches!(
-                current_bottom.cmp(&target_bottom),
-                Some(Ordering::Less)
-            ) {
-                let raise =
-                    &target_bottom - &current_bottom;
-                let lowered_subscript =
-                    &*sub_shift - &raise;
+            if matches!(current_bottom.cmp(&target_bottom), Some(Ordering::Less)) {
+                let raise = &target_bottom - &current_bottom;
+                let lowered_subscript = &*sub_shift - &raise;
 
                 if !matches!(
                     lowered_subscript.cmp(&Dim::zero()),
                     Some(Ordering::Less) | None
                 ) {
-                    *sup_shift =
-                        &*sup_shift + &raise;
-                    *sub_shift =
-                        lowered_subscript;
+                    *sup_shift = &*sup_shift + &raise;
+                    *sub_shift = lowered_subscript;
                 }
             }
         }
@@ -1049,8 +970,7 @@ impl Engine<'_> {
         let factor_target =
             &max_distance * &Dim::ratio(TEX_DELIMITER_FACTOR_NUM, TEX_DELIMITER_FACTOR_DEN);
         let shortfall_target =
-            (&(&max_distance * &Dim::from_i64(2)) - &self.delimiter_shortfall)
-                .clamp_nonneg();
+            (&(&max_distance * &Dim::from_i64(2)) - &self.delimiter_shortfall).clamp_nonneg();
         factor_target.max(&shortfall_target)
     }
 
@@ -1274,55 +1194,36 @@ impl Engine<'_> {
         // then use the OpenType baseline-drop constants for side scripts.
         // Italic correction offsets only the superscript branch and is
         // removed from the common operator width.
-        let axis =
-            &self.params.axis_height * &scale;
-        let center =
-            &(&op.height - &op.depth) / &Dim::from_i64(2);
-        op.shift =
-            &axis - &center;
+        let axis = &self.params.axis_height * &scale;
+        let center = &(&op.height - &op.depth) / &Dim::from_i64(2);
+        op.shift = &axis - &center;
 
-        let base_height =
-            (&op.height + &op.shift).clamp_nonneg();
-        let base_depth =
-            (&op.depth - &op.shift).clamp_nonneg();
+        let base_height = (&op.height + &op.shift).clamp_nonneg();
+        let base_depth = (&op.depth - &op.shift).clamp_nonneg();
 
-        let mut sup_shift =
-            sup_laid.as_ref().map_or_else(Dim::zero, |sup_box| {
-                let standard = if style.is_cramped() {
-                    &self.params.superscript_shift_up_cramped * &scale
-                } else {
-                    &self.params.superscript_shift_up * &scale
-                };
-                let from_base =
-                    &base_height
-                        - &(&self
-                            .script_placement
-                            .superscript_baseline_drop_max
-                            * &scale);
-                let from_bottom =
-                    &sup_box.depth
-                        + &(&self.script_placement.superscript_bottom_min * &scale);
+        let mut sup_shift = sup_laid.as_ref().map_or_else(Dim::zero, |sup_box| {
+            let standard = if style.is_cramped() {
+                &self.params.superscript_shift_up_cramped * &scale
+            } else {
+                &self.params.superscript_shift_up * &scale
+            };
+            let from_base =
+                &base_height - &(&self.script_placement.superscript_baseline_drop_max * &scale);
+            let from_bottom =
+                &sup_box.depth + &(&self.script_placement.superscript_bottom_min * &scale);
 
-                standard.max(&from_base).max(&from_bottom)
-            });
+            standard.max(&from_base).max(&from_bottom)
+        });
 
-        let mut sub_shift =
-            sub_laid.as_ref().map_or_else(Dim::zero, |sub_box| {
-                let standard =
-                    &self.params.subscript_shift_down * &scale;
-                let from_base =
-                    &base_depth
-                        + &(&self
-                            .script_placement
-                            .subscript_baseline_drop_min
-                            * &scale);
-                let from_top =
-                    (&sub_box.height
-                        - &(&self.script_placement.subscript_top_max * &scale))
-                        .clamp_nonneg();
+        let mut sub_shift = sub_laid.as_ref().map_or_else(Dim::zero, |sub_box| {
+            let standard = &self.params.subscript_shift_down * &scale;
+            let from_base =
+                &base_depth + &(&self.script_placement.subscript_baseline_drop_min * &scale);
+            let from_top = (&sub_box.height - &(&self.script_placement.subscript_top_max * &scale))
+                .clamp_nonneg();
 
-                standard.max(&from_base).max(&from_top)
-            });
+            standard.max(&from_base).max(&from_top)
+        });
 
         self.enforce_paired_script_constraints(
             sup_laid.as_ref(),
@@ -1333,66 +1234,34 @@ impl Engine<'_> {
             &mut sub_shift,
         );
 
-        let italic =
-            op.italic.clone();
-        let mut slot_width =
-            Dim::zero();
-        let mut slot_height =
-            Dim::zero();
-        let mut slot_depth =
-            Dim::zero();
-        let mut slot_children =
-            Vec::new();
+        let italic = op.italic.clone();
+        let mut slot_width = Dim::zero();
+        let mut slot_height = Dim::zero();
+        let mut slot_depth = Dim::zero();
+        let mut slot_children = Vec::new();
 
         if let Some(sup_box) = sup_laid {
-            let mut branch =
-                sup_box.with_shift(sup_shift);
+            let mut branch = sup_box.with_shift(sup_shift);
 
             if !italic.is_zero() {
-                let vertical_shift =
-                    branch.shift.clone();
-                branch.shift =
-                    Dim::zero();
-                branch =
-                    MathBox::hpack(vec![
-                        MathBox::kern(italic.clone()),
-                        branch,
-                    ]);
-                branch.shift =
-                    vertical_shift;
+                let vertical_shift = branch.shift.clone();
+                branch.shift = Dim::zero();
+                branch = MathBox::hpack(vec![MathBox::kern(italic.clone()), branch]);
+                branch.shift = vertical_shift;
             }
 
-            slot_width =
-                slot_width.max(&branch.width);
-            slot_height =
-                slot_height.max(
-                    &(&branch.height + &branch.shift)
-                        .clamp_nonneg(),
-                );
-            slot_depth =
-                slot_depth.max(
-                    &(&branch.depth - &branch.shift)
-                        .clamp_nonneg(),
-                );
+            slot_width = slot_width.max(&branch.width);
+            slot_height = slot_height.max(&(&branch.height + &branch.shift).clamp_nonneg());
+            slot_depth = slot_depth.max(&(&branch.depth - &branch.shift).clamp_nonneg());
             slot_children.push(branch);
         }
 
         if let Some(sub_box) = sub_laid {
-            let branch =
-                sub_box.with_shift(-sub_shift);
+            let branch = sub_box.with_shift(-sub_shift);
 
-            slot_width =
-                slot_width.max(&branch.width);
-            slot_height =
-                slot_height.max(
-                    &(&branch.height + &branch.shift)
-                        .clamp_nonneg(),
-                );
-            slot_depth =
-                slot_depth.max(
-                    &(&branch.depth - &branch.shift)
-                        .clamp_nonneg(),
-                );
+            slot_width = slot_width.max(&branch.width);
+            slot_height = slot_height.max(&(&branch.height + &branch.shift).clamp_nonneg());
+            slot_depth = slot_depth.max(&(&branch.depth - &branch.shift).clamp_nonneg());
             slot_children.push(branch);
         }
 
@@ -1405,11 +1274,9 @@ impl Engine<'_> {
             content: BoxContent::Overlap(slot_children),
         };
 
-        let after =
-            &self.params.space_after_script * &scale;
+        let after = &self.params.space_after_script * &scale;
 
-        let mut children =
-            vec![op];
+        let mut children = vec![op];
 
         if !italic.is_zero() {
             children.push(MathBox::kern(-italic));
@@ -1632,16 +1499,8 @@ impl Engine<'_> {
         let stretchy = is_stretchy_accent(kind);
         let hat_tilde = is_hat_tilde_accent(kind);
 
-        if matches!(
-            kind,
-            AccentKind::WideHat | AccentKind::WideTilde
-        ) {
-            acc = self.wide_hat_tilde_glyph(
-                acc,
-                &b.width,
-                kind,
-                style,
-            )?;
+        if matches!(kind, AccentKind::WideHat | AccentKind::WideTilde) {
+            acc = self.wide_hat_tilde_glyph(acc, &b.width, kind, style)?;
         } else if stretchy {
             acc = self.stretch_h(acc, &b.width, style)?;
         }
@@ -1653,15 +1512,10 @@ impl Engine<'_> {
             });
         }
 
-        let nucleus_width =
-            hat_tilde_nucleus_width(&b, kind);
+        let nucleus_width = hat_tilde_nucleus_width(&b, kind);
 
         let x_off = if hat_tilde {
-            self.hat_tilde_accent_x_off(
-                &b,
-                &acc,
-                style,
-            )
+            self.hat_tilde_accent_x_off(&b, &acc, style)
         } else if stretchy {
             let extra = &b.width - &acc.width;
             &extra / &Dim::from_i64(2)
@@ -1672,22 +1526,13 @@ impl Engine<'_> {
         // Hat/tilde compatibility keeps AccentBaseHeight even when
         // the recursively laid-out nucleus is cramped. The generic
         // path retains the 2.x flattened-height rule for other accents.
-        let raise =
-            if hat_tilde {
-                self.hat_tilde_accent_raise(
-                    &b,
-                    style,
-                )
-            } else {
-                self.accent_raise(
-                    &b,
-                    kind,
-                    style,
-                )
-            };
+        let raise = if hat_tilde {
+            self.hat_tilde_accent_raise(&b, style)
+        } else {
+            self.accent_raise(&b, kind, style)
+        };
 
-        let mut placed =
-            overlay_accent(b, acc, x_off, raise);
+        let mut placed = overlay_accent(b, acc, x_off, raise);
 
         if let Some(width) = nucleus_width {
             placed.width = width;
@@ -1728,8 +1573,7 @@ impl Engine<'_> {
             _ => return Ok(fixed),
         };
 
-        let seed =
-            self.font.glyph(seed_ch)?;
+        let seed = self.font.glyph(seed_ch)?;
 
         let mut selected = fixed;
         let mut selected_width = selected.width.clone();
@@ -1777,41 +1621,18 @@ impl Engine<'_> {
     // MATH TopAccentAttachment is expressed in font em. Box
     // coordinates are already scaled to the current math style,
     // therefore the attachment coordinate must use the same scale.
-    fn hat_tilde_accent_x_off(
-        &self,
-        base: &MathBox,
-        acc: &MathBox,
-        style: MathStyle,
-    ) -> Dim {
-        let scale =
-            self.params.scale(style);
+    fn hat_tilde_accent_x_off(&self, base: &MathBox, acc: &MathBox, style: MathStyle) -> Dim {
+        let scale = self.params.scale(style);
 
-        let two =
-            Dim::from_i64(2);
+        let two = Dim::from_i64(2);
 
         let base_att = single_glyph_id(base)
-            .and_then(
-                |glyph_id| {
-                    self.font
-                        .top_accent_attachment(glyph_id)
-                },
-            )
-            .map_or_else(
-                || &base.width / &two,
-                |value| value * &scale,
-            );
+            .and_then(|glyph_id| self.font.top_accent_attachment(glyph_id))
+            .map_or_else(|| &base.width / &two, |value| value * &scale);
 
         let acc_att = single_glyph_id(acc)
-            .and_then(
-                |glyph_id| {
-                    self.font
-                        .top_accent_attachment(glyph_id)
-                },
-            )
-            .map_or_else(
-                || &acc.width / &two,
-                |value| value * &scale,
-            );
+            .and_then(|glyph_id| self.font.top_accent_attachment(glyph_id))
+            .map_or_else(|| &acc.width / &two, |value| value * &scale);
 
         &base_att - &acc_att
     }
@@ -1819,17 +1640,10 @@ impl Engine<'_> {
     // AccentBaseHeight is the largest base ink height that needs no
     // vertical raise. Hat/tilde keep this rule for nested cramped
     // nuclei instead of switching to FlattenedAccentBaseHeight.
-    fn hat_tilde_accent_raise(
-        &self,
-        base: &MathBox,
-        style: MathStyle,
-    ) -> Dim {
-        let base_height =
-            &self.params.accent_base_height
-                * &self.params.scale(style);
+    fn hat_tilde_accent_raise(&self, base: &MathBox, style: MathStyle) -> Dim {
+        let base_height = &self.params.accent_base_height * &self.params.scale(style);
 
-        (&base.height - &base_height)
-            .clamp_nonneg()
+        (&base.height - &base_height).clamp_nonneg()
     }
     fn cancelto(&self, value: &MathNode, expr: &MathNode, style: MathStyle) -> Result<Item, Error> {
         let b = self.layout(expr, style)?;
@@ -2031,11 +1845,7 @@ impl Engine<'_> {
         })
     }
 
-    fn substack(
-        &self,
-        lines: &[MathNode],
-        style: MathStyle,
-    ) -> Result<Item, Error> {
+    fn substack(&self, lines: &[MathNode], style: MathStyle) -> Result<Item, Error> {
         if lines.is_empty() {
             return Ok(Item {
                 class: Some(AtomKind::Ord),
@@ -2045,87 +1855,42 @@ impl Engine<'_> {
 
         // AMSMath subarray rows are always Script style,
         // even when the surrounding expression is already Script.
-        let mut laid =
-            Vec::with_capacity(lines.len());
+        let mut laid = Vec::with_capacity(lines.len());
 
         for line in lines {
-            laid.push(
-                self.layout(
-                    line,
-                    MathStyle::Script,
-                )?,
-            );
+            laid.push(self.layout(line, MathStyle::Script)?);
         }
 
-        let width =
-            laid.iter().fold(
-                Dim::zero(),
-                |current, row| {
-                    current.max(&row.width)
-                },
-            );
+        let width = laid
+            .iter()
+            .fold(Dim::zero(), |current, row| current.max(&row.width));
 
-        let rows: Vec<_> =
-            laid.into_iter()
-                .map(
-                    |row| {
-                        center_in(
-                            row,
-                            &width,
-                        )
-                    },
-                )
-                .collect();
+        let rows: Vec<_> = laid.into_iter().map(|row| center_in(row, &width)).collect();
 
-        let gaps =
-            self.substack_interrow_gaps(
-                &rows,
-            );
+        let gaps = self.substack_interrow_gaps(&rows);
 
-        let stack =
-            self.center_amsmath_stack(
-                rows,
-                &gaps,
-                style,
-            );
+        let stack = self.center_amsmath_stack(rows, &gaps, style);
 
         // Large-operator limit placement overwrites the outer
         // MathBox::shift. Keep substack vcentering on the child.
         Ok(Item {
             class: Some(AtomKind::Ord),
-            bx: shifted_hpack(
-                vec![stack],
-            ),
+            bx: shifted_hpack(vec![stack]),
         })
     }
 
-    fn substack_interrow_gaps(
-        &self,
-        rows: &[MathBox],
-    ) -> Vec<Dim> {
+    fn substack_interrow_gaps(&self, rows: &[MathBox]) -> Vec<Dim> {
         rows.windows(2)
             .map(|pair| {
-                let candidate =
-                    &(&self.substack.baseline_skip
-                        - &pair[0].depth)
-                        - &pair[1].height;
+                let candidate = &(&self.substack.baseline_skip - &pair[0].depth) - &pair[1].height;
 
                 if candidate
-                    .cmp(
-                        &self.substack.line_skip,
-                    )
-                    .is_some_and(
-                        |ordering| {
-                            ordering
-                                != Ordering::Less
-                        },
-                    )
+                    .cmp(&self.substack.line_skip)
+                    .is_some_and(|ordering| ordering != Ordering::Less)
                 {
                     candidate
                 } else {
-                    self.substack
-                        .line_skip
-                        .clone()
+                    self.substack.line_skip.clone()
                 }
             })
             .collect()
@@ -2173,52 +1938,26 @@ impl Engine<'_> {
     ) -> Result<Item, Error> {
         let data = data_cells(rows)?;
 
-        let cells =
-            self.layout_environment_rows(
-                &data,
-                MathStyle::Text,
-            )?;
+        let cells = self.layout_environment_rows(&data, MathStyle::Text)?;
 
-        let column_gap =
-            self.tex_points_in_root_em(
-                TEX_ARRAY_COLSEP_PT * 2,
-            );
+        let column_gap = self.tex_points_in_root_em(TEX_ARRAY_COLSEP_PT * 2);
 
-        let baseline_skip =
-            self.tex_points_in_root_em(TEX_BASELINE_SKIP_PT);
-        let line_skip =
-            self.tex_points_in_root_em(TEX_LINE_SKIP_PT);
+        let baseline_skip = self.tex_points_in_root_em(TEX_BASELINE_SKIP_PT);
+        let line_skip = self.tex_points_in_root_em(TEX_LINE_SKIP_PT);
 
-        let packed_rows =
-            self.build_amsmath_rows(
-                cells,
-                &column_gap,
-                &baseline_skip,
-                |_| ColSpec::Center,
-                |column| column > 0,
-            );
+        let packed_rows = self.build_amsmath_rows(
+            cells,
+            &column_gap,
+            &baseline_skip,
+            |_| ColSpec::Center,
+            |column| column > 0,
+        );
 
-        let gaps =
-            self.tex_interrow_gaps(
-                &packed_rows,
-                &baseline_skip,
-                &line_skip,
-                &Dim::zero(),
-            );
+        let gaps = self.tex_interrow_gaps(&packed_rows, &baseline_skip, &line_skip, &Dim::zero());
 
-        let stack =
-            self.center_amsmath_stack(
-                packed_rows,
-                &gaps,
-                style,
-            );
+        let stack = self.center_amsmath_stack(packed_rows, &gaps, style);
 
-        let bx =
-            self.wrap_amsmath_stack(
-                stack,
-                matrix_delims(style_m),
-                style,
-            )?;
+        let bx = self.wrap_amsmath_stack(stack, matrix_delims(style_m), style)?;
 
         Ok(Item {
             class: Some(AtomKind::Inner),
@@ -2226,55 +1965,28 @@ impl Engine<'_> {
         })
     }
 
-    fn cases_env(
-        &self,
-        rows: &[EnvRow],
-        style: MathStyle,
-    ) -> Result<Item, Error> {
+    fn cases_env(&self, rows: &[EnvRow], style: MathStyle) -> Result<Item, Error> {
         let data = data_cells(rows)?;
 
-        let cells =
-            self.layout_environment_rows(
-                &data,
-                MathStyle::Text,
-            )?;
+        let cells = self.layout_environment_rows(&data, MathStyle::Text)?;
 
-        let baseline_skip =
-            self.tex_points_in_root_em(TEX_BASELINE_SKIP_PT);
-        let line_skip =
-            self.tex_points_in_root_em(TEX_LINE_SKIP_PT);
+        let baseline_skip = self.tex_points_in_root_em(TEX_BASELINE_SKIP_PT);
+        let line_skip = self.tex_points_in_root_em(TEX_LINE_SKIP_PT);
         let array_stretch = Dim::ratio(6, 5);
 
-        let packed_rows =
-            self.build_amsmath_rows(
-                cells,
-                &Dim::one(),
-                &(&baseline_skip * &array_stretch),
-                |_| ColSpec::Left,
-                |column| column > 0,
-            );
+        let packed_rows = self.build_amsmath_rows(
+            cells,
+            &Dim::one(),
+            &(&baseline_skip * &array_stretch),
+            |_| ColSpec::Left,
+            |column| column > 0,
+        );
 
-        let gaps =
-            self.tex_interrow_gaps(
-                &packed_rows,
-                &baseline_skip,
-                &line_skip,
-                &Dim::zero(),
-            );
+        let gaps = self.tex_interrow_gaps(&packed_rows, &baseline_skip, &line_skip, &Dim::zero());
 
-        let stack =
-            self.center_amsmath_stack(
-                packed_rows,
-                &gaps,
-                style,
-            );
+        let stack = self.center_amsmath_stack(packed_rows, &gaps, style);
 
-        let bx =
-            self.wrap_amsmath_stack(
-                stack,
-                (Some('{'), None),
-                style,
-            )?;
+        let bx = self.wrap_amsmath_stack(stack, (Some('{'), None), style)?;
 
         Ok(Item {
             class: Some(AtomKind::Inner),
@@ -2282,60 +1994,28 @@ impl Engine<'_> {
         })
     }
 
-    fn amsmath_aligned(
-        &self,
-        rows: &[EnvRow],
-        style: MathStyle,
-    ) -> Result<Item, Error> {
-        if rows
-            .iter()
-            .any(|row| !matches!(row, EnvRow::Cells { .. }))
-        {
-            return self.align_env(
-                rows,
-                style,
-                false,
-            );
+    fn amsmath_aligned(&self, rows: &[EnvRow], style: MathStyle) -> Result<Item, Error> {
+        if rows.iter().any(|row| !matches!(row, EnvRow::Cells { .. })) {
+            return self.align_env(rows, style, false);
         }
 
-        let mut cells =
-            Vec::with_capacity(rows.len());
+        let mut cells = Vec::with_capacity(rows.len());
 
         for row in rows {
-            let EnvRow::Cells {
-                cells: row,
-                ..
-            } = row
-            else {
-                unreachable!(
-                    "non-cell aligned rows handled above"
-                );
+            let EnvRow::Cells { cells: row, .. } = row else {
+                unreachable!("non-cell aligned rows handled above");
             };
 
-            let mut laid =
-                Vec::with_capacity(row.len());
+            let mut laid = Vec::with_capacity(row.len());
 
-            for (column, cell) in
-                row.iter().enumerate()
-            {
-                let mut bx =
-                    self.layout(
-                        cell,
-                        MathStyle::Display,
-                    )?;
+            for (column, cell) in row.iter().enumerate() {
+                let mut bx = self.layout(cell, MathStyle::Display)?;
 
                 if column % 2 == 1 {
-                    let leading =
-                        self.aligned_leading_ord_space(
-                            cell,
-                        )?;
+                    let leading = self.aligned_leading_ord_space(cell)?;
 
                     if !leading.is_zero() {
-                        bx =
-                            MathBox::hpack(vec![
-                                MathBox::kern(leading),
-                                bx,
-                            ]);
+                        bx = MathBox::hpack(vec![MathBox::kern(leading), bx]);
                     }
                 }
 
@@ -2345,46 +2025,27 @@ impl Engine<'_> {
             cells.push(laid);
         }
 
-        let pair_gap =
-            self.tex_points_in_root_em(
-                TEX_MIN_ALIGN_SEP_PT,
-            );
+        let pair_gap = self.tex_points_in_root_em(TEX_MIN_ALIGN_SEP_PT);
 
-        let packed_rows =
-            self.build_amsmath_rows(
-                cells,
-                &pair_gap,
-                &self.tex_points_in_root_em(TEX_BASELINE_SKIP_PT),
-                |column| {
-                    if column % 2 == 0 {
-                        ColSpec::Right
-                    } else {
-                        ColSpec::Left
-                    }
-                },
-                |column| {
-                    column > 0 && column % 2 == 0
-                },
-            );
+        let packed_rows = self.build_amsmath_rows(
+            cells,
+            &pair_gap,
+            &self.tex_points_in_root_em(TEX_BASELINE_SKIP_PT),
+            |column| {
+                if column % 2 == 0 {
+                    ColSpec::Right
+                } else {
+                    ColSpec::Left
+                }
+            },
+            |column| column > 0 && column % 2 == 0,
+        );
 
-        let gaps =
-            self.aligned_interrow_gaps(
-                &packed_rows,
-            );
+        let gaps = self.aligned_interrow_gaps(&packed_rows);
 
-        let stack =
-            self.center_amsmath_stack(
-                packed_rows,
-                &gaps,
-                style,
-            );
+        let stack = self.center_amsmath_stack(packed_rows, &gaps, style);
 
-        let bx =
-            self.wrap_amsmath_stack(
-                stack,
-                (None, None),
-                style,
-            )?;
+        let bx = self.wrap_amsmath_stack(stack, (None, None), style)?;
 
         Ok(Item {
             class: Some(AtomKind::Inner),
@@ -2392,12 +2053,8 @@ impl Engine<'_> {
         })
     }
 
-    fn tex_points_in_root_em(
-        &self,
-        points: i64,
-    ) -> Dim {
-        Dim::from_i64(points)
-            / &self.root_em_size_pt
+    fn tex_points_in_root_em(&self, points: i64) -> Dim {
+        Dim::from_i64(points) / &self.root_em_size_pt
     }
 
     fn layout_environment_rows(
@@ -2408,74 +2065,37 @@ impl Engine<'_> {
         rows.iter()
             .map(|row| {
                 row.iter()
-                    .map(
-                        |cell| {
-                            self.layout(
-                                cell,
-                                style,
-                            )
-                        },
-                    )
+                    .map(|cell| self.layout(cell, style))
                     .collect::<Result<Vec<_>, _>>()
             })
             .collect()
     }
 
-    fn aligned_leading_ord_space(
-        &self,
-        cell: &MathNode,
-    ) -> Result<Dim, Error> {
-        let bare =
-            self.layout(
-                cell,
-                MathStyle::Display,
-            )?;
+    fn aligned_leading_ord_space(&self, cell: &MathNode) -> Result<Dim, Error> {
+        let bare = self.layout(cell, MathStyle::Display)?;
 
-        let empty_ord =
-            MathNode::Row(Vec::new());
+        let empty_ord = MathNode::Row(Vec::new());
 
-        let prefixed =
-            match cell {
-                MathNode::Row(items) => {
-                    let mut with_ord =
-                        Vec::with_capacity(
-                            items
-                                .len()
-                                .saturating_add(1),
-                        );
+        let prefixed = match cell {
+            MathNode::Row(items) => {
+                let mut with_ord = Vec::with_capacity(items.len().saturating_add(1));
 
-                    with_ord.push(empty_ord);
+                with_ord.push(empty_ord);
 
-                    with_ord.extend(
-                        items.iter().cloned(),
-                    );
+                with_ord.extend(items.iter().cloned());
 
-                    MathNode::Row(with_ord)
-                }
+                MathNode::Row(with_ord)
+            }
 
-                _ => {
-                    MathNode::Row(vec![
-                        empty_ord,
-                        cell.clone(),
-                    ])
-                }
-            };
+            _ => MathNode::Row(vec![empty_ord, cell.clone()]),
+        };
 
-        let with_ord =
-            self.layout(
-                &prefixed,
-                MathStyle::Display,
-            )?;
+        let with_ord = self.layout(&prefixed, MathStyle::Display)?;
 
-        Ok(
-            (&with_ord.width - &bare.width)
-                .clamp_nonneg(),
-        )
+        Ok((&with_ord.width - &bare.width).clamp_nonneg())
     }
 
-    fn amsmath_strut(
-        stretch: &Dim,
-    ) -> MathBox {
+    fn amsmath_strut(stretch: &Dim) -> MathBox {
         MathBox::rule(
             Dim::zero(),
             &Dim::ratio(7, 10) * stretch,
@@ -2491,66 +2111,32 @@ impl Engine<'_> {
         align_for_column: impl Fn(usize) -> ColSpec,
         gap_before_column: impl Fn(usize) -> bool,
     ) -> Vec<MathBox> {
-        let ncols =
-            rows.iter()
-                .map(Vec::len)
-                .max()
-                .unwrap_or(0);
+        let ncols = rows.iter().map(Vec::len).max().unwrap_or(0);
 
-        let mut widths =
-            vec![Dim::zero(); ncols];
+        let mut widths = vec![Dim::zero(); ncols];
 
         for row in &rows {
-            for (column, cell) in
-                row.iter().enumerate()
-            {
-                widths[column] =
-                    widths[column]
-                        .max(&cell.width);
+            for (column, cell) in row.iter().enumerate() {
+                widths[column] = widths[column].max(&cell.width);
             }
         }
 
         rows.into_iter()
             .map(|mut row| {
                 while row.len() < ncols {
-                    row.push(
-                        MathBox::empty(),
-                    );
+                    row.push(MathBox::empty());
                 }
 
-                let mut parts =
-                    Vec::with_capacity(
-                        row.len()
-                            .saturating_mul(2)
-                            .saturating_add(1),
-                    );
+                let mut parts = Vec::with_capacity(row.len().saturating_mul(2).saturating_add(1));
 
-                parts.push(
-                    Self::amsmath_strut(
-                        strut_stretch,
-                    ),
-                );
+                parts.push(Self::amsmath_strut(strut_stretch));
 
-                for (column, cell) in
-                    row.into_iter().enumerate()
-                {
+                for (column, cell) in row.into_iter().enumerate() {
                     if gap_before_column(column) {
-                        parts.push(
-                            MathBox::kern(
-                                gap.clone(),
-                            ),
-                        );
+                        parts.push(MathBox::kern(gap.clone()));
                     }
 
-                    parts.push(
-                        align_in(
-                            cell,
-                            &widths[column],
-                            align_for_column(
-                                column,
-                            ),
-                        ),
-                    );
+                    parts.push(align_in(cell, &widths[column], align_for_column(column)));
                 }
 
                 MathBox::hpack(parts)
@@ -2558,23 +2144,12 @@ impl Engine<'_> {
             .collect()
     }
 
-    fn aligned_interrow_gaps(
-        &self,
-        rows: &[MathBox],
-    ) -> Vec<Dim> {
-        let jot =
-            self.tex_points_in_root_em(TEX_JOT_PT);
-        let baseline_skip =
-            &self.tex_points_in_root_em(TEX_BASELINE_SKIP_PT) + &jot;
-        let line_skip =
-            &self.tex_points_in_root_em(TEX_LINE_SKIP_PT) + &jot;
+    fn aligned_interrow_gaps(&self, rows: &[MathBox]) -> Vec<Dim> {
+        let jot = self.tex_points_in_root_em(TEX_JOT_PT);
+        let baseline_skip = &self.tex_points_in_root_em(TEX_BASELINE_SKIP_PT) + &jot;
+        let line_skip = &self.tex_points_in_root_em(TEX_LINE_SKIP_PT) + &jot;
 
-        self.tex_interrow_gaps(
-            rows,
-            &baseline_skip,
-            &line_skip,
-            &jot,
-        )
+        self.tex_interrow_gaps(rows, &baseline_skip, &line_skip, &jot)
     }
 
     // TeX appends \baselineskip - prevdepth - height when that glue is
@@ -2588,13 +2163,9 @@ impl Engine<'_> {
     ) -> Vec<Dim> {
         rows.windows(2)
             .map(|pair| {
-                let candidate =
-                    &(baseline_skip - &pair[0].depth) - &pair[1].height;
+                let candidate = &(baseline_skip - &pair[0].depth) - &pair[1].height;
 
-                if matches!(
-                    candidate.cmp(line_skip_limit),
-                    Some(Ordering::Less)
-                ) {
+                if matches!(candidate.cmp(line_skip_limit), Some(Ordering::Less)) {
                     line_skip.clone()
                 } else {
                     candidate
@@ -2603,38 +2174,15 @@ impl Engine<'_> {
             .collect()
     }
 
-    fn center_amsmath_stack(
-        &self,
-        rows: Vec<MathBox>,
-        gaps: &[Dim],
-        style: MathStyle,
-    ) -> MathBox {
-        debug_assert_eq!(
-            gaps.len(),
-            rows.len().saturating_sub(1),
-        );
+    fn center_amsmath_stack(&self, rows: Vec<MathBox>, gaps: &[Dim], style: MathStyle) -> MathBox {
+        debug_assert_eq!(gaps.len(), rows.len().saturating_sub(1),);
 
-        let mut children =
-            Vec::with_capacity(
-                rows.len()
-                    .saturating_mul(2)
-                    .saturating_sub(1),
-            );
+        let mut children = Vec::with_capacity(rows.len().saturating_mul(2).saturating_sub(1));
 
-        for (row_index, row) in
-            rows.into_iter().enumerate()
-        {
-            if let Some(gap) =
-                row_index
-                    .checked_sub(1)
-                    .and_then(
-                        |index| gaps.get(index),
-                    )
-            {
+        for (row_index, row) in rows.into_iter().enumerate() {
+            if let Some(gap) = row_index.checked_sub(1).and_then(|index| gaps.get(index)) {
                 if !gap.is_zero() {
-                    children.push(
-                        sep_row(gap.clone()),
-                    );
+                    children.push(sep_row(gap.clone()));
                 }
             }
 
@@ -2645,22 +2193,15 @@ impl Engine<'_> {
             return MathBox::empty();
         }
 
-        let mut stack =
-            MathBox::vpack(children);
+        let mut stack = MathBox::vpack(children);
 
-        let span =
-            &stack.height + &stack.depth;
+        let span = &stack.height + &stack.depth;
 
-        let axis =
-            &self.params.axis_height
-                * &self.params.scale(style);
+        let axis = &self.params.axis_height * &self.params.scale(style);
 
-        let desired_height =
-            &(&span / &Dim::from_i64(2))
-                + &axis;
+        let desired_height = &(&span / &Dim::from_i64(2)) + &axis;
 
-        stack.shift =
-            &desired_height - &stack.height;
+        stack.shift = &desired_height - &stack.height;
 
         stack
     }
@@ -2671,61 +2212,29 @@ impl Engine<'_> {
         delims: (Option<char>, Option<char>),
         style: MathStyle,
     ) -> Result<MathBox, Error> {
-        let scale =
-            self.params.scale(style);
+        let scale = self.params.scale(style);
 
-        let axis =
-            &self.params.axis_height * &scale;
+        let axis = &self.params.axis_height * &scale;
 
-        let effective_height =
-            (&stack.height + &stack.shift)
-                .clamp_nonneg();
+        let effective_height = (&stack.height + &stack.shift).clamp_nonneg();
 
-        let effective_depth =
-            (&stack.depth - &stack.shift)
-                .clamp_nonneg();
+        let effective_depth = (&stack.depth - &stack.shift).clamp_nonneg();
 
-        let needed =
-            self.delimiter_target(
-                &effective_height,
-                &effective_depth,
-                &axis,
-            );
+        let needed = self.delimiter_target(&effective_height, &effective_depth, &axis);
 
-        let mut children =
-            Vec::with_capacity(3);
+        let mut children = Vec::with_capacity(3);
 
         if let Some(ch) = delims.0 {
-            children.push(
-                self.center_delimiter(
-                    self.sized_glyph(
-                        ch,
-                        &needed,
-                        style,
-                    )?,
-                    &axis,
-                ),
-            );
+            children.push(self.center_delimiter(self.sized_glyph(ch, &needed, style)?, &axis));
         }
 
         children.push(stack);
 
         if let Some(ch) = delims.1 {
-            children.push(
-                self.center_delimiter(
-                    self.sized_glyph(
-                        ch,
-                        &needed,
-                        style,
-                    )?,
-                    &axis,
-                ),
-            );
+            children.push(self.center_delimiter(self.sized_glyph(ch, &needed, style)?, &axis));
         }
 
-        Ok(
-            shifted_hpack(children),
-        )
+        Ok(shifted_hpack(children))
     }
 
     fn align_env(&self, rows: &[EnvRow], style: MathStyle, numbered: bool) -> Result<Item, Error> {
@@ -3071,8 +2580,6 @@ impl Engine<'_> {
             bx: MathBox::vpack(packed),
         })
     }
-
-
 }
 
 fn shifted_hpack(children: Vec<MathBox>) -> MathBox {
@@ -3303,28 +2810,19 @@ fn overlay_accent(base: MathBox, acc: MathBox, x_off: Dim, raise: Dim) -> MathBo
     }
 }
 
-fn single_glyph_id(
-    b: &MathBox,
-) -> Option<u16> {
+fn single_glyph_id(b: &MathBox) -> Option<u16> {
     match &b.content {
-        BoxContent::Glyph { glyph_id, .. } => {
-            Some(*glyph_id)
-        }
+        BoxContent::Glyph { glyph_id, .. } => Some(*glyph_id),
 
-        BoxContent::HList(children)
-        | BoxContent::VList(children) => {
+        BoxContent::HList(children) | BoxContent::VList(children) => {
             let mut found = None;
 
             for child in children {
-                if matches!(
-                    &child.content,
-                    BoxContent::Empty | BoxContent::Kern(_)
-                ) {
+                if matches!(&child.content, BoxContent::Empty | BoxContent::Kern(_)) {
                     continue;
                 }
 
-                let glyph_id =
-                    single_glyph_id(child)?;
+                let glyph_id = single_glyph_id(child)?;
 
                 if found.replace(glyph_id).is_some() {
                     return None;
@@ -3336,9 +2834,7 @@ fn single_glyph_id(
 
         BoxContent::Color(_, inner)
         | BoxContent::BackColor(_, inner)
-        | BoxContent::Frame { inner, .. } => {
-            single_glyph_id(inner)
-        }
+        | BoxContent::Frame { inner, .. } => single_glyph_id(inner),
 
         _ => None,
     }
@@ -3386,39 +2882,26 @@ fn is_tex_accent(kind: AccentKind) -> bool {
     )
 }
 
-fn is_hat_tilde_accent(
-    kind: AccentKind,
-) -> bool {
+fn is_hat_tilde_accent(kind: AccentKind) -> bool {
     matches!(
         kind,
-        AccentKind::Hat
-            | AccentKind::WideHat
-            | AccentKind::Tilde
-            | AccentKind::WideTilde
+        AccentKind::Hat | AccentKind::WideHat | AccentKind::Tilde | AccentKind::WideTilde
     )
 }
 
 // TeX gives hat/tilde accent noads the horizontal width of their
 // nucleus and lets the accent overhang. A direct math-character
 // nucleus includes its MATH italic correction.
-fn hat_tilde_nucleus_width(
-    base: &MathBox,
-    kind: AccentKind,
-) -> Option<Dim> {
+fn hat_tilde_nucleus_width(base: &MathBox, kind: AccentKind) -> Option<Dim> {
     if !matches!(
         kind,
-        AccentKind::Hat
-            | AccentKind::WideHat
-            | AccentKind::Tilde
-            | AccentKind::WideTilde
+        AccentKind::Hat | AccentKind::WideHat | AccentKind::Tilde | AccentKind::WideTilde
     ) {
         return None;
     }
 
     Some(match &base.content {
-        BoxContent::Glyph { .. } => {
-            &base.width + &base.italic
-        }
+        BoxContent::Glyph { .. } => &base.width + &base.italic,
 
         _ => base.width.clone(),
     })
@@ -3567,15 +3050,9 @@ fn math_char(c: char) -> char {
 /// Greek, digits and everything else stay upright. Explicit font commands
 /// (`\mathrm`, `\text`, ...) arrive as [`MathNode::Text`] and bypass this.
 fn is_default_math_variable(c: char) -> bool {
-    let lower_greek =
-        ('\u{03B1}'..='\u{03C9}').contains(&c);
+    let lower_greek = ('\u{03B1}'..='\u{03C9}').contains(&c);
 
-    c.is_ascii_alphabetic()
-        || lower_greek
-        || matches!(
-            c,
-            'ϵ' | 'ϑ' | 'ϰ' | 'ϕ' | 'ϱ' | 'ϖ'
-        )
+    c.is_ascii_alphabetic() || lower_greek || matches!(c, 'ϵ' | 'ϑ' | 'ϰ' | 'ϕ' | 'ϱ' | 'ϖ')
 }
 
 fn math_italic(c: char) -> char {
@@ -3590,20 +3067,13 @@ fn math_italic(c: char) -> char {
 // participates directly in a row. Script attachment already owns the
 // correction needed by scripted nuclei, so row packing must not add it
 // again for Superscript/Subscript/SubSup nodes.
-fn row_needs_math_italic_kern(
-    node: &MathNode,
-) -> bool {
+fn row_needs_math_italic_kern(node: &MathNode) -> bool {
     match node {
-        MathNode::Atom(ch, class) => {
-            *class == AtomKind::Ord
-                && is_default_math_variable(*ch)
-        }
+        MathNode::Atom(ch, class) => *class == AtomKind::Ord && is_default_math_variable(*ch),
 
         MathNode::Symbol(name) => {
             symbol_class(name) == AtomKind::Ord
-                && symbol_char(name)
-                    .ok()
-                    .is_some_and(is_default_math_variable)
+                && symbol_char(name).ok().is_some_and(is_default_math_variable)
         }
 
         _ => false,

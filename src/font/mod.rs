@@ -151,11 +151,7 @@ impl MathFont {
         &self.face
     }
 
-    pub(crate) fn script_alternate_glyph_id(
-        &self,
-        glyph_id: u16,
-        script_level: u8,
-    ) -> Option<u16> {
+    pub(crate) fn script_alternate_glyph_id(&self, glyph_id: u16, script_level: u8) -> Option<u16> {
         let alternate_index = match script_level {
             1 => 0,
             2 => 1,
@@ -377,11 +373,7 @@ impl MathFont {
     }
 }
 
-fn ssty_alternate_glyph_id(
-    face: &Face<'_>,
-    glyph_id: u16,
-    script_level: u8,
-) -> Option<u16> {
+fn ssty_alternate_glyph_id(face: &Face<'_>, glyph_id: u16, script_level: u8) -> Option<u16> {
     let alternate_index = match script_level {
         1 => 0,
         2 => 1,
@@ -400,27 +392,19 @@ fn ssty_alternate_glyph_id(
             .subtables
             .into_iter::<ttf_parser::gsub::SubstitutionSubtable<'_>>()
         {
-            let ttf_parser::gsub::SubstitutionSubtable::Alternate(alternate) =
-                subtable
-            else {
+            let ttf_parser::gsub::SubstitutionSubtable::Alternate(alternate) = subtable else {
                 continue;
             };
 
-            let Some(coverage_index) =
-                alternate.coverage.get(ttf_parser::GlyphId(glyph_id))
-            else {
+            let Some(coverage_index) = alternate.coverage.get(ttf_parser::GlyphId(glyph_id)) else {
                 continue;
             };
 
-            let Some(set) =
-                alternate.alternate_sets.get(coverage_index)
-            else {
+            let Some(set) = alternate.alternate_sets.get(coverage_index) else {
                 continue;
             };
 
-            if let Some(selected) =
-                set.alternates.get(alternate_index)
-            {
+            if let Some(selected) = set.alternates.get(alternate_index) {
                 return Some(selected.0);
             }
         }
