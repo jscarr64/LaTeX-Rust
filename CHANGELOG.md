@@ -1,5 +1,39 @@
 # Changelog
 
+## [2.1.1] — 2026-10-06
+
+The dvips named-color table carries its LPPL notice, and TealBlue matches
+`drivers.dtx`. No API changes.
+
+### Fixed
+
+- `data/dvipsnames.tsv` TealBlue is the upstream CMYK tuple `0.86, 0, 0.34, 0.02`
+  from `dvipsnam.def` in `drivers.dtx` 2026-06-26 v3.0m. The previous tuple
+  `0.86, 0.09, 0.54, 0.10` is absent from that file. The other 67 tuples were
+  already identical. `tests/dvipsnames.rs` checks every tuple against the
+  values transcribed from `%<*dvipsnames>`.
+
+### Changed
+
+- `data/dvipsnames.tsv` is identified as a modified extract of `dvipsnam.def`:
+  copyright holders, LPPL-1.3c or later, and the alphabetical re-sort. `NOTICE`
+  records the same terms, including where to obtain the unmodified
+  `drivers.dtx`.
+
+### Known issues
+
+GitHub issues for this crate are closed, and the README and earlier changelog
+entries list no open defects.
+
+`ttf-parser` 0.25.1 is flagged unmaintained by RUSTSEC-2026-0192 (informational;
+the advisory lists no patched version). The maintained reader named there is
+`skrifa`. This patch keeps `ttf-parser`. `MathFont::face` returns
+`ttf_parser::Face`, and the crate re-exports `ttf_parser` so callers can name
+that type. `skrifa` is a different API. Replacing it means rewriting glyph
+metrics, MATH variants, GSUB `ssty` lookup, and the SVG, PNG, and egui outline
+walkers, and it removes a public type in a patch release. That work belongs in
+a breaking release.
+
 ## [2.1.0] — 2026-10-02
 
 Layout follows more of TeX and the OpenType MATH table. Dimensions of fractions,

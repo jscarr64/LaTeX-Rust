@@ -8,3 +8,42 @@ SIL Open Font License 1.1. See fonts/stix-two-math/OFL.txt.
 
 STIX Fonts is a trademark of The Institute of Electrical and
 Electronics Engineers, Inc.
+
+data/dvipsnames.tsv is a modified extract of the named-color table in
+dvipsnam.def, taken from drivers.dtx in the LaTeX graphics bundle
+(the %<*dvipsnames> guard). Checked against drivers.dtx 2026-06-26 v3.0m:
+https://github.com/latex3/latex2e/blob/develop/required/graphics/drivers.dtx
+An unmodified copy of the graphics bundle is also published by CTAN:
+https://ctan.org/pkg/graphics
+
+Copyright 1994 David Carlisle and Sebastian Rahtz
+Copyright 1995-1999 David Carlisle
+Copyright 2000-2026 The LaTeX Project
+
+This file may be distributed and/or modified under the conditions of the
+LaTeX Project Public License, either version 1.3c of this license or (at
+your option) any later version.
+https://www.latex-project.org/lppl.txt
+
+This is a modified version of that table. The LaTeX Project maintains
+drivers.dtx. The LaTeX Project does not maintain data/dvipsnames.tsv and
+does not provide support for it. The maintenance contact for this extract
+is Jeffrey S Carr <jscarr1964@gmail.com>,
+https://github.com/jscarr64/LaTeX-Rust.
+
+Modifications from dvipsnam.def, recorded here so the distributed file
+satisfies the LPPL requirement that a modified component carry a prominent
+notice of what changed (LPPL-1.3c clause 6(b)), together with a pointer to
+an unmodified copy (clause 6(d)):
+
+- Each \DefineNamedColor{named}{Name}{cmyk}{c,m,y,k} line is stored as a
+  tab-separated row: name, c, m, y, k.
+- Rows are re-sorted alphabetically by name. Upstream order is the dvips
+  color-wheel order, which starts at GreenYellow and ends at White.
+- CMYK components match drivers.dtx 2026-06-26 v3.0m, including TealBlue
+  0.86, 0, 0.34, 0.02.
+
+The same notice is in the header of data/dvipsnames.tsv. The file name is
+data/dvipsnames.tsv. The table is compiled into the latex-rust named-color
+registry. The rest of this crate is separate from the graphics bundle and
+is licensed under MIT OR Apache-2.0, as stated above.

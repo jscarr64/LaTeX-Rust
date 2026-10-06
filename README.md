@@ -1,6 +1,6 @@
 # LaTeX-Rust
 
-> **Please upgrade to latex-rust 2.1.0.** Versions 1.0.0 through 1.0.4 abort
+> **Please upgrade to latex-rust 2.1.1.** Versions 1.0.0 through 1.0.4 abort
 > the process with a stack overflow when given deeply nested input, which
 > matters if you render LaTeX from untrusted sources. 1.0.5 fixes that for 1.x
 > with no API changes (`cargo update -p latex-rust`). 2.0.0 has the same fixes
@@ -9,7 +9,8 @@
 > 1.0.5 and 2.0.1 also fix the egui backend, which failed with "glyph
 > tessellation" on some glyphs (for example `\partial_t u`). 2.1.0 keeps those
 > fixes and corrects TeX and OpenType MATH layout, so some formulas draw
-> differently from 2.0.1.
+> differently from 2.0.1. 2.1.1 keeps that layout and corrects the dvips name
+> TealBlue to the CMYK tuple in `drivers.dtx`.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE-MIT)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE-APACHE)
@@ -172,7 +173,7 @@ SVG `<path>` elements (and PNG/egui meshes when those features are on).
 
 ## Notes
 
-2.1.0 is the current release. baselogic contributed the TeX and OpenType MATH
+2.1.1 is the current release. baselogic contributed the TeX and OpenType MATH
 layout work in pull request 13. His commits are in the history under his name. They cover delimiter sizing with
 a physical `\delimitershortfall`, fraction width without null-delimiter padding,
 radical variant slack, large-operator limits, `ssty` script alternates,
@@ -185,7 +186,36 @@ smallest MATH variant that covers the nucleus. AMSMath rows use LaTeX's 12 pt
 `\baselineskip`, plus `\jot` in `aligned`. A radical degree is placed by the
 bottom of its ink.
 
+## Credits
+
+`data/dvipsnames.tsv` is a modified extract of `dvipsnam.def` from `drivers.dtx`
+in the LaTeX graphics bundle, Copyright 1994 David Carlisle and Sebastian Rahtz;
+1995-1999 David Carlisle; 2000-2026 The LaTeX Project. The table is licensed
+under the LaTeX Project Public License, version 1.3c or later. Rows in this
+crate are sorted alphabetically. See `NOTICE`.
+
+STIX Two Math 2.13 is embedded under the SIL Open Font License 1.1. See
+`fonts/stix-two-math/OFL.txt` and `NOTICE`.
+
+Tom Clark reported the 2.0 defects and contributed several of the fixes.
+baselogic wrote the 2.1.0 TeX and OpenType MATH layout corrections. The
+changelog records both.
+
+## Acknowledgments
+
+This crate was developed with help from AI assistants by SpaceXAI, Anthropic, OpenAI, Google, and Meta.
+
+## Known issues
+
+GitHub issues for this crate are closed. `ttf-parser` 0.25.1, which reads the
+embedded STIX Two Math face, is marked unmaintained by RUSTSEC-2026-0192
+(informational; no patched release). The maintained reader named there is
+`skrifa`. `MathFont::face` returns `ttf_parser::Face`, and the crate re-exports
+`ttf_parser`. Moving to `skrifa` changes that public type and the outline,
+MATH, and GSUB code that uses it, so it waits for a breaking release.
+
 ## License
 
 MIT OR Apache-2.0. STIX Two Math remains under the SIL Open Font License 1.1.
-See `NOTICE`.
+The dvips named-color table in `data/dvipsnames.tsv` remains under the LaTeX
+Project Public License, version 1.3c or later. See `NOTICE`.

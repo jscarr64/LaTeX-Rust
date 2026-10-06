@@ -11,6 +11,8 @@ use std::sync::OnceLock;
 use crate::dim::Dim;
 use crate::error::Error;
 
+/// dvipsnames CMYK table. Lines starting with `#` are the LPPL notice for this
+/// modified extract of `dvipsnam.def`; the loader skips them.
 const DVIPS: &str = include_str!("../data/dvipsnames.tsv");
 
 /// 8-bit sRGB color. Values are integers; conversion from unit intervals uses `Dim`.
@@ -148,13 +150,13 @@ fn dvipsnames() -> &'static [(String, Color)] {
 
 fn load_dvips() -> Vec<(String, Color)> {
     let mut out = Vec::new();
-    let mut lines = DVIPS.lines();
+    let mut lines = DVIPS.lines().filter(|line| {
+        let trimmed = line.trim();
+        !trimmed.is_empty() && !trimmed.starts_with('#')
+    });
     let header = lines.next().expect("dvipsnames header");
     assert_eq!(header, "name\tc\tm\ty\tk", "dvipsnames.tsv schema");
     for line in lines {
-        if line.is_empty() {
-            continue;
-        }
         let mut cols = line.split('\t');
         let name = cols.next().expect("name").to_string();
         let c = cols.next().expect("c");
