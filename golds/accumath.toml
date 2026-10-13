@@ -1,0 +1,98 @@
+# Accumath emission contract. expect is the tree 3.0.0 must build.
+# forbid is the 2.1.1 tree from the prefix bug. The runner rejects a
+# gold that still matches forbid, so expect cannot be "fixed" by copying
+# today's output. Later steps append rows. This file starts with the
+# \over-family rows for the preprocess fix.
+
+[[gold]]
+name = "overline-in-frac"
+kind = "ast"
+input = "\\frac{\\overline{x}}{2}"
+expect = "(frac (accent overline (atom Ord \"x\")) (atom Ord \"2\"))"
+# 2.1.1: fraction of empty over the letters l i n e x, over 2.
+forbid = "(frac (frac (row) (row (atom Ord \"l\") (atom Ord \"i\") (atom Ord \"n\") (atom Ord \"e\") (atom Ord \"x\"))) (atom Ord \"2\"))"
+
+[[gold]]
+name = "overline-in-sqrt"
+kind = "ast"
+input = "\\sqrt{\\overline{x}}"
+expect = "(sqrt (accent overline (atom Ord \"x\")))"
+forbid = "(sqrt (frac (row) (row (atom Ord \"l\") (atom Ord \"i\") (atom Ord \"n\") (atom Ord \"e\") (atom Ord \"x\"))))"
+
+[[gold]]
+name = "overline-in-sub"
+kind = "ast"
+input = "x_{\\overline{y}}"
+expect = "(sub (atom Ord \"x\") (accent overline (atom Ord \"y\")))"
+forbid = "(sub (atom Ord \"x\") (frac (row) (row (atom Ord \"l\") (atom Ord \"i\") (atom Ord \"n\") (atom Ord \"e\") (atom Ord \"y\"))))"
+
+[[gold]]
+name = "overline-in-sup"
+kind = "ast"
+input = "x^{\\overline{y}}"
+expect = "(sup (atom Ord \"x\") (accent overline (atom Ord \"y\")))"
+forbid = "(sup (atom Ord \"x\") (frac (row) (row (atom Ord \"l\") (atom Ord \"i\") (atom Ord \"n\") (atom Ord \"e\") (atom Ord \"y\"))))"
+
+[[gold]]
+name = "overline-in-group"
+kind = "ast"
+input = "{a+\\overline{b}}"
+expect = "(row (atom Ord \"a\") (atom Bin \"+\") (accent overline (atom Ord \"b\")))"
+forbid = "(frac (row (atom Ord \"a\") (atom Bin \"+\")) (row (atom Ord \"l\") (atom Ord \"i\") (atom Ord \"n\") (atom Ord \"e\") (atom Ord \"b\")))"
+
+[[gold]]
+name = "overset-in-group"
+kind = "ast"
+input = "{\\overset{a}{b}}"
+expect = "(overunder (atom Ord \"b\") (atom Ord \"a\") _)"
+forbid = "(frac (row) (row (atom Ord \"s\") (atom Ord \"e\") (atom Ord \"t\") (atom Ord \"a\") (atom Ord \"b\")))"
+
+[[gold]]
+name = "overrightarrow-in-frac"
+kind = "ast"
+input = "\\frac{\\overrightarrow{AB}}{2}"
+expect = "(frac (accent overrightarrow (row (atom Ord \"A\") (atom Ord \"B\"))) (atom Ord \"2\"))"
+forbid = "(frac (frac (row) (row (atom Ord \"r\") (atom Ord \"i\") (atom Ord \"g\") (atom Ord \"h\") (atom Ord \"t\") (atom Ord \"a\") (atom Ord \"r\") (atom Ord \"r\") (atom Ord \"o\") (atom Ord \"w\") (row (atom Ord \"A\") (atom Ord \"B\")))) (atom Ord \"2\"))"
+
+[[gold]]
+name = "overbrace-in-group"
+kind = "ast"
+input = "{\\overbrace{x}}"
+expect = "(accent overbrace (atom Ord \"x\"))"
+forbid = "(frac (row) (row (atom Ord \"b\") (atom Ord \"r\") (atom Ord \"a\") (atom Ord \"c\") (atom Ord \"e\") (atom Ord \"x\")))"
+
+[[gold]]
+name = "overline-bare"
+kind = "ast"
+input = "\\overline{z}"
+expect = "(accent overline (atom Ord \"z\"))"
+
+[[gold]]
+name = "overline-in-left"
+kind = "ast"
+input = "\\left(\\overline{x}\\right)"
+expect = "(delim ( (accent overline (atom Ord \"x\")) ))"
+
+[[gold]]
+name = "overline-in-parens"
+kind = "ast"
+input = "(\\overline{x})"
+expect = "(row (atom Open \"(\") (accent overline (atom Ord \"x\")) (atom Close \")\"))"
+
+[[gold]]
+name = "hat-in-frac"
+kind = "ast"
+input = "\\frac{\\hat{x}}{2}"
+expect = "(frac (accent hat (atom Ord \"x\")) (atom Ord \"2\"))"
+
+[[gold]]
+name = "hat-in-sqrt"
+kind = "ast"
+input = "\\sqrt{\\hat{x}}"
+expect = "(sqrt (accent hat (atom Ord \"x\")))"
+
+[[gold]]
+name = "underline-in-group"
+kind = "ast"
+input = "{\\underline{x}}"
+expect = "(accent underline (atom Ord \"x\"))"
