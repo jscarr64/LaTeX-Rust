@@ -290,7 +290,7 @@ fn close_denominator(layers: &mut Vec<Layer>) -> bool {
     true
 }
 
-fn push_char(layers: &mut Vec<Layer>, ch: char) {
+fn push_char(layers: &mut [Layer], ch: char) {
     let Some(layer) = layers.last_mut() else {
         return;
     };
