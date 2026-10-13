@@ -3,9 +3,9 @@
 //! An abort never returns to `thread::join`, so each case is a child
 //! process. The child parses on an 8 MiB stack. That is the audit host's
 //! main-thread stack (`ulimit -s` = 8192). In a release build, 3,500 brace
-//! groups with `with_max_depth(20_000)` return `Ok`, and 3,531 abort. A debug
-//! build uses more stack per frame and aborts a little above 1,800, so the
-//! debug run checks 1,500 instead of 3,500. Libtest's worker thread is 2 MiB,
+//! groups with `with_max_depth(20_000)` return `Ok`. 3,531 and deeper return
+//! `Err(Malformed)`. A debug build uses more stack per frame, so the debug
+//! run checks 1,500 instead of 3,500. Libtest's worker thread is 2 MiB,
 //! so the child moves the parse onto an 8 MiB thread before it calls
 //! `parse_with_options`.
 //!

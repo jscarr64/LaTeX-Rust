@@ -38,6 +38,59 @@ use crate::symbols::{lookup, SymbolKind as CatalogKind};
 /// smaller stack should lower it.
 pub const DEFAULT_MAX_NESTING_DEPTH: usize = 32;
 
+/// Bytes of stack [`Parser::nested`] may use before [`ParseError::Malformed`].
+///
+/// Release frames are about 2 KiB. On an 8 MiB thread, 3,500 brace groups sit
+/// just under this ceiling and 3,531 sit just over it. Debug frames are
+/// larger, so that ceiling is higher: 1,500 braces still parse, and a deep
+/// `\frac` still stops before the guard page. The check runs before the
+/// recursive call.
+const STACK_BUDGET_BYTES: usize = if cfg!(debug_assertions) {
+    7_700_000
+} else {
+    7_540_000
+};
+
+/// Stack pointer, so the budget sees the real frame rather than one local.
+///
+/// Readings are only subtracted. Nothing is loaded through the pointer.
+#[inline(always)]
+fn stack_pointer() -> usize {
+    #[cfg(target_arch = "x86_64")]
+    {
+        let sp: usize;
+        // SAFETY: copies `rsp` into a register. `nostack` keeps the asm from
+        // pushing, and the value is never dereferenced.
+        unsafe {
+            core::arch::asm!(
+                "mov {}, rsp",
+                out(reg) sp,
+                options(nomem, nostack, preserves_flags)
+            );
+        }
+        sp
+    }
+    #[cfg(target_arch = "aarch64")]
+    {
+        let sp: usize;
+        // SAFETY: copies `sp` into a register. `nostack` keeps the asm from
+        // pushing, and the value is never dereferenced.
+        unsafe {
+            core::arch::asm!(
+                "mov {}, sp",
+                out(reg) sp,
+                options(nomem, nostack, preserves_flags)
+            );
+        }
+        sp
+    }
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    {
+        let frame = 0u8;
+        std::ptr::from_ref(&frame) as usize
+    }
+}
+
 /// Options for [`parse_with_options`].
 ///
 /// # Examples
@@ -74,8 +127,13 @@ impl ParseOptions {
 
     /// Set the deepest parser recursion accepted.
     ///
-    /// Raising it past the default is safe only if the calling thread has the
-    /// stack for it; see [`DEFAULT_MAX_NESTING_DEPTH`].
+    /// Raising this past the default needs a thread with room for the
+    /// recursion. On an 8 MiB stack the parser returns
+    /// [`ParseError::Malformed`] once the call reaches the stack budget
+    /// (3,500 brace groups still parse in a release build; 3,531 of them
+    /// return `Malformed`). A smaller stack can still abort before that
+    /// check. See
+    /// [`DEFAULT_MAX_NESTING_DEPTH`].
     #[must_use]
     pub fn with_max_depth(mut self, max_depth: usize) -> Self {
         self.max_depth = max_depth;
@@ -164,6 +222,9 @@ pub fn parse_with_options(
     options: &ParseOptions,
 ) -> Result<(MathNode, ColorTable), ParseError> {
     let sanitized = preprocess(input);
+    if sanitized.is_empty() {
+        return Err(ParseError::Malformed("empty input".into()));
+    }
     let tokens = tokenize(&sanitized)?;
     let tokens = strip_fences(&tokens)?;
     let mut p = Parser {
@@ -172,6 +233,7 @@ pub fn parse_with_options(
         depth: 0,
         max_depth: options.max_depth,
         colors: ColorTable::new(),
+        stack_base: stack_pointer(),
     };
     let node = p.parse_list(Stop::eof())?;
     p.skip_ws();
@@ -253,6 +315,8 @@ struct Parser {
     depth: usize,
     /// Deepest nesting accepted, from [`ParseOptions::max_depth`].
     max_depth: usize,
+    /// Address of a local in [`parse_with_options`], for the stack budget.
+    stack_base: usize,
 }
 
 impl Parser {
@@ -295,7 +359,8 @@ impl Parser {
         }
     }
 
-    /// Run `f` one level deeper, refusing to descend past `max_depth`.
+    /// Run `f` one level deeper, refusing to descend past `max_depth` or the
+    /// stack budget. The budget is checked before the recursive call.
     fn nested<T>(
         &mut self,
         f: impl FnOnce(&mut Self) -> Result<T, ParseError>,
@@ -305,6 +370,12 @@ impl Parser {
                 "input nests deeper than {} levels",
                 self.max_depth
             )));
+        }
+        let used = self.stack_base.abs_diff(stack_pointer());
+        if used >= STACK_BUDGET_BYTES {
+            return Err(ParseError::Malformed(
+                "input nests deeper than the stack budget".into(),
+            ));
         }
         self.depth += 1;
         let out = f(self);
@@ -350,7 +421,13 @@ impl Parser {
     }
 
     fn parse_atom(&mut self) -> Result<MathNode, ParseError> {
-        let mut nucleus = self.parse_nucleus()?;
+        self.skip_ws();
+        let mut nucleus =
+            if matches!(self.peek(), Some(Token::Char('('))) && self.script_follows_parens() {
+                self.nested(|p| p.parse_paren_row())?
+            } else {
+                self.parse_nucleus()?
+            };
         let mut limits = None;
         loop {
             match self.peek_ws() {
@@ -377,9 +454,8 @@ impl Parser {
         self.skip_ws();
         match self.peek().cloned() {
             None => Err(ParseError::Malformed("unexpected end of input".into())),
-            Some(Token::Superscript | Token::Subscript | Token::Char('\'')) => {
-                Ok(MathNode::Row(Vec::new()))
-            }
+            Some(Token::Char('\'')) => Err(ParseError::Malformed("prime has no base".into())),
+            Some(Token::Superscript | Token::Subscript) => Ok(MathNode::Row(Vec::new())),
             Some(Token::BeginGroup) => self.parse_group(),
             Some(Token::Char(c)) => {
                 self.bump();
@@ -413,8 +489,74 @@ impl Parser {
         self.skip_ws();
         match self.peek() {
             Some(Token::BeginGroup) => self.parse_group(),
+            Some(Token::Char('(')) => self.parse_paren_row(),
             Some(_) => self.parse_nucleus(),
             None => Err(ParseError::Malformed("missing argument".into())),
+        }
+    }
+
+    /// True when the `(` at `pos` has a match and the next token is `^`, `_`, or `'`.
+    fn script_follows_parens(&self) -> bool {
+        let mut i = self.pos;
+        let mut depth = 0i32;
+        while let Some(tok) = self.tokens.get(i) {
+            match tok {
+                Token::Space => {}
+                Token::Char('(') => depth += 1,
+                Token::Char(')') => {
+                    depth -= 1;
+                    if depth == 0 {
+                        i += 1;
+                        while matches!(self.tokens.get(i), Some(Token::Space)) {
+                            i += 1;
+                        }
+                        return matches!(
+                            self.tokens.get(i),
+                            Some(Token::Superscript | Token::Subscript | Token::Char('\''))
+                        );
+                    }
+                    if depth < 0 {
+                        return false;
+                    }
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+        false
+    }
+
+    /// Balanced `(...)`, parentheses kept as atoms. Inner `(` binds a following
+    /// script; a following script of this row is left for the caller.
+    fn parse_paren_row(&mut self) -> Result<MathNode, ParseError> {
+        match self.bump() {
+            Some(Token::Char('(')) => {}
+            _ => return Err(ParseError::Malformed("expected '('".into())),
+        }
+        let mut items = vec![MathNode::Atom('(', AtomKind::Open)];
+        let mut depth = 1i32;
+        loop {
+            self.skip_ws();
+            match self.peek().cloned() {
+                None => return Err(ParseError::Malformed("unmatched '('".into())),
+                Some(Token::Char(')')) => {
+                    self.bump();
+                    items.push(MathNode::Atom(')', AtomKind::Close));
+                    depth -= 1;
+                    if depth == 0 {
+                        return Ok(wrap_row(items));
+                    }
+                }
+                Some(Token::Char('(')) if self.script_follows_parens() => {
+                    items.push(self.parse_atom()?);
+                }
+                Some(Token::Char('(')) => {
+                    self.bump();
+                    items.push(MathNode::Atom('(', AtomKind::Open));
+                    depth += 1;
+                }
+                Some(_) => items.push(self.parse_atom()?),
+            }
         }
     }
 
@@ -422,7 +564,7 @@ impl Parser {
         self.parse_arg()
     }
 
-    fn bind_scripts(&mut self, nucleus: MathNode) -> Result<MathNode, ParseError> {
+    fn bind_scripts(&mut self, mut nucleus: MathNode) -> Result<MathNode, ParseError> {
         let mut sub: Option<MathNode> = None;
         let mut sup: Option<MathNode> = None;
         let mut sup_from_prime = false;
@@ -437,15 +579,15 @@ impl Parser {
                 }
                 Some(Token::Superscript) => {
                     self.bump();
-                    let s = self.parse_script()?;
-                    if let Some(prev) = sup.take() {
-                        if !sup_from_prime {
-                            return Err(ParseError::Malformed("double superscript".into()));
-                        }
-                        sup = Some(wrap_row(vec![prev, s]));
+                    if sup_from_prime {
+                        // f'^2 is the square of primed f, the same tree as {f'}^2.
+                        nucleus = apply_scripts(nucleus, sub.take(), sup.take());
                         sup_from_prime = false;
+                        sup = Some(self.parse_script()?);
+                    } else if sup.is_some() {
+                        return Err(ParseError::Malformed("double superscript".into()));
                     } else {
-                        sup = Some(s);
+                        sup = Some(self.parse_script()?);
                     }
                 }
                 Some(Token::Char('\'')) => {
@@ -468,6 +610,9 @@ impl Parser {
             "frac" | "dfrac" | "tfrac" | "cfrac" => {
                 let n = self.parse_arg()?;
                 let d = self.parse_arg()?;
+                if is_empty_node(&n) && is_empty_node(&d) {
+                    return Err(ParseError::Malformed("empty fraction".into()));
+                }
                 Ok(MathNode::Fraction(Box::new(n), Box::new(d)))
             }
             "binom" | "dbinom" | "tbinom" => {

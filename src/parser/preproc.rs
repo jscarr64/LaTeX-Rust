@@ -401,6 +401,14 @@ mod tests {
     #[test]
     fn empty() {
         assert_eq!(preprocess("   "), "");
+        assert!(matches!(
+            crate::parse(""),
+            Err(crate::ParseError::Malformed(_))
+        ));
+        assert!(matches!(
+            crate::parse("   "),
+            Err(crate::ParseError::Malformed(_))
+        ));
     }
 
     #[test]

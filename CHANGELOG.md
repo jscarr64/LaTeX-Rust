@@ -30,6 +30,45 @@ This release lists every finding and its fix.
   release build. Each command is now rewritten in one left-to-right pass.
   The trees of real infix fractions are unchanged. No migration.
 
+- **A script after `(...)` bound to one parenthesis.** `(-b)^{n}`, `(a/b)^{n}`,
+  `(\frac{a}{b})^{n}`, `(2x)^{2}`, and `(f(x))'` put `^`, `_`, or `'` on the
+  closing parenthesis. `x^(-b)` put the opening parenthesis in the exponent.
+  A parenthesized row is now one nucleus, and the parentheses stay atoms in
+  that row.
+
+  Migration: a superscript, subscript, or prime after `(...)` applies to the
+  parenthesized row. The old tree applied it to the nearest parenthesis.
+  `{(-b)}^{n}` and `\left(-b\right)^{n}` stay as they were. `-b^{n}` and
+  `a/b^{n}` still put the power on `b`.
+
+- **`f'^2` flattened the prime and the exponent.** The superscript was a row
+  of prime-then-2. It is now the square of primed `f`, the same tree as
+  `{f'}^2`. `f'`, `f''`, and `f'''` are unchanged. `f^{\prime}` stays a
+  `prime` symbol.
+
+  Migration: `f'^2` is the square of primed `f`. `f'` and `f^{\prime}` stay
+  different nodes.
+
+- **A raised depth limit aborted the process.** `with_max_depth(20_000)`
+  parsed 3,500 brace groups and aborted at 3,531. The same limit aborted on
+  deep `\left` and `\frac`. The parser checks a stack budget before each
+  recursive call and returns `Malformed` once that budget is reached. The
+  default depth stays 32.
+
+  Migration: 3,500 braces at limit 20,000 on an 8 MiB stack still return
+  `Ok`. 3,531 or more braces, `\left`, or `\frac` at that limit return
+  `Err(Malformed)`. A thread with less than about 8 MiB of stack can still
+  abort if the limit is raised. Callers on the default limit of 32 see no
+  change.
+
+- **Empty input parsed as an empty row.** `parse("")` and whitespace returned
+  `(row)`. `\frac{}{}` was a fraction of two empty rows. A bare prime was a
+  superscript on an empty row. A bare `^` was already `Malformed`. `^2` is
+  still a superscript on an empty base.
+
+  Migration: callers that treated the empty row as “no formula” should match
+  on `Err`. `\frac{}{}` and a bare prime return `Err`.
+
 ## [2.1.1] — 2026-10-06
 
 The dvips color names now carry their license, and `TealBlue` matches

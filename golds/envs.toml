@@ -4,7 +4,7 @@
 name = "aligned-two-ast"
 kind = "ast"
 input = "\\begin{aligned} f(x) &= x^2 + 2x + 1 \\\\ &= (x+1)^2 \\end{aligned}"
-expect = "(matrix aligned ((row (atom Ord \"f\") (atom Open \"(\") (atom Ord \"x\") (atom Close \")\")) (row (atom Rel \"=\") (sup (atom Ord \"x\") (atom Ord \"2\")) (atom Bin \"+\") (atom Ord \"2\") (atom Ord \"x\") (atom Bin \"+\") (atom Ord \"1\"))) ((row) (row (atom Rel \"=\") (atom Open \"(\") (atom Ord \"x\") (atom Bin \"+\") (atom Ord \"1\") (sup (atom Close \")\") (atom Ord \"2\")))))"
+expect = "(matrix aligned ((row (atom Ord \"f\") (atom Open \"(\") (atom Ord \"x\") (atom Close \")\")) (row (atom Rel \"=\") (sup (atom Ord \"x\") (atom Ord \"2\")) (atom Bin \"+\") (atom Ord \"2\") (atom Ord \"x\") (atom Bin \"+\") (atom Ord \"1\"))) ((row) (row (atom Rel \"=\") (sup (row (atom Open \"(\") (atom Ord \"x\") (atom Bin \"+\") (atom Ord \"1\") (atom Close \")\")) (atom Ord \"2\")))))"
 
 [[gold]]
 name = "aligned-two-dims"
@@ -194,7 +194,7 @@ expect = "w=1.315 h=0.705 d=0.929"
 name = "split-in-equation-ast"
 kind = "ast"
 input = "\\begin{equation}\\begin{split} f(x) &= (x+1)^2 \\\\ &= x^2 + 2x + 1 \\end{split}\\end{equation}"
-expect = "(matrix equation ((matrix split ((row (atom Ord \"f\") (atom Open \"(\") (atom Ord \"x\") (atom Close \")\")) (row (atom Rel \"=\") (atom Open \"(\") (atom Ord \"x\") (atom Bin \"+\") (atom Ord \"1\") (sup (atom Close \")\") (atom Ord \"2\")))) ((row) (row (atom Rel \"=\") (sup (atom Ord \"x\") (atom Ord \"2\")) (atom Bin \"+\") (atom Ord \"2\") (atom Ord \"x\") (atom Bin \"+\") (atom Ord \"1\"))))))"
+expect = "(matrix equation ((matrix split ((row (atom Ord \"f\") (atom Open \"(\") (atom Ord \"x\") (atom Close \")\")) (row (atom Rel \"=\") (sup (row (atom Open \"(\") (atom Ord \"x\") (atom Bin \"+\") (atom Ord \"1\") (atom Close \")\")) (atom Ord \"2\")))) ((row) (row (atom Rel \"=\") (sup (atom Ord \"x\") (atom Ord \"2\")) (atom Bin \"+\") (atom Ord \"2\") (atom Ord \"x\") (atom Bin \"+\") (atom Ord \"1\"))))))"
 
 [[gold]]
 name = "split-in-equation-dims"
