@@ -99,6 +99,7 @@ fn variant_name(err: &ParseError) -> &'static str {
         ParseError::Unknown(_) => "Unknown",
         ParseError::Malformed(_) => "Malformed",
         ParseError::UnmatchedDelimiter => "UnmatchedDelimiter",
+        _ => "other",
     }
 }
 

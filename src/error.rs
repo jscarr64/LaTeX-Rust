@@ -36,7 +36,11 @@ pub enum Error {
 }
 
 /// Tokenizer / parser failure.
+///
+/// The enum is non-exhaustive so a later release can add a variant. A
+/// downstream match needs a wildcard.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ParseError {
     /// Input ended with a stray `\` and no command character.
     TrailingBackslash,

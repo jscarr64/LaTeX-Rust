@@ -76,6 +76,50 @@ This release lists every finding and its fix.
   on `Err`. `\frac{}{}`, a bare prime, `^2`, `^{2}`, `_i`, and `'^2` return
   `Err`. A script still needs a real base: `x^2` is the same tree.
 
+- **`√`, a superscript run, and U+2212 were ordinary atoms.** `√x` and
+  `√{x}` are a square root, the same tree as `\sqrt{x}`. A run of
+  superscript digits, superscript letters, and a superscript minus
+  (`²`, `³`, `ⁿ`, `⁻¹`, `²³ⁿ⁻¹`) is a superscript, the same tree as
+  `x^{…}`. A superscript with no base is `Malformed`, the same as `^2`.
+  U+2212 MINUS is a binary minus, the same atom as `-`.
+
+  Migration: stored `gold()` values for those characters change. `√x^2`
+  is the square of the radical, and `√{x^2}` is the radical of the square.
+  `f'²` is the square of primed `f`, the same tree as `f'^2`. ASCII `-`
+  is unchanged.
+
+- **ASCII relations, bare operators, unicode symbols, and prime symbols
+  stay off unless requested.** `<=`, `>=`, `!=`, `sin(x)`, `α`, and `f'`
+  keep today's trees. `ParseOptions::with_ascii_relations` maps adjacent
+  `<=`, `>=`, and `!=` to the same symbols as `\le`, `\ge`, and `\ne`.
+  `with_bare_operators` reads a maximal run of ASCII letters as one
+  identifier. The whole run has to be in the operator table, or be
+  `\zeta`, so `sinh` is `\sinh`, `xsin` and `sinx` stay letters, and
+  `infty` is not `\inf`. A space ends the run, so `x sin` is `x` times
+  `\sin`. `ω` is not an ASCII letter, so `sinω` is `\sin` followed by
+  `ω`. Inside `cases`, the identifier `otherwise` is the text node of
+  `\text{otherwise}`. Outside `cases` that word stays letters.
+  `with_unicode_symbols` maps `α`, `Γ`, `π`, `≤`, `≥`, `≠`, `∞`, `×`,
+  `·` (U+00B7), and `⋅` (U+22C5) to the symbol nodes of `\alpha`,
+  `\Gamma`, `\pi`, `\leq`, `\geq`, `\neq`, `\infty`, `\times`, and
+  `\cdot`. `with_prime_symbol` spells `'` as `(symbol prime)`. `f''` is
+  a row of two primes. `f'''` keeps its nested rows.
+
+  Migration: the four flags default to off, so existing `gold()` values
+  in `golds/parse.toml` and `golds/accumath.toml` stay byte-identical.
+  Accumath turns the flags on at `parse_with_options`. `f'` and
+  `f^{\prime}` stay different nodes unless `prime_symbol` is on. `f'''`
+  is not rewritten into a flat row of three primes. `x < = 0` stays two
+  relation atoms. `ω` stays an ordinary atom.
+
+- **`MathNode` and `ParseError` are `non_exhaustive`.** A later release
+  can add a variant. `ParseOptions` already was.
+
+  Migration: a downstream `match` that lists every variant of `MathNode`
+  or `ParseError` needs a wildcard. `if let`, `matches!`, and
+  constructing a variant are unchanged. `ParseOptions::new` still builds
+  the defaults, including the four flags above set to off.
+
 ## [2.1.1] — 2026-10-06
 
 The dvips color names now carry their license, and `TealBlue` matches

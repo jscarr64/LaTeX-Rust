@@ -12,6 +12,7 @@ use super::token::{tokenize, Token};
 use crate::color::{parse_color_spec, Color, ColorTable};
 
 mod drive;
+mod lexicon;
 use crate::dim::Dim;
 use crate::error::{Error, ParseError};
 use crate::symbols::{lookup, SymbolKind as CatalogKind};
@@ -170,6 +171,10 @@ impl ParseOptions {
 /// Accepts raw math, `$...$`, `$$...$$`, `\(...\)`, or `\[...\]`. Binding of
 /// `_` / `^` / primes is Pratt-style (tight postfix on the nucleus).
 ///
+/// `√x` is a square root, a run of superscript digits or letters is a
+/// superscript, and U+2212 is a binary minus. `<=`, a bare `sin`, `α`, and
+/// `'` stay today's atoms unless [`ParseOptions`] turns that lexicon on.
+///
 /// # Arguments
 ///
 /// * `input` — math source, with or without delimiter fences.
@@ -257,6 +262,12 @@ pub fn parse_with_options(
         depth: 0,
         max_depth: options.max_depth,
         colors: ColorTable::new(),
+        ascii_relations: options.ascii_relations,
+        bare_operators: options.bare_operators,
+        unicode_symbols: options.unicode_symbols,
+        prime_symbol: options.prime_symbol,
+        cases_depth: 0,
+        plain_letters_until: 0,
     };
     let node = drive::parse_top(&mut p)?;
     p.skip_ws();
@@ -338,6 +349,14 @@ struct Parser {
     depth: usize,
     /// Deepest nesting accepted, from [`ParseOptions::max_depth`].
     max_depth: usize,
+    ascii_relations: bool,
+    bare_operators: bool,
+    unicode_symbols: bool,
+    prime_symbol: bool,
+    /// `\begin{cases}` bodies currently open. `otherwise` is text only here.
+    cases_depth: usize,
+    /// Index past a rejected ASCII-letter run. Letters before it stay atoms.
+    plain_letters_until: usize,
 }
 
 impl Parser {
@@ -395,10 +414,11 @@ impl Parser {
                         while matches!(self.tokens.get(i), Some(Token::Space)) {
                             i += 1;
                         }
-                        return matches!(
-                            self.tokens.get(i),
-                            Some(Token::Superscript | Token::Subscript | Token::Char('\''))
-                        );
+                        return match self.tokens.get(i) {
+                            Some(Token::Superscript | Token::Subscript | Token::Char('\'')) => true,
+                            Some(Token::Char(c)) if lexicon::is_superscript_char(*c) => true,
+                            _ => false,
+                        };
                     }
                     if depth < 0 {
                         return false;

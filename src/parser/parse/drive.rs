@@ -553,10 +553,19 @@ fn step_nucleus(
                     *phase = NuclPhase::Wait;
                     Ok(Step::Call(Kind::group(), false))
                 }
-                Some(Token::Char(c)) => {
-                    parser.bump();
-                    Ok(Step::Done(MathNode::Atom(c, atom_kind(c))))
-                }
+                Some(Token::Char(c)) => match nucleus_char(parser, c)? {
+                    CharNucleus::Node(node) => Ok(Step::Done(node)),
+                    CharNucleus::Sqrt => {
+                        *phase = NuclPhase::Wait;
+                        Ok(Step::Call(
+                            Kind::Cmd(Box::new(Cmd::Sqrt {
+                                index: None,
+                                phase: OptSeq::Body,
+                            })),
+                            false,
+                        ))
+                    }
+                },
                 Some(Token::Command(name)) => {
                     parser.bump();
                     match classify(parser, &name)? {
@@ -571,6 +580,109 @@ fn step_nucleus(
             }
         }
     }
+}
+
+enum CharNucleus {
+    Node(MathNode),
+    Sqrt,
+}
+
+fn nucleus_char(parser: &mut super::Parser, c: char) -> Result<CharNucleus, ParseError> {
+    if super::lexicon::is_superscript_char(c) {
+        return Err(ParseError::Malformed("script has no base".into()));
+    }
+    if c == '\u{221A}' {
+        parser.bump();
+        return Ok(CharNucleus::Sqrt);
+    }
+    if c == '\u{2212}' {
+        parser.bump();
+        return Ok(CharNucleus::Node(MathNode::Atom('-', atom_kind('-'))));
+    }
+    if parser.bare_operators && c.is_ascii_alphabetic() {
+        if let Some(node) = take_bare_word(parser) {
+            return Ok(CharNucleus::Node(node));
+        }
+    }
+    if let Some(name) = ascii_relation(parser, c) {
+        return Ok(CharNucleus::Node(MathNode::Symbol(name.into())));
+    }
+    if parser.unicode_symbols {
+        if let Some(name) = super::lexicon::unicode_symbol(c) {
+            parser.bump();
+            return Ok(CharNucleus::Node(MathNode::Symbol(name.into())));
+        }
+    }
+    parser.bump();
+    Ok(CharNucleus::Node(MathNode::Atom(c, atom_kind(c))))
+}
+
+fn take_bare_word(parser: &mut super::Parser) -> Option<MathNode> {
+    if parser.pos < parser.plain_letters_until {
+        return None;
+    }
+    let (end, word) = ascii_letter_run(parser);
+    if let Some(node) = super::lexicon::bare_identifier(&word, parser.cases_depth > 0) {
+        parser.pos = end;
+        Some(node)
+    } else {
+        parser.plain_letters_until = end;
+        None
+    }
+}
+
+fn ascii_letter_run(parser: &super::Parser) -> (usize, String) {
+    let mut end = parser.pos;
+    let mut word = String::new();
+    while let Some(Token::Char(c)) = parser.tokens.get(end) {
+        if !c.is_ascii_alphabetic() {
+            break;
+        }
+        word.push(*c);
+        end += 1;
+    }
+    (end, word)
+}
+
+/// Adjacent `<=`, `>=`, and `!=` when `ascii_relations` is on. A space between
+/// the two characters is not a match.
+fn ascii_relation(parser: &mut super::Parser, c: char) -> Option<&'static str> {
+    if !parser.ascii_relations {
+        return None;
+    }
+    let name = match c {
+        '<' => "leq",
+        '>' => "geq",
+        '!' => "neq",
+        _ => return None,
+    };
+    match parser.tokens.get(parser.pos + 1) {
+        Some(Token::Char('=')) => {
+            parser.pos += 2;
+            Some(name)
+        }
+        _ => None,
+    }
+}
+
+fn peek_superscript_base(parser: &super::Parser) -> Option<char> {
+    match parser.peek() {
+        Some(Token::Char(c)) => super::lexicon::superscript_base(*c),
+        _ => None,
+    }
+}
+
+fn take_superscript_run(parser: &mut super::Parser) -> Result<MathNode, ParseError> {
+    parser.skip_ws();
+    let mut items = Vec::new();
+    while let Some(base) = peek_superscript_base(parser) {
+        parser.bump_raw();
+        items.push(MathNode::Atom(base, atom_kind(base)));
+    }
+    if items.is_empty() {
+        return Err(internal("superscript run"));
+    }
+    Ok(wrap_row(items))
 }
 
 #[inline(never)]
@@ -652,6 +764,7 @@ fn step_scripts(
         Some(Token::Subscript) => 1,
         Some(Token::Superscript) => 2,
         Some(Token::Char('\'')) => 3,
+        Some(Token::Char(c)) if super::lexicon::is_superscript_char(*c) => 4,
         _ => 0,
     };
     match sig {
@@ -684,13 +797,36 @@ fn step_scripts(
         }
         3 => {
             parser.bump();
-            let prime = MathNode::Atom('′', AtomKind::Ord);
+            let prime = if parser.prime_symbol {
+                MathNode::Symbol("prime".into())
+            } else {
+                MathNode::Atom('′', AtomKind::Ord)
+            };
             st.sup = Some(Box::new(match st.sup.take() {
                 None => prime,
                 Some(prev) => wrap_row(vec![*prev, prime]),
             }));
             st.sup_from_prime = true;
             Ok(Step::Again)
+        }
+        4 => {
+            let body = take_superscript_run(parser)?;
+            if st.sup_from_prime {
+                let nucleus = unbox(st.nucleus.take(), "script nucleus")?;
+                st.nucleus = Some(Box::new(apply_scripts(
+                    nucleus,
+                    st.sub.take().map(|n| *n),
+                    st.sup.take().map(|n| *n),
+                )));
+                st.sup = Some(Box::new(body));
+                st.sup_from_prime = false;
+                Ok(Step::Again)
+            } else if st.sup.is_some() {
+                Err(ParseError::Malformed("double superscript".into()))
+            } else {
+                st.sup = Some(Box::new(body));
+                Ok(Step::Again)
+            }
         }
         _ => {
             let nucleus = unbox(st.nucleus.take(), "script nucleus")?;
@@ -1129,6 +1265,9 @@ fn push_row(st: &mut BeginState) {
 
 fn finish_begin(parser: &mut super::Parser, st: &mut BeginState) -> Result<Step, ParseError> {
     parser.expect_end(&st.name)?;
+    if matches!(st.style, MatrixStyle::Cases) {
+        parser.cases_depth = parser.cases_depth.saturating_sub(1);
+    }
     Ok(Step::Done(MathNode::Matrix(
         st.style,
         mem::take(&mut st.colspec),
@@ -1457,6 +1596,9 @@ fn start_begin(parser: &mut super::Parser) -> Result<Classified, ParseError> {
             return Err(ParseError::Unsupported(format!("environment {other}")));
         }
     };
+    if matches!(style, MatrixStyle::Cases) {
+        parser.cases_depth = parser.cases_depth.saturating_add(1);
+    }
     Ok(Classified::Cmd(Cmd::Begin(Box::new(BeginState {
         name,
         style,

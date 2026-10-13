@@ -524,6 +524,8 @@ impl DelimSize {
 /// Typed math-mode syntax tree.
 ///
 /// Produced by [`crate::parse()`]. [`MathNode::gold`] is the gold-stable debug form.
+/// The enum is non-exhaustive so a later release can add a variant. A
+/// downstream match needs a wildcard.
 ///
 /// # Examples
 ///
@@ -534,6 +536,7 @@ impl DelimSize {
 /// assert!(n.gold().contains("sup"));
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum MathNode {
     /// Single character with a TeX atom class.
     Atom(char, AtomKind),
