@@ -12,6 +12,8 @@
 //! `raised_limit_must_not_abort` is part of the default run. 3,500 braces
 //! at limit 20,000 stay `Ok` in a release build. 3,531 and deeper return
 //! `Err(Malformed)` for braces, `\left`, and `\frac`. An abort is a failure.
+//! `small_stack_must_not_abort` runs those 3,531 nests on a 1 MiB thread and
+//! on a 256 KiB thread. `Ok` or `Err(Malformed)` is success. An abort is not.
 
 use std::process::{Command, ExitStatus, Stdio};
 use std::time::{Duration, Instant};
@@ -78,8 +80,9 @@ fn child_code() -> i32 {
         }
     };
     let expect_ok = match std::env::var("LATEX_RUST_DEPTH_EXPECT") {
-        Ok(s) if s == "ok" => true,
-        Ok(s) if s == "err" => false,
+        Ok(s) if s == "ok" => Some(true),
+        Ok(s) if s == "err" => Some(false),
+        Ok(s) if s == "either" => None,
         Ok(s) => {
             eprintln!("expect {s}");
             return 3;
@@ -89,9 +92,19 @@ fn child_code() -> i32 {
             return 3;
         }
     };
+    let stack = match std::env::var("LATEX_RUST_DEPTH_STACK") {
+        Ok(s) => match s.parse() {
+            Ok(stack) => stack,
+            Err(err) => {
+                eprintln!("stack: {err}");
+                return 3;
+            }
+        },
+        Err(_) => AUDIT_STACK,
+    };
     let handle = match std::thread::Builder::new()
         .name("audit-stack".into())
-        .stack_size(AUDIT_STACK)
+        .stack_size(stack)
         .spawn(move || outcome(&name, n, &limit))
     {
         Ok(handle) => handle,
@@ -101,9 +114,10 @@ fn child_code() -> i32 {
         }
     };
     match handle.join() {
-        Ok(Ok(is_ok)) if is_ok == expect_ok => CHILD_OK,
+        Ok(Ok(_)) if expect_ok.is_none() => CHILD_OK,
+        Ok(Ok(is_ok)) if Some(is_ok) == expect_ok => CHILD_OK,
         Ok(Ok(is_ok)) => {
-            eprintln!("parse ok={is_ok}, expected ok={expect_ok}");
+            eprintln!("parse ok={is_ok}, expected ok={expect_ok:?}");
             2
         }
         Ok(Err(err)) => {
@@ -133,6 +147,10 @@ fn exe() -> std::path::PathBuf {
 }
 
 fn run_case(shape_name: &str, n: usize, limit: &str, expect: &str) {
+    run_case_on(shape_name, n, limit, expect, AUDIT_STACK);
+}
+
+fn run_case_on(shape_name: &str, n: usize, limit: &str, expect: &str, stack: usize) {
     let mut child = match Command::new(exe())
         .arg("depth_child")
         .arg("--exact")
@@ -141,6 +159,7 @@ fn run_case(shape_name: &str, n: usize, limit: &str, expect: &str) {
         .env("LATEX_RUST_DEPTH_N", n.to_string())
         .env("LATEX_RUST_DEPTH_LIMIT", limit)
         .env("LATEX_RUST_DEPTH_EXPECT", expect)
+        .env("LATEX_RUST_DEPTH_STACK", stack.to_string())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .spawn()
@@ -169,7 +188,7 @@ fn run_case(shape_name: &str, n: usize, limit: &str, expect: &str) {
     }
     assert!(
         status.code() == Some(CHILD_OK),
-        "{shape_name}@{n} limit={limit} expect={expect}: {}\n{err_text}",
+        "{shape_name}@{n} limit={limit} stack={stack} expect={expect}: {}\n{err_text}",
         status_word(&status)
     );
 }
@@ -211,5 +230,16 @@ fn raised_limit_must_not_abort() {
         run_case("braces", n, "20000", "err");
         run_case("left", n, "20000", "err");
         run_case("frac", n, "20000", "err");
+    }
+}
+
+/// A raised limit on a 1 MiB thread, and on a 256 KiB thread, must not abort.
+/// `Ok` and `Err(Malformed)` are both acceptable.
+#[test]
+fn small_stack_must_not_abort() {
+    for stack in [1 << 20, 256 << 10] {
+        for name in ["braces", "left", "frac"] {
+            run_case_on(name, 3_531, "20000", "either", stack);
+        }
     }
 }

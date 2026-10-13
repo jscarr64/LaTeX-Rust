@@ -2,13 +2,28 @@
 //!
 //! `parse("")` and whitespace used to be an empty row. `\frac{}{}` used to
 //! be a fraction of two empty rows. A bare prime used to be a superscript
-//! on that empty row. A bare `^` is already a missing argument.
+//! on that empty row. `^2` and `^{2}` used to be a superscript on that empty
+//! row. `_i` used to be a subscript on it. `'^2` is a prime with no base.
+//! A bare `^` is already a missing argument.
 
 use latex_rust::{parse, ParseError};
 
 #[test]
 fn empty_and_bare_scripts_are_malformed() {
-    let inputs = ["", " ", "\t", "\n", r"\frac{}{}", r"\frac{ }{ }", "^", "'"];
+    let inputs = [
+        "",
+        " ",
+        "\t",
+        "\n",
+        r"\frac{}{}",
+        r"\frac{ }{ }",
+        "^",
+        "'",
+        "^2",
+        "^{2}",
+        "_i",
+        "'^2",
+    ];
     let mut problems = Vec::new();
     for input in inputs {
         match parse(input) {
