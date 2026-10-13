@@ -41,6 +41,13 @@ png = ["dep:tiny-skia"]
 # egui Shape backend (`src/render/egui`).
 egui = ["dep:egui"]
 
+[dev-dependencies]
+proptest = "=1.5.0"
+# rusty-fork (via proptest 1.5) pulls the newest tempfile. 3.27 needs
+# getrandom 0.4, whose manifest requires Cargo edition2024. 1.83 cannot
+# read that manifest. 3.14 stays on getrandom 0.2.
+tempfile = "=3.14.0"
+
 [dependencies]
 ttf-parser = "0.25"
 tiny-skia = { version = "0.11", optional = true }

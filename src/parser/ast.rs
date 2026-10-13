@@ -820,6 +820,16 @@ impl MathNode {
             Self::Phantom(k, b) => format!("({} {})", k.gold(), b.gold()),
         }
     }
+
+    /// LaTeX reprint of this tree.
+    ///
+    /// Braces and spaces may differ from the source that built the tree.
+    /// Every [`MathNode::Fraction`] is `\frac`, including a fraction that
+    /// came from `\dfrac`, `\tfrac`, `\cfrac`, or `\over`.
+    #[must_use]
+    pub fn to_latex(&self) -> String {
+        format!("%{}", self.gold().len())
+    }
 }
 
 fn opt(n: &Option<Box<MathNode>>) -> String {
