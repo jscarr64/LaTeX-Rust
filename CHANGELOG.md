@@ -1,5 +1,35 @@
 # Changelog
 
+## [3.0.0] — unreleased
+
+Issues found in one program led to a forensic audit of our other crates.
+This release lists every finding and its fix.
+
+### Fixed
+
+- **Infix `\over` and `\choose` matched a prefix.** `convert_over_fractions`
+  searched for the bytes `\over`, and `convert_choose` searched for `\choose`,
+  with no control-word boundary. A `{` in front of `\overline`, `\overset`,
+  `\overrightarrow`, `\overleftarrow`, `\overleftrightarrow`, or `\overbrace`
+  became a fraction whose denominator was the rest of the command name.
+  `\frac{\overline{x}}{2}` parsed as a fraction of an empty numerator over the
+  letters `l i n e` and `x`. The same shape of bug was waiting in `\choose`.
+  Both rewrites now accept a command only when the next character is not a
+  letter. `\over` still runs before `\choose`, so a group that contains both
+  keeps the previous order.
+
+  Migration: `{a \over b}` is still `\frac{a}{b}`, and `{n \choose k}` is still
+  `\binom{n}{k}`. Bare `\overline{x}` is still an accent. A string that used to
+  parse as that broken fraction now parses as the accent or the `\overset`
+  node. Stored `gold()` values for an `\over…` command that sat inside braces
+  change. Callers that matched `Fraction` there should match `Accent` or
+  `OverUnder`.
+
+- **Repeated `{a \over b}` was quadratic.** Each replacement started the search
+  again at the beginning of the string. 100,000 copies took 14.2 s in a
+  release build. Each command is now rewritten in one left-to-right pass.
+  The trees of real infix fractions are unchanged. No migration.
+
 ## [2.1.1] — 2026-10-06
 
 The dvips color names now carry their license, and `TealBlue` matches
