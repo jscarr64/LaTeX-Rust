@@ -9,13 +9,14 @@
 //! so the child moves the parse onto an 8 MiB thread before it calls
 //! `parse_with_options`.
 //!
-//! Cases that abort on 2.1.1 stay `#[ignore]` until the depth fix. The
-//! default run covers the cases that already return `Ok` or `Err`.
+//! `raised_limit_must_not_abort` is part of the default run. 3,500 braces
+//! at limit 20,000 stay `Ok` in a release build. 3,531 and deeper return
+//! `Err(Malformed)` for braces, `\left`, and `\frac`. An abort is a failure.
 
 use std::process::{Command, ExitStatus, Stdio};
 use std::time::{Duration, Instant};
 
-use latex_rust::{parse, parse_with_options, ParseOptions};
+use latex_rust::{parse, parse_with_options, ParseError, ParseOptions};
 
 const CHILD_OK: i32 = 17;
 const AUDIT_STACK: usize = 8 << 20;
@@ -44,7 +45,11 @@ fn outcome(name: &str, n: usize, limit: &str) -> Result<bool, String> {
         let opts = ParseOptions::new().with_max_depth(depth);
         parse_with_options(&input, &opts).map(|_| ())
     };
-    Ok(parsed.is_ok())
+    match parsed {
+        Ok(()) => Ok(true),
+        Err(ParseError::Malformed(_)) => Ok(false),
+        Err(err) => Err(format!("expected Malformed, got {err}")),
+    }
 }
 
 fn child_code() -> i32 {
@@ -197,12 +202,14 @@ fn default_limit_rejects_3531_braces() {
     run_case("braces", 3_531, "default", "err");
 }
 
-/// 3,531 groups at `with_max_depth(20_000)` abort on an 8 MiB stack today.
-/// The depth fix must return `Err` instead. Ignored until that fix.
+/// 3,531 and deeper nests at `with_max_depth(20_000)` must be
+/// `Err(Malformed)`, not a stack abort. 3,500 braces staying `Ok` is
+/// `raised_limit_parses_deep_braces`.
 #[test]
-#[ignore = "E2: raised max_depth must return Err instead of aborting"]
 fn raised_limit_must_not_abort() {
-    run_case("braces", 3_531, "20000", "err");
-    run_case("left", 3_531, "20000", "err");
-    run_case("frac", 3_531, "20000", "err");
+    for n in [3_531_usize, 10_000] {
+        run_case("braces", n, "20000", "err");
+        run_case("left", n, "20000", "err");
+        run_case("frac", n, "20000", "err");
+    }
 }
