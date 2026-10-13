@@ -52,22 +52,24 @@ This release lists every finding and its fix.
 - **A raised depth limit aborted the process.** `with_max_depth(20_000)`
   parsed 3,500 brace groups and aborted at 3,531. The same limit aborted on
   deep `\left` and `\frac`. The parser checks a stack budget before each
-  recursive call and returns `Malformed` once that budget is reached. The
-  default depth stays 32.
+  recursive call and returns `Malformed` once that budget is reached, or
+  once the calling thread has less than 64 KiB of stack left. The default
+  depth stays 32.
 
   Migration: 3,500 braces at limit 20,000 on an 8 MiB stack still return
   `Ok`. 3,531 or more braces, `\left`, or `\frac` at that limit return
-  `Err(Malformed)`. A thread with less than about 8 MiB of stack can still
-  abort if the limit is raised. Callers on the default limit of 32 see no
-  change.
+  `Err(Malformed)`. The same nests on a 1 MiB or 256 KiB thread also return
+  `Err(Malformed)`. Callers on the default limit of 32 see no change.
 
 - **Empty input parsed as an empty row.** `parse("")` and whitespace returned
   `(row)`. `\frac{}{}` was a fraction of two empty rows. A bare prime was a
-  superscript on an empty row. A bare `^` was already `Malformed`. `^2` is
-  still a superscript on an empty base.
+  superscript on an empty row. `^2` and `^{2}` were a superscript on that
+  empty row, and `_i` was a subscript on it. `'^2` is a prime with no base.
+  A bare `^` was already `Malformed`. `x^2` and `x_i` are unchanged.
 
   Migration: callers that treated the empty row as “no formula” should match
-  on `Err`. `\frac{}{}` and a bare prime return `Err`.
+  on `Err`. `\frac{}{}`, a bare prime, `^2`, `^{2}`, `_i`, and `'^2` return
+  `Err`. A script still needs a real base: `x^2` is the same tree.
 
 ## [2.1.1] — 2026-10-06
 

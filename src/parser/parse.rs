@@ -42,14 +42,22 @@ pub const DEFAULT_MAX_NESTING_DEPTH: usize = 32;
 ///
 /// Release frames are about 2 KiB. On an 8 MiB thread, 3,500 brace groups sit
 /// just under this ceiling and 3,531 sit just over it. Debug frames are
-/// larger, so that ceiling is higher: 1,500 braces still parse, and a deep
-/// `\frac` still stops before the guard page. The check runs before the
-/// recursive call.
+/// larger, so that ceiling is higher: 1,500 braces still parse. A thread
+/// with less room stops earlier, at [`STACK_HEADROOM`] bytes above the
+/// bottom of that thread's stack. The check runs before the recursive call.
 const STACK_BUDGET_BYTES: usize = if cfg!(debug_assertions) {
     7_700_000
 } else {
     7_540_000
 };
+
+/// Bytes left above the stack floor before a recursive call is refused.
+///
+/// One debug `\left` step is about 27 KiB. This leaves room for that step
+/// on a 256 KiB thread without touching the guard page.
+const STACK_HEADROOM: usize = 64 << 10;
+
+const STACK_PAGE: usize = 4096;
 
 /// Stack pointer, so the budget sees the real frame rather than one local.
 ///
@@ -91,6 +99,130 @@ fn stack_pointer() -> usize {
     }
 }
 
+std::thread_local! {
+    static STACK_FLOOR: std::cell::Cell<usize> = const { std::cell::Cell::new(usize::MAX) };
+}
+
+/// Lowest address this thread's stack may approach, cached for the thread.
+fn thread_stack_floor(sp: usize) -> Option<usize> {
+    STACK_FLOOR.with(|cell| {
+        let cached = cell.get();
+        if cached != usize::MAX {
+            return Some(cached);
+        }
+        let floor = stack_floor(sp)?;
+        cell.set(floor);
+        Some(floor)
+    })
+}
+
+/// Floor of the mapping that contains `sp`.
+///
+/// A pthread stack mapping is fully reserved, so its low address is the
+/// floor. The main `[stack]` mapping grows downward until `RLIMIT_STACK`.
+fn stack_floor(sp: usize) -> Option<usize> {
+    let maps = std::fs::read_to_string("/proc/self/maps").ok()?;
+    for line in maps.lines() {
+        let Some(range) = line.split_whitespace().next() else {
+            continue;
+        };
+        let Some((start, end)) = range.split_once('-') else {
+            continue;
+        };
+        let Ok(low) = usize::from_str_radix(start, 16) else {
+            continue;
+        };
+        let Ok(high) = usize::from_str_radix(end, 16) else {
+            continue;
+        };
+        if sp < low || sp >= high {
+            continue;
+        }
+        if line.split_whitespace().last() == Some("[stack]") {
+            return Some(main_stack_floor(low, high));
+        }
+        return Some(low);
+    }
+    None
+}
+
+fn main_stack_floor(low: usize, high: usize) -> usize {
+    let Some(limit) = rlimit_stack_cur() else {
+        return low;
+    };
+    if limit >= (1 << 62) {
+        return low;
+    }
+    let Ok(limit) = usize::try_from(limit) else {
+        return low;
+    };
+    high.saturating_sub(limit).saturating_add(STACK_PAGE)
+}
+
+#[cfg(target_arch = "x86_64")]
+fn rlimit_stack_cur() -> Option<u64> {
+    #[repr(C)]
+    struct RLimit {
+        cur: u64,
+        max: u64,
+    }
+    let mut lim = RLimit { cur: 0, max: 0 };
+    let rc: isize;
+    // SAFETY: Linux `getrlimit` is syscall 97 and `RLIMIT_STACK` is 3. `lim`
+    // is a live object. The asm lists the registers `syscall` clobbers and
+    // does not push.
+    unsafe {
+        core::arch::asm!(
+            "syscall",
+            in("rax") 97usize,
+            in("rdi") 3usize,
+            in("rsi") &mut lim as *mut RLimit,
+            lateout("rax") rc,
+            lateout("rcx") _,
+            lateout("r11") _,
+            options(nostack)
+        );
+    }
+    if rc == 0 {
+        Some(lim.cur)
+    } else {
+        None
+    }
+}
+
+#[cfg(target_arch = "aarch64")]
+fn rlimit_stack_cur() -> Option<u64> {
+    #[repr(C)]
+    struct RLimit {
+        cur: u64,
+        max: u64,
+    }
+    let mut lim = RLimit { cur: 0, max: 0 };
+    let rc: isize;
+    // SAFETY: Linux `getrlimit` is syscall 163 and `RLIMIT_STACK` is 3. `lim`
+    // is a live object. The asm does not push.
+    unsafe {
+        core::arch::asm!(
+            "svc #0",
+            in("x8") 163usize,
+            in("x0") 3usize,
+            in("x1") &mut lim as *mut RLimit,
+            lateout("x0") rc,
+            options(nostack)
+        );
+    }
+    if rc == 0 {
+        Some(lim.cur)
+    } else {
+        None
+    }
+}
+
+#[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+fn rlimit_stack_cur() -> Option<u64> {
+    None
+}
+
 /// Options for [`parse_with_options`].
 ///
 /// # Examples
@@ -127,13 +259,12 @@ impl ParseOptions {
 
     /// Set the deepest parser recursion accepted.
     ///
-    /// Raising this past the default needs a thread with room for the
-    /// recursion. On an 8 MiB stack the parser returns
-    /// [`ParseError::Malformed`] once the call reaches the stack budget
-    /// (3,500 brace groups still parse in a release build; 3,531 of them
-    /// return `Malformed`). A smaller stack can still abort before that
-    /// check. See
-    /// [`DEFAULT_MAX_NESTING_DEPTH`].
+    /// Raising this past the default needs room on the calling thread.
+    /// The parser returns [`ParseError::Malformed`] when the next call would
+    /// pass the stack budget or the room left on that thread. On an 8 MiB
+    /// thread, 3,500 brace groups still parse in a release build and 3,531
+    /// of them return `Malformed`. A 1 MiB or 256 KiB thread returns
+    /// `Malformed` for those deep nests. See [`DEFAULT_MAX_NESTING_DEPTH`].
     #[must_use]
     pub fn with_max_depth(mut self, max_depth: usize) -> Self {
         self.max_depth = max_depth;
@@ -227,13 +358,15 @@ pub fn parse_with_options(
     }
     let tokens = tokenize(&sanitized)?;
     let tokens = strip_fences(&tokens)?;
+    let stack_base = stack_pointer();
     let mut p = Parser {
         tokens,
         pos: 0,
         depth: 0,
         max_depth: options.max_depth,
         colors: ColorTable::new(),
-        stack_base: stack_pointer(),
+        stack_base,
+        stack_floor: thread_stack_floor(stack_base).filter(|floor| *floor < stack_base),
     };
     let node = p.parse_list(Stop::eof())?;
     p.skip_ws();
@@ -315,8 +448,10 @@ struct Parser {
     depth: usize,
     /// Deepest nesting accepted, from [`ParseOptions::max_depth`].
     max_depth: usize,
-    /// Address of a local in [`parse_with_options`], for the stack budget.
+    /// Stack pointer at the start of [`parse_with_options`].
     stack_base: usize,
+    /// Lowest address this thread's stack may approach, when known.
+    stack_floor: Option<usize>,
 }
 
 impl Parser {
@@ -371,8 +506,12 @@ impl Parser {
                 self.max_depth
             )));
         }
-        let used = self.stack_base.abs_diff(stack_pointer());
-        if used >= STACK_BUDGET_BYTES {
+        let sp = stack_pointer();
+        let used = self.stack_base.abs_diff(sp);
+        let near_floor = self
+            .stack_floor
+            .is_some_and(|floor| sp.saturating_sub(floor) < STACK_HEADROOM);
+        if used >= STACK_BUDGET_BYTES || near_floor {
             return Err(ParseError::Malformed(
                 "input nests deeper than the stack budget".into(),
             ));
@@ -454,8 +593,9 @@ impl Parser {
         self.skip_ws();
         match self.peek().cloned() {
             None => Err(ParseError::Malformed("unexpected end of input".into())),
-            Some(Token::Char('\'')) => Err(ParseError::Malformed("prime has no base".into())),
-            Some(Token::Superscript | Token::Subscript) => Ok(MathNode::Row(Vec::new())),
+            Some(Token::Char('\'') | Token::Superscript | Token::Subscript) => {
+                Err(ParseError::Malformed("script has no base".into()))
+            }
             Some(Token::BeginGroup) => self.parse_group(),
             Some(Token::Char(c)) => {
                 self.bump();
