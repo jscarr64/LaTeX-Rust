@@ -823,12 +823,27 @@ impl MathNode {
 
     /// LaTeX reprint of this tree.
     ///
-    /// Braces and spaces may differ from the source that built the tree.
+    /// The method is total: every node prints, and it does not return
+    /// [`Err`](crate::Error) or panic. Braces and spaces may differ from the
+    /// source that built the tree, so compare trees, then compare a reprint
+    /// to a reprint. It is not a byte-preserving formatter.
+    ///
+    /// Every script base and script argument, every accent body, every
+    /// fraction argument, and every `\overset` / `\underset` argument is
+    /// braced. An alphabetic control word is followed by a space, so
+    /// `\sin x` does not become `\sinx`. `\overline` is that full command.
+    ///
     /// Every [`MathNode::Fraction`] is `\frac`, including a fraction that
-    /// came from `\dfrac`, `\tfrac`, `\cfrac`, or `\over`.
+    /// came from `\dfrac`, `\tfrac`, `\cfrac`, or `\over`. Those commands do
+    /// not store a display style, so the printer cannot put it back.
+    ///
+    /// A [`MathNode::Color`] is its own group. A color nested in a row
+    /// therefore does not swallow the nodes that follow it.
     #[must_use]
     pub fn to_latex(&self) -> String {
-        format!("%{}", self.gold().len())
+        let mut out = String::new();
+        write_node(&mut out, self);
+        out
     }
 }
 
@@ -886,4 +901,482 @@ fn dim_gold(d: &Dim) -> String {
         }
     }
     d.to_dec_string()
+}
+
+fn write_node(out: &mut String, node: &MathNode) {
+    match node {
+        MathNode::Atom(c, _) => write_atom(out, *c),
+        MathNode::Fraction(num, den) => {
+            write_cmd(out, "frac");
+            write_group(out, num);
+            write_group(out, den);
+        }
+        MathNode::Radical(index, body) => {
+            write_cmd(out, "sqrt");
+            if let Some(index) = index {
+                out.push('[');
+                write_node(out, index);
+                out.push(']');
+            }
+            write_group(out, body);
+        }
+        MathNode::Superscript(base, sup) => write_scripts(out, base, None, Some(sup)),
+        MathNode::Subscript(base, sub) => write_scripts(out, base, Some(sub), None),
+        MathNode::SubSup(base, sub, sup) => write_scripts(out, base, Some(sub), Some(sup)),
+        MathNode::Delimited(open, body, close) => {
+            write_cmd(out, "left");
+            write_delim(out, open);
+            write_node(out, body);
+            write_cmd(out, "right");
+            write_delim(out, close);
+        }
+        MathNode::SizedDelim(delim, size, kind) => {
+            out.push('\\');
+            out.push_str(size.gold());
+            out.push_str(sized_suffix(*kind, delim));
+            out.push(' ');
+            write_delim(out, delim);
+        }
+        MathNode::Row(items) => write_row(out, items),
+        MathNode::Matrix(style, spec, rows) => write_matrix(out, *style, spec, rows),
+        MathNode::Substack(lines) => {
+            write_cmd(out, "substack");
+            out.push('{');
+            for (i, line) in lines.iter().enumerate() {
+                if i > 0 {
+                    out.push_str("\\\\");
+                }
+                write_node(out, line);
+            }
+            out.push('}');
+        }
+        MathNode::Ref(key) => write_braced_text(out, "ref", key),
+        MathNode::Tag { star, body } => {
+            write_cmd(out, "tag");
+            if *star {
+                out.push('*');
+            }
+            write_group(out, body);
+        }
+        MathNode::Label(key) => write_braced_text(out, "label", key),
+        MathNode::NoNumber => write_cmd(out, "nonumber"),
+        MathNode::Hline => write_cmd(out, "hline"),
+        MathNode::Intertext(body) => write_intertext(out, body),
+        MathNode::Sum(lower, upper) => {
+            write_op_scripts(out, "sum", lower.as_deref(), upper.as_deref())
+        }
+        MathNode::Product(lower, upper) => {
+            write_op_scripts(out, "prod", lower.as_deref(), upper.as_deref())
+        }
+        MathNode::Integral(kind, lower, upper) => {
+            write_op_scripts(out, kind.gold(), lower.as_deref(), upper.as_deref())
+        }
+        MathNode::Limit(lower) => write_op_scripts(out, "lim", lower.as_deref(), None),
+        MathNode::OverUnder(base, over, under) => {
+            write_over_under(out, base, over.as_deref(), under.as_deref())
+        }
+        MathNode::Accent(body, kind) => {
+            write_cmd(out, kind.gold());
+            write_group(out, body);
+        }
+        MathNode::CancelTo(value, expr) => {
+            write_cmd(out, "cancelto");
+            write_group(out, value);
+            write_group(out, expr);
+        }
+        MathNode::Text(text, style) => {
+            write_cmd(out, style_cmd(*style));
+            out.push('{');
+            push_escaped(out, text);
+            out.push('}');
+        }
+        MathNode::Space(kind) => write_space(out, kind),
+        MathNode::Operator(name, limits) => write_operator(out, name, *limits),
+        MathNode::Symbol(name) => write_cmd(out, name),
+        MathNode::Color(color, body) => {
+            out.push('{');
+            write_cmd(out, "color");
+            push_html(out, *color);
+            write_node(out, body);
+            out.push('}');
+        }
+        MathNode::TextColor(color, body) => write_paint(out, "textcolor", *color, None, body),
+        MathNode::ColorBox(color, body) => write_paint(out, "colorbox", *color, None, body),
+        MathNode::FColorBox(border, fill, body) => {
+            write_paint(out, "fcolorbox", *border, Some(*fill), body)
+        }
+        MathNode::Strut(height, depth) => write_strut(out, height, depth),
+        MathNode::Phantom(kind, body) => {
+            write_cmd(out, kind.gold());
+            write_group(out, body);
+        }
+    }
+}
+
+fn write_scripts(
+    out: &mut String,
+    base: &MathNode,
+    sub: Option<&MathNode>,
+    sup: Option<&MathNode>,
+) {
+    write_group(out, base);
+    if let Some(sub) = sub {
+        out.push('_');
+        write_group(out, sub);
+    }
+    if let Some(sup) = sup {
+        out.push('^');
+        write_group(out, sup);
+    }
+}
+
+fn write_op_scripts(out: &mut String, name: &str, sub: Option<&MathNode>, sup: Option<&MathNode>) {
+    write_cmd(out, name);
+    if let Some(sub) = sub {
+        out.push('_');
+        write_group(out, sub);
+    }
+    if let Some(sup) = sup {
+        out.push('^');
+        write_group(out, sup);
+    }
+}
+
+fn write_group(out: &mut String, node: &MathNode) {
+    out.push('{');
+    write_node(out, node);
+    out.push('}');
+}
+
+/// Brace each child so a nested row stays nested, and so `<` `=` and a run of
+/// letters are not glued back into a relation or a bare operator.
+fn write_row(out: &mut String, items: &[MathNode]) {
+    if items.is_empty() {
+        out.push_str("{}");
+        return;
+    }
+    for item in items {
+        write_group(out, item);
+    }
+}
+
+fn write_matrix(out: &mut String, style: MatrixStyle, spec: &[ColSpec], rows: &[EnvRow]) {
+    write_cmd(out, "begin");
+    out.push('{');
+    out.push_str(style.gold());
+    out.push('}');
+    if matches!(style, MatrixStyle::Array) || !spec.is_empty() {
+        out.push('{');
+        for col in spec {
+            out.push(col.gold());
+        }
+        out.push('}');
+    }
+    let mut prev_cells = false;
+    for row in rows {
+        let cells = matches!(row, EnvRow::Cells { .. });
+        if prev_cells {
+            out.push_str("\\\\");
+        }
+        prev_cells = cells;
+        match row {
+            EnvRow::Hline => write_cmd(out, "hline"),
+            EnvRow::Intertext(body) => write_intertext(out, body),
+            EnvRow::Cells {
+                cells,
+                number,
+                labels,
+            } => {
+                for (i, cell) in cells.iter().enumerate() {
+                    if i > 0 {
+                        out.push('&');
+                    }
+                    write_node(out, cell);
+                    if i + 1 == cells.len() {
+                        write_eq_meta(out, number, labels);
+                    }
+                }
+                if cells.is_empty() {
+                    write_eq_meta(out, number, labels);
+                }
+            }
+        }
+    }
+    write_cmd(out, "end");
+    out.push('{');
+    out.push_str(style.gold());
+    out.push('}');
+}
+
+fn write_eq_meta(out: &mut String, number: &EqNumber, labels: &[String]) {
+    for key in labels {
+        write_braced_text(out, "label", key);
+    }
+    match number {
+        EqNumber::Default => {}
+        EqNumber::Suppress => write_cmd(out, "nonumber"),
+        EqNumber::Tag { star, body } => {
+            write_cmd(out, "tag");
+            if *star {
+                out.push('*');
+            }
+            write_group(out, body);
+        }
+    }
+}
+
+fn write_over_under(
+    out: &mut String,
+    base: &MathNode,
+    over: Option<&MathNode>,
+    under: Option<&MathNode>,
+) {
+    if let MathNode::Accent(body, kind @ (AccentKind::Overbrace | AccentKind::Underbrace)) = base {
+        write_cmd(out, kind.gold());
+        write_group(out, body);
+        if let Some(under) = under {
+            out.push('_');
+            write_group(out, under);
+        }
+        if let Some(over) = over {
+            out.push('^');
+            write_group(out, over);
+        }
+        return;
+    }
+    if let MathNode::Symbol(name) = base {
+        let cmd = match (name.as_str(), over) {
+            ("longrightarrow", Some(_)) => Some("xrightarrow"),
+            ("longleftarrow", Some(_)) => Some("xleftarrow"),
+            _ => None,
+        };
+        if let Some(cmd) = cmd {
+            write_cmd(out, cmd);
+            if let Some(under) = under {
+                out.push('[');
+                write_node(out, under);
+                out.push(']');
+            }
+            if let Some(over) = over {
+                write_group(out, over);
+            }
+            return;
+        }
+    }
+    match (over, under) {
+        (Some(over), Some(under)) => {
+            write_cmd(out, "overset");
+            write_group(out, over);
+            out.push('{');
+            write_cmd(out, "underset");
+            write_group(out, under);
+            write_group(out, base);
+            out.push('}');
+        }
+        (Some(over), None) => {
+            write_cmd(out, "overset");
+            write_group(out, over);
+            write_group(out, base);
+        }
+        (None, Some(under)) => {
+            write_cmd(out, "underset");
+            write_group(out, under);
+            write_group(out, base);
+        }
+        (None, None) => write_node(out, base),
+    }
+}
+
+fn write_intertext(out: &mut String, body: &MathNode) {
+    write_cmd(out, "intertext");
+    out.push('{');
+    if let MathNode::Text(text, _) = body {
+        push_escaped(out, text);
+    } else {
+        write_node(out, body);
+    }
+    out.push('}');
+}
+
+fn write_paint(out: &mut String, cmd: &str, first: Color, second: Option<Color>, body: &MathNode) {
+    write_cmd(out, cmd);
+    push_html(out, first);
+    if let Some(second) = second {
+        push_html(out, second);
+    }
+    write_group(out, body);
+}
+
+fn write_operator(out: &mut String, name: &str, limits: bool) {
+    match operator_limits(name) {
+        Some(default) => {
+            write_cmd(out, name);
+            if limits != default {
+                write_cmd(out, if limits { "limits" } else { "nolimits" });
+            }
+        }
+        None => {
+            write_cmd(out, "operatorname");
+            out.push('{');
+            push_escaped(out, name);
+            out.push('}');
+            if limits {
+                write_cmd(out, "limits");
+            }
+        }
+    }
+}
+
+fn operator_limits(name: &str) -> Option<bool> {
+    Some(match name {
+        "sin" | "cos" | "tan" | "cot" | "sec" | "csc" | "arcsin" | "arccos" | "arctan" | "sinh"
+        | "cosh" | "tanh" | "coth" | "log" | "ln" | "lg" | "exp" | "limsup" | "liminf" | "sup"
+        | "inf" | "max" | "min" | "det" | "dim" | "ker" | "deg" | "gcd" | "lcm" | "Pr" | "arg" => {
+            false
+        }
+        "coprod" | "bigcup" | "bigcap" | "bigsqcup" | "bigvee" | "bigwedge" | "bigoplus"
+        | "bigotimes" | "biguplus" => true,
+        _ => return None,
+    })
+}
+
+fn write_space(out: &mut String, kind: &SpaceKind) {
+    match kind {
+        SpaceKind::Thin => out.push_str("\\,"),
+        SpaceKind::Medium => out.push_str("\\:"),
+        SpaceKind::Thick => out.push_str("\\;"),
+        SpaceKind::NegThin => out.push_str("\\!"),
+        SpaceKind::Quad => write_cmd(out, "quad"),
+        SpaceKind::Qquad => write_cmd(out, "qquad"),
+        SpaceKind::ControlSpace => out.push_str("\\ "),
+        SpaceKind::Hspace(dim) => {
+            write_cmd(out, "hspace");
+            out.push('{');
+            out.push_str(&dim.to_dec_string());
+            out.push_str("em}");
+        }
+    }
+}
+
+fn write_strut(out: &mut String, height: &Dim, depth: &Dim) {
+    if height.eq_dim(&Dim::ratio(7, 10)) && depth.eq_dim(&Dim::ratio(3, 10)) {
+        write_cmd(out, "strut");
+        return;
+    }
+    write_cmd(out, "rule");
+    out.push_str("{0em}{");
+    out.push_str(&height.to_dec_string());
+    out.push_str("em}");
+}
+
+fn write_atom(out: &mut String, c: char) {
+    match c {
+        '{' | '}' | '%' | '\\' => {
+            out.push('\\');
+            out.push(c);
+        }
+        '<' | '>' | '!' => {
+            out.push(c);
+            out.push(' ');
+        }
+        _ => out.push(c),
+    }
+}
+
+fn write_delim(out: &mut String, delim: &Delimiter) {
+    match delim {
+        Delimiter::Empty => out.push('.'),
+        Delimiter::Char(c) => write_atom(out, *c),
+        Delimiter::Named(name) if name == "{" || name == "}" || name == "|" => {
+            out.push('\\');
+            out.push_str(name);
+        }
+        Delimiter::Named(name) => write_cmd(out, name),
+    }
+}
+
+fn sized_suffix(kind: AtomKind, delim: &Delimiter) -> &'static str {
+    if kind == delim_class(delim) {
+        return "";
+    }
+    match kind {
+        AtomKind::Open => "l",
+        AtomKind::Close => "r",
+        AtomKind::Rel => "m",
+        AtomKind::Ord | AtomKind::Op | AtomKind::Bin | AtomKind::Punct | AtomKind::Inner => "",
+    }
+}
+
+fn delim_class(delim: &Delimiter) -> AtomKind {
+    match delim {
+        Delimiter::Char(c) => atom_class(*c),
+        Delimiter::Named(name) if name == "{" => AtomKind::Open,
+        Delimiter::Named(name) if name == "}" => AtomKind::Close,
+        Delimiter::Empty | Delimiter::Named(_) => AtomKind::Open,
+    }
+}
+
+fn atom_class(c: char) -> AtomKind {
+    match c {
+        '+' | '-' | '*' | '±' | '∓' | '·' | '×' | '÷' => AtomKind::Bin,
+        '=' | '<' | '>' | '≠' | '≤' | '≥' | '≈' | '≡' => AtomKind::Rel,
+        '(' | '[' | '{' => AtomKind::Open,
+        ')' | ']' | '}' => AtomKind::Close,
+        ',' | ';' | '!' | '?' | ':' => AtomKind::Punct,
+        _ => AtomKind::Ord,
+    }
+}
+
+fn style_cmd(style: TextStyle) -> &'static str {
+    match style {
+        TextStyle::Rm => "mathrm",
+        TextStyle::Bf => "mathbf",
+        TextStyle::It => "mathit",
+        TextStyle::Sf => "mathsf",
+        TextStyle::Tt => "mathtt",
+        TextStyle::Bb => "mathbb",
+        TextStyle::Cal => "mathcal",
+        TextStyle::Frak => "mathfrak",
+        TextStyle::Scr => "mathscr",
+        TextStyle::Boldsymbol => "boldsymbol",
+        TextStyle::Pmb => "pmb",
+        TextStyle::Text => "text",
+    }
+}
+
+fn write_cmd(out: &mut String, name: &str) {
+    out.push('\\');
+    out.push_str(name);
+    if !name.is_empty() && name.chars().all(|c| c.is_ascii_alphabetic()) {
+        out.push(' ');
+    }
+}
+
+fn write_braced_text(out: &mut String, cmd: &str, text: &str) {
+    write_cmd(out, cmd);
+    out.push('{');
+    push_escaped(out, text);
+    out.push('}');
+}
+
+fn push_escaped(out: &mut String, text: &str) {
+    for c in text.chars() {
+        match c {
+            '\\' | '{' | '}' | '%' => {
+                out.push('\\');
+                out.push(c);
+            }
+            _ => out.push(c),
+        }
+    }
+}
+
+fn push_html(out: &mut String, color: Color) {
+    out.push_str("[HTML]{");
+    let hex = color.css_hex();
+    match hex.strip_prefix('#') {
+        Some(body) => out.push_str(body),
+        None => out.push_str(&hex),
+    }
+    out.push('}');
 }

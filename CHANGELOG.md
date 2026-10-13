@@ -3,7 +3,7 @@
 ## [3.0.0] — unreleased
 
 Issues found in one program led to a forensic audit of our other crates.
-This release lists every finding and its fix.
+This release lists every finding and its fix. Nothing in this section is published.
 
 ### Fixed
 
@@ -88,10 +88,16 @@ This release lists every finding and its fix.
   `f'²` is the square of primed `f`, the same tree as `f'^2`. ASCII `-`
   is unchanged.
 
-- **ASCII relations, bare operators, unicode symbols, and prime symbols
-  stay off unless requested.** `<=`, `>=`, `!=`, `sin(x)`, `α`, and `f'`
-  keep today's trees. `ParseOptions::with_ascii_relations` maps adjacent
+- **ASCII `<=`, `>=`, and `!=` were two atoms.** They stay two atoms
+  unless requested. `ParseOptions::with_ascii_relations` maps adjacent
   `<=`, `>=`, and `!=` to the same symbols as `\le`, `\ge`, and `\ne`.
+  A space still splits them, so `x < = 0` is two relation atoms.
+
+  Migration: the flag defaults to off, so existing `gold()` values stay
+  byte-identical. Accumath turns it on at `parse_with_options`.
+
+- **Bare words were products of letters.** `sin(x)`, `zeta(s,a)`, and
+  `otherwise` inside `cases` stay letters unless requested.
   `with_bare_operators` reads a maximal run of ASCII letters as one
   identifier. The whole run has to be in the operator table, or be
   `\zeta`, so `sinh` is `\sinh`, `xsin` and `sinx` stay letters, and
@@ -99,18 +105,33 @@ This release lists every finding and its fix.
   `\sin`. `ω` is not an ASCII letter, so `sinω` is `\sin` followed by
   `ω`. Inside `cases`, the identifier `otherwise` is the text node of
   `\text{otherwise}`. Outside `cases` that word stays letters.
-  `with_unicode_symbols` maps `α`, `Γ`, `π`, `≤`, `≥`, `≠`, `∞`, `×`,
-  `·` (U+00B7), and `⋅` (U+22C5) to the symbol nodes of `\alpha`,
-  `\Gamma`, `\pi`, `\leq`, `\geq`, `\neq`, `\infty`, `\times`, and
-  `\cdot`. `with_prime_symbol` spells `'` as `(symbol prime)`. `f''` is
-  a row of two primes. `f'''` keeps its nested rows.
 
-  Migration: the four flags default to off, so existing `gold()` values
-  in `golds/parse.toml` and `golds/accumath.toml` stay byte-identical.
-  Accumath turns the flags on at `parse_with_options`. `f'` and
-  `f^{\prime}` stay different nodes unless `prime_symbol` is on. `f'''`
-  is not rewritten into a flat row of three primes. `x < = 0` stays two
-  relation atoms. `ω` stays an ordinary atom.
+  Migration: the flag defaults to off. Existing `gold()` values stay
+  byte-identical. Accumath turns it on at `parse_with_options`.
+
+- **The same glyph could be a different node.** `α`, `Γ`, `π`, `≤`,
+  `≥`, `≠`, `∞`, `×`, `·` (U+00B7), and `⋅` (U+22C5 DOT OPERATOR) stay
+  ordinary atoms unless requested. `⋅` was Ord, not Bin and not
+  `(symbol cdot)`. `with_unicode_symbols` maps those characters to the
+  symbol nodes of `\alpha`, `\Gamma`, `\pi`, `\leq`, `\geq`, `\neq`,
+  `\infty`, `\times`, and `\cdot`. `f'` stays a superscript of U+2032.
+  `with_prime_symbol` spells `'` as `(symbol prime)`. `f''` is a row of
+  two primes. `f'''` keeps its nested rows; it is not rewritten into a
+  flat row of three primes.
+
+  Migration: both flags default to off, so `f'` and `f^{\prime}` stay
+  different nodes unless `prime_symbol` is on. `ω` stays an ordinary
+  atom. Accumath turns the flags on at `parse_with_options`.
+
+- **A nested color reprinted without its group.**
+  `{\color{red} x + {\color{blue} y} + z}` already parsed as red over
+  the row and blue only on `y`. `MathNode::to_latex` prints each
+  `Color` in its own group, so the inner color does not swallow `+ z`
+  on the next parse.
+
+  Migration: the parse tree is unchanged. Callers that printed the tree
+  themselves need the same grouping. `to_latex` is the reprint that
+  round-trips.
 
 - **`MathNode` and `ParseError` are `non_exhaustive`.** A later release
   can add a variant. `ParseOptions` already was.
@@ -119,6 +140,44 @@ This release lists every finding and its fix.
   or `ParseError` needs a wildcard. `if let`, `matches!`, and
   constructing a variant are unchanged. `ParseOptions::new` still builds
   the defaults, including the four flags above set to off.
+
+### Added
+
+- `MathNode::to_latex` reprints a tree as LaTeX. It is total. Every
+  script, accent, fraction, and `\overset` / `\underset` argument is
+  braced, an alphabetic control word is followed by a space, and
+  `\overline` is the full command. Every `Fraction` prints as `\frac`,
+  including one that came from `\dfrac`, `\tfrac`, `\cfrac`, or `\over`.
+  Braces and spaces may differ from the source; compare trees, then
+  compare a reprint to a reprint.
+
+  Migration: new method. No parse change. `gold()` strings are unchanged.
+
+- `tests/roundtrip.rs` checks `parse(to_latex(t)) == t` and an idempotent
+  reprint on the `parse.toml`, `accumath.toml`, and `lexicon.toml` golds,
+  including trees built with the flags on. A grammar generator covers
+  2,000 trees in debug and 50,000 in release. `LATEX_RUST_ROUNDTRIP_CASES`
+  overrides the count. `proptest` is a dev-dependency.
+- `fuzz/fuzz_targets/parse.rs` and `preprocess.rs`. The parse target
+  keeps `max_depth` at the default, because an abort kills the fuzzer.
+- `.github/workflows/ci.yml` runs fmt, clippy (`--all-targets
+  --all-features -D warnings`), `cargo test`, `cargo test --release`,
+  and a 60-second parse fuzz. `.github/workflows/fuzz-nightly.yml` runs
+  the release tests, then parse for 16 minutes and preprocess for 2.
+
+### Known issues
+
+`\dfrac`, `\tfrac`, and `\cfrac` still erase display style. The tree is
+the same `Fraction` as `\frac`, and `to_latex` prints `\frac`. Restoring
+the style needs a field this release does not add.
+
+`\\` outside a row break is still `ParseError::Unknown` with message
+`unknown command: \\`. The error is typed. The wording is easy to
+misread, and this release does not add a variant for it.
+
+`ttf-parser` 0.25 stays. It is flagged unmaintained (RUSTSEC-2026-0192,
+informational, no patched release). See the 2.1.1 note. PNG and egui
+were not part of the audit's render pass.
 
 ## [2.1.1] — 2026-10-06
 
