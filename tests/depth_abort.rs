@@ -1,27 +1,18 @@
 //! Subprocess harness for parser depth.
 //!
-//! An abort never returns to `thread::join`, so each case is a child
-//! process. The child parses on an 8 MiB stack. That is the audit host's
-//! main-thread stack (`ulimit -s` = 8192). In a release build, 3,500 brace
-//! groups with `with_max_depth(20_000)` return `Ok`. 3,531 and deeper return
-//! `Err(Malformed)`. A debug build uses more stack per frame, so the debug
-//! run checks 1,500 instead of 3,500. Libtest's worker thread is 2 MiB,
-//! so the child moves the parse onto an 8 MiB thread before it calls
-//! `parse_with_options`.
-//!
-//! `raised_limit_must_not_abort` is part of the default run. 3,500 braces
-//! at limit 20,000 stay `Ok` in a release build. 3,531 and deeper return
-//! `Err(Malformed)` for braces, `\left`, and `\frac`. An abort is a failure.
-//! `small_stack_must_not_abort` runs those 3,531 nests on a 1 MiB thread and
-//! on a 256 KiB thread. `Ok` or `Err(Malformed)` is success. An abort is not.
+//! Acceptance depends only on the input and `max_depth`. Each case runs on an
+//! 8 MiB stack, a 1 MiB stack, and a 256 KiB stack. The same assertions hold
+//! in debug and release: Pop runs this file both ways. Within the limit the
+//! parse is `Ok`. Past the limit it is `Err(Malformed)` naming that limit.
+//! An abort is a failure. `Ok` and `Malformed` are never interchangeable.
 
 use std::process::{Command, ExitStatus, Stdio};
 use std::time::{Duration, Instant};
 
-use latex_rust::{parse, parse_with_options, ParseError, ParseOptions};
+use latex_rust::{parse, parse_with_options, ParseError, ParseOptions, DEFAULT_MAX_NESTING_DEPTH};
 
 const CHILD_OK: i32 = 17;
-const AUDIT_STACK: usize = 8 << 20;
+const STACKS: [usize; 3] = [8 << 20, 1 << 20, 256 << 10];
 
 fn shape(name: &str, n: usize) -> String {
     match name {
@@ -31,26 +22,35 @@ fn shape(name: &str, n: usize) -> String {
         "sup" => "x^{".repeat(n) + "y" + &"}".repeat(n),
         "left" => "\\left(".repeat(n) + "x" + &"\\right)".repeat(n),
         "mathrm" => "\\mathrm{".repeat(n) + "x" + &"}".repeat(n),
+        "styled_frac" => "\\mathrm{".to_string() + &shape("frac", n) + "}",
         other => panic!("unknown shape {other}"),
+    }
+}
+
+fn limit_n(limit: &str) -> Result<usize, String> {
+    if limit == "default" {
+        Ok(DEFAULT_MAX_NESTING_DEPTH)
+    } else {
+        limit
+            .parse()
+            .map_err(|err: std::num::ParseIntError| err.to_string())
     }
 }
 
 fn outcome(name: &str, n: usize, limit: &str) -> Result<bool, String> {
     let input = shape(name, n);
+    let depth = limit_n(limit)?;
     let parsed = if limit == "default" {
         parse(&input).map(|_| ())
     } else {
-        let depth: usize = match limit.parse() {
-            Ok(depth) => depth,
-            Err(err) => return Err(err.to_string()),
-        };
         let opts = ParseOptions::new().with_max_depth(depth);
         parse_with_options(&input, &opts).map(|_| ())
     };
+    let needle = format!("input nests deeper than {depth} levels");
     match parsed {
-        Ok(()) => Ok(true),
-        Err(ParseError::Malformed(_)) => Ok(false),
-        Err(err) => Err(format!("expected Malformed, got {err}")),
+        Ok(_) => Ok(true),
+        Err(ParseError::Malformed(msg)) if msg == needle => Ok(false),
+        Err(err) => Err(format!("unexpected {err}")),
     }
 }
 
@@ -80,9 +80,8 @@ fn child_code() -> i32 {
         }
     };
     let expect_ok = match std::env::var("LATEX_RUST_DEPTH_EXPECT") {
-        Ok(s) if s == "ok" => Some(true),
-        Ok(s) if s == "err" => Some(false),
-        Ok(s) if s == "either" => None,
+        Ok(s) if s == "ok" => true,
+        Ok(s) if s == "err" => false,
         Ok(s) => {
             eprintln!("expect {s}");
             return 3;
@@ -100,7 +99,7 @@ fn child_code() -> i32 {
                 return 3;
             }
         },
-        Err(_) => AUDIT_STACK,
+        Err(_) => STACKS[0],
     };
     let handle = match std::thread::Builder::new()
         .name("audit-stack".into())
@@ -114,10 +113,9 @@ fn child_code() -> i32 {
         }
     };
     match handle.join() {
-        Ok(Ok(_)) if expect_ok.is_none() => CHILD_OK,
-        Ok(Ok(is_ok)) if Some(is_ok) == expect_ok => CHILD_OK,
+        Ok(Ok(is_ok)) if is_ok == expect_ok => CHILD_OK,
         Ok(Ok(is_ok)) => {
-            eprintln!("parse ok={is_ok}, expected ok={expect_ok:?}");
+            eprintln!("parse ok={is_ok}, expected ok={expect_ok}");
             2
         }
         Ok(Err(err)) => {
@@ -146,10 +144,6 @@ fn exe() -> std::path::PathBuf {
     }
 }
 
-fn run_case(shape_name: &str, n: usize, limit: &str, expect: &str) {
-    run_case_on(shape_name, n, limit, expect, AUDIT_STACK);
-}
-
 fn run_case_on(shape_name: &str, n: usize, limit: &str, expect: &str, stack: usize) {
     let mut child = match Command::new(exe())
         .arg("depth_child")
@@ -171,12 +165,12 @@ fn run_case_on(shape_name: &str, n: usize, limit: &str, expect: &str, stack: usi
     let status = loop {
         match child.try_wait() {
             Ok(Some(status)) => break status,
-            Ok(None) if start.elapsed() >= Duration::from_secs(10) => {
+            Ok(None) if start.elapsed() >= Duration::from_secs(30) => {
                 if let Err(err) = child.kill() {
-                    panic!("{shape_name}@{n}: kill after 10s: {err}");
+                    panic!("{shape_name}@{n}: kill after 30s: {err}");
                 }
                 let _ = child.wait();
-                panic!("{shape_name}@{n} limit={limit}: still running after 10s");
+                panic!("{shape_name}@{n} limit={limit}: still running after 30s");
             }
             Ok(None) => std::thread::sleep(Duration::from_millis(20)),
             Err(err) => panic!("{shape_name}@{n}: wait: {err}"),
@@ -200,46 +194,53 @@ fn status_word(status: &ExitStatus) -> String {
     }
 }
 
-#[test]
-fn default_limit_rejects_deep_input() {
-    for name in ["braces", "frac", "sqrt", "sup", "left", "mathrm"] {
-        run_case(name, 100_000, "default", "err");
+fn on_every_stack(shape_name: &str, n: usize, limit: &str, expect: &str) {
+    for stack in STACKS {
+        run_case_on(shape_name, n, limit, expect, stack);
     }
 }
 
 #[test]
+fn default_limit_rejects_deep_input() {
+    for name in ["braces", "frac", "sqrt", "sup", "left", "mathrm"] {
+        on_every_stack(name, 100_000, "default", "err");
+    }
+}
+
+/// 3,500 and 3,531 brace groups are under a limit of 20,000, so both are `Ok`.
+#[test]
 fn raised_limit_parses_deep_braces() {
-    // Under the debug abort (about 1,850) and under the release abort (3,531).
-    run_case("braces", 1_500, "20000", "ok");
-    if !cfg!(debug_assertions) {
-        run_case("braces", 3_500, "20000", "ok");
+    for n in [3_500_usize, 3_531] {
+        on_every_stack("braces", n, "20000", "ok");
     }
 }
 
 #[test]
 fn default_limit_rejects_3531_braces() {
-    run_case("braces", 3_531, "default", "err");
+    on_every_stack("braces", 3_531, "default", "err");
 }
 
-/// 3,531 and deeper nests at `with_max_depth(20_000)` must be
-/// `Err(Malformed)`, not a stack abort. 3,500 braces staying `Ok` is
-/// `raised_limit_parses_deep_braces`.
+/// Inside `with_max_depth(20_000)` the parse is `Ok`. One level past it is
+/// `Malformed` naming 20,000. A brace or `\left` is one level. `\frac`,
+/// `\sqrt`, a superscript, and `\mathrm` each cost two.
 #[test]
 fn raised_limit_must_not_abort() {
-    for n in [3_531_usize, 10_000] {
-        run_case("braces", n, "20000", "err");
-        run_case("left", n, "20000", "err");
-        run_case("frac", n, "20000", "err");
+    for n in [10_000_usize, 19_999] {
+        on_every_stack("braces", n, "20000", "ok");
+        on_every_stack("left", n, "20000", "ok");
     }
-}
-
-/// A raised limit on a 1 MiB thread, and on a 256 KiB thread, must not abort.
-/// `Ok` and `Err(Malformed)` are both acceptable.
-#[test]
-fn small_stack_must_not_abort() {
-    for stack in [1 << 20, 256 << 10] {
-        for name in ["braces", "left", "frac"] {
-            run_case_on(name, 3_531, "20000", "either", stack);
-        }
+    on_every_stack("left", 3_531, "20000", "ok");
+    for name in ["frac", "sqrt", "sup", "mathrm"] {
+        on_every_stack(name, 3_531, "20000", "ok");
+        on_every_stack(name, 9_999, "20000", "ok");
     }
+    // `\mathrm{\frac…}` starts two levels down, so 9,998 still fits and 9,999 does not.
+    on_every_stack("styled_frac", 3_531, "20000", "ok");
+    on_every_stack("styled_frac", 9_998, "20000", "ok");
+    on_every_stack("braces", 20_000, "20000", "err");
+    on_every_stack("left", 20_000, "20000", "err");
+    for name in ["frac", "sqrt", "sup", "mathrm"] {
+        on_every_stack(name, 10_000, "20000", "err");
+    }
+    on_every_stack("styled_frac", 9_999, "20000", "err");
 }

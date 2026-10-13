@@ -49,17 +49,22 @@ This release lists every finding and its fix.
   Migration: `f'^2` is the square of primed `f`. `f'` and `f^{\prime}` stay
   different nodes.
 
-- **A raised depth limit aborted the process.** `with_max_depth(20_000)`
-  parsed 3,500 brace groups and aborted at 3,531. The same limit aborted on
-  deep `\left` and `\frac`. The parser checks a stack budget before each
-  recursive call and returns `Malformed` once that budget is reached, or
-  once the calling thread has less than 64 KiB of stack left. The default
-  depth stays 32.
+- **A raised depth limit aborted the process, and acceptance depended on the build.**
+  `with_max_depth(20_000)` parsed 3,500 brace groups and aborted at 3,531.
+  The same limit aborted on deep `\left` and `\frac`. A stack budget on top
+  of that returned `Malformed` for input that was still under the caller's
+  limit, and a release build's smaller frames made 3,531 braces `Ok` while
+  a debug build returned `Err`. Nesting now lives on a heap stack.
+  `max_depth` is the only limit: the same input gets the same result in
+  debug and release, on an 8 MiB stack and on a 256 KiB stack.
 
-  Migration: 3,500 braces at limit 20,000 on an 8 MiB stack still return
-  `Ok`. 3,531 or more braces, `\left`, or `\frac` at that limit return
-  `Err(Malformed)`. The same nests on a 1 MiB or 256 KiB thread also return
-  `Err(Malformed)`. Callers on the default limit of 32 see no change.
+  Migration: the default depth stays 32. 3,500 and 3,531 brace groups at
+  limit 20,000 return `Ok`, and so does the same nest of `\left` or a
+  3,531-deep `\frac`. A brace group or a `\left` body is one level, so
+  20,000 of them at that limit return `Err(Malformed)`. A braced argument
+  such as `\frac` or a superscript costs two levels, so 10,000 of those
+  return `Err(Malformed)`. Callers on the default limit of 32 see no change.
+  Layout of a deep tree still uses the calling thread's stack.
 
 - **Empty input parsed as an empty row.** `parse("")` and whitespace returned
   `(row)`. `\frac{}{}` was a fraction of two empty rows. A bare prime was a

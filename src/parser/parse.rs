@@ -5,223 +5,43 @@
 
 use super::ast::{
     AccentKind, AtomKind, ColSpec, DelimSize, Delimiter, EnvRow, EqNumber, IntegralKind, MathNode,
-    MatrixStyle, PhantomKind, SpaceKind, TextStyle,
+    TextStyle,
 };
 use super::preproc::preprocess;
 use super::token::{tokenize, Token};
 use crate::color::{parse_color_spec, Color, ColorTable};
+
+mod drive;
 use crate::dim::Dim;
 use crate::error::{Error, ParseError};
 use crate::symbols::{lookup, SymbolKind as CatalogKind};
 
 /// Default deepest nesting [`parse`] and [`layout`](crate::layout()) accept.
 ///
-/// Both recurse over the structure of the input, so their stack use grows with
-/// how deeply it nests. Past the limit they return an error rather than
-/// consume unbounded stack: input this deep is pathological, and a crate that
-/// refuses to invent a render should not abort the process either.
+/// Past the limit both return an error. Input this deep is pathological, and
+/// a crate that refuses to invent a render should not abort the process either.
+///
+/// Parsing keeps its nesting on a heap stack. Whether an input is inside this
+/// limit depends only on the input and the limit, not on frame size, the build
+/// profile, or the calling thread's stack.
 ///
 /// The count is of parser recursion levels rather than of LaTeX constructs, and
 /// a braced argument costs two of them (one for the argument and one for the
-/// group), so the default admits `\frac{1}{…}` nested about 15 deep. Real
-/// mathematics rarely nests beyond five levels.
+/// group), so the default admits `\frac{1}{…}` nested 15 deep. Real mathematics
+/// rarely nests beyond five levels.
 ///
-/// Measured on Linux x86-64 with the deepest input 32 admits in each nesting
-/// shape, parsed, laid out, rendered to SVG and dropped: an optimised build
-/// survives on a 1 MiB stack (the `wasm32` default) with about three times the
-/// headroom needed, and an unoptimised build survives on the 2 MiB stack of a
-/// default `std::thread` worker with about twice. An unoptimised build on a
-/// 1 MiB stack is *not* covered: layout overflows there at about 14 nested
-/// radicals or scripts. A caller that knows it has more stack can raise the
-/// limit with [`ParseOptions::with_max_depth`] and
-/// [`layout_with_max_depth`](crate::layout_with_max_depth); a caller on a
-/// smaller stack should lower it.
+/// Layout still walks the tree on the calling thread's stack. Measured on
+/// Linux x86-64 with the deepest input 32 admits in each nesting shape, laid
+/// out, rendered to SVG and dropped: an optimised build survives on a 1 MiB
+/// stack (the `wasm32` default) with about three times the headroom needed,
+/// and an unoptimised build survives on the 2 MiB stack of a default
+/// `std::thread` worker with about twice. An unoptimised build on a 1 MiB
+/// stack is *not* covered: layout overflows there at about 14 nested radicals
+/// or scripts. A caller that knows it has more stack can raise the layout
+/// limit with [`layout_with_max_depth`](crate::layout_with_max_depth); a caller
+/// on a smaller stack should lower it. Parsing is raised separately with
+/// [`ParseOptions::with_max_depth`].
 pub const DEFAULT_MAX_NESTING_DEPTH: usize = 32;
-
-/// Bytes of stack [`Parser::nested`] may use before [`ParseError::Malformed`].
-///
-/// Release frames are about 2 KiB. On an 8 MiB thread, 3,500 brace groups sit
-/// just under this ceiling and 3,531 sit just over it. Debug frames are
-/// larger, so that ceiling is higher: 1,500 braces still parse. A thread
-/// with less room stops earlier, at [`STACK_HEADROOM`] bytes above the
-/// bottom of that thread's stack. The check runs before the recursive call.
-const STACK_BUDGET_BYTES: usize = if cfg!(debug_assertions) {
-    7_700_000
-} else {
-    7_540_000
-};
-
-/// Bytes left above the stack floor before a recursive call is refused.
-///
-/// One debug `\left` step is about 27 KiB. This leaves room for that step
-/// on a 256 KiB thread without touching the guard page.
-const STACK_HEADROOM: usize = 64 << 10;
-
-const STACK_PAGE: usize = 4096;
-
-/// Stack pointer, so the budget sees the real frame rather than one local.
-///
-/// Readings are only subtracted. Nothing is loaded through the pointer.
-#[inline(always)]
-fn stack_pointer() -> usize {
-    #[cfg(target_arch = "x86_64")]
-    {
-        let sp: usize;
-        // SAFETY: copies `rsp` into a register. `nostack` keeps the asm from
-        // pushing, and the value is never dereferenced.
-        unsafe {
-            core::arch::asm!(
-                "mov {}, rsp",
-                out(reg) sp,
-                options(nomem, nostack, preserves_flags)
-            );
-        }
-        sp
-    }
-    #[cfg(target_arch = "aarch64")]
-    {
-        let sp: usize;
-        // SAFETY: copies `sp` into a register. `nostack` keeps the asm from
-        // pushing, and the value is never dereferenced.
-        unsafe {
-            core::arch::asm!(
-                "mov {}, sp",
-                out(reg) sp,
-                options(nomem, nostack, preserves_flags)
-            );
-        }
-        sp
-    }
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
-    {
-        let frame = 0u8;
-        std::ptr::from_ref(&frame) as usize
-    }
-}
-
-std::thread_local! {
-    static STACK_FLOOR: std::cell::Cell<usize> = const { std::cell::Cell::new(usize::MAX) };
-}
-
-/// Lowest address this thread's stack may approach, cached for the thread.
-fn thread_stack_floor(sp: usize) -> Option<usize> {
-    STACK_FLOOR.with(|cell| {
-        let cached = cell.get();
-        if cached != usize::MAX {
-            return Some(cached);
-        }
-        let floor = stack_floor(sp)?;
-        cell.set(floor);
-        Some(floor)
-    })
-}
-
-/// Floor of the mapping that contains `sp`.
-///
-/// A pthread stack mapping is fully reserved, so its low address is the
-/// floor. The main `[stack]` mapping grows downward until `RLIMIT_STACK`.
-fn stack_floor(sp: usize) -> Option<usize> {
-    let maps = std::fs::read_to_string("/proc/self/maps").ok()?;
-    for line in maps.lines() {
-        let Some(range) = line.split_whitespace().next() else {
-            continue;
-        };
-        let Some((start, end)) = range.split_once('-') else {
-            continue;
-        };
-        let Ok(low) = usize::from_str_radix(start, 16) else {
-            continue;
-        };
-        let Ok(high) = usize::from_str_radix(end, 16) else {
-            continue;
-        };
-        if sp < low || sp >= high {
-            continue;
-        }
-        if line.split_whitespace().last() == Some("[stack]") {
-            return Some(main_stack_floor(low, high));
-        }
-        return Some(low);
-    }
-    None
-}
-
-fn main_stack_floor(low: usize, high: usize) -> usize {
-    let Some(limit) = rlimit_stack_cur() else {
-        return low;
-    };
-    if limit >= (1 << 62) {
-        return low;
-    }
-    let Ok(limit) = usize::try_from(limit) else {
-        return low;
-    };
-    high.saturating_sub(limit).saturating_add(STACK_PAGE)
-}
-
-#[cfg(target_arch = "x86_64")]
-fn rlimit_stack_cur() -> Option<u64> {
-    #[repr(C)]
-    struct RLimit {
-        cur: u64,
-        max: u64,
-    }
-    let mut lim = RLimit { cur: 0, max: 0 };
-    let rc: isize;
-    // SAFETY: Linux `getrlimit` is syscall 97 and `RLIMIT_STACK` is 3. `lim`
-    // is a live object. The asm lists the registers `syscall` clobbers and
-    // does not push.
-    unsafe {
-        core::arch::asm!(
-            "syscall",
-            in("rax") 97usize,
-            in("rdi") 3usize,
-            in("rsi") &mut lim as *mut RLimit,
-            lateout("rax") rc,
-            lateout("rcx") _,
-            lateout("r11") _,
-            options(nostack)
-        );
-    }
-    if rc == 0 {
-        Some(lim.cur)
-    } else {
-        None
-    }
-}
-
-#[cfg(target_arch = "aarch64")]
-fn rlimit_stack_cur() -> Option<u64> {
-    #[repr(C)]
-    struct RLimit {
-        cur: u64,
-        max: u64,
-    }
-    let mut lim = RLimit { cur: 0, max: 0 };
-    let rc: isize;
-    // SAFETY: Linux `getrlimit` is syscall 163 and `RLIMIT_STACK` is 3. `lim`
-    // is a live object. The asm does not push.
-    unsafe {
-        core::arch::asm!(
-            "svc #0",
-            in("x8") 163usize,
-            in("x0") 3usize,
-            in("x1") &mut lim as *mut RLimit,
-            lateout("x0") rc,
-            options(nostack)
-        );
-    }
-    if rc == 0 {
-        Some(lim.cur)
-    } else {
-        None
-    }
-}
-
-#[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
-fn rlimit_stack_cur() -> Option<u64> {
-    None
-}
 
 /// Options for [`parse_with_options`].
 ///
@@ -257,14 +77,18 @@ impl ParseOptions {
         Self::default()
     }
 
-    /// Set the deepest parser recursion accepted.
+    /// Set the deepest parser nesting accepted.
     ///
-    /// Raising this past the default needs room on the calling thread.
-    /// The parser returns [`ParseError::Malformed`] when the next call would
-    /// pass the stack budget or the room left on that thread. On an 8 MiB
-    /// thread, 3,500 brace groups still parse in a release build and 3,531
-    /// of them return `Malformed`. A 1 MiB or 256 KiB thread returns
-    /// `Malformed` for those deep nests. See [`DEFAULT_MAX_NESTING_DEPTH`].
+    /// Parsing uses a heap stack, so this limit is exact. The same input is
+    /// [`Ok`](Result::Ok) or [`ParseError::Malformed`] in every build profile
+    /// and on every thread stack, including 256 KiB. A brace group or a
+    /// `\left` body is one level, so 3,531 of them are inside a limit of
+    /// 20,000 and 20,000 of them are not. A braced argument such as `\frac`
+    /// or a superscript costs two levels, so 9,999 of those are inside 20,000
+    /// and 10,000 are not.
+    ///
+    /// Layout of the tree is separate and still uses the calling thread's
+    /// stack. See [`DEFAULT_MAX_NESTING_DEPTH`].
     #[must_use]
     pub fn with_max_depth(mut self, max_depth: usize) -> Self {
         self.max_depth = max_depth;
@@ -358,17 +182,14 @@ pub fn parse_with_options(
     }
     let tokens = tokenize(&sanitized)?;
     let tokens = strip_fences(&tokens)?;
-    let stack_base = stack_pointer();
     let mut p = Parser {
         tokens,
         pos: 0,
         depth: 0,
         max_depth: options.max_depth,
         colors: ColorTable::new(),
-        stack_base,
-        stack_floor: thread_stack_floor(stack_base).filter(|floor| *floor < stack_base),
     };
-    let node = p.parse_list(Stop::eof())?;
+    let node = drive::parse_top(&mut p)?;
     p.skip_ws();
     if p.pos < p.tokens.len() {
         return Err(ParseError::Malformed(format!(
@@ -448,10 +269,6 @@ struct Parser {
     depth: usize,
     /// Deepest nesting accepted, from [`ParseOptions::max_depth`].
     max_depth: usize,
-    /// Stack pointer at the start of [`parse_with_options`].
-    stack_base: usize,
-    /// Lowest address this thread's stack may approach, when known.
-    stack_floor: Option<usize>,
 }
 
 impl Parser {
@@ -494,147 +311,6 @@ impl Parser {
         }
     }
 
-    /// Run `f` one level deeper, refusing to descend past `max_depth` or the
-    /// stack budget. The budget is checked before the recursive call.
-    fn nested<T>(
-        &mut self,
-        f: impl FnOnce(&mut Self) -> Result<T, ParseError>,
-    ) -> Result<T, ParseError> {
-        if self.depth >= self.max_depth {
-            return Err(ParseError::Malformed(format!(
-                "input nests deeper than {} levels",
-                self.max_depth
-            )));
-        }
-        let sp = stack_pointer();
-        let used = self.stack_base.abs_diff(sp);
-        let near_floor = self
-            .stack_floor
-            .is_some_and(|floor| sp.saturating_sub(floor) < STACK_HEADROOM);
-        if used >= STACK_BUDGET_BYTES || near_floor {
-            return Err(ParseError::Malformed(
-                "input nests deeper than the stack budget".into(),
-            ));
-        }
-        self.depth += 1;
-        let out = f(self);
-        self.depth -= 1;
-        out
-    }
-
-    fn parse_list(&mut self, stop: Stop) -> Result<MathNode, ParseError> {
-        self.nested(|p| p.parse_list_inner(stop))
-    }
-
-    fn parse_list_inner(&mut self, stop: Stop) -> Result<MathNode, ParseError> {
-        let mut items = Vec::new();
-        loop {
-            self.skip_ws();
-            let Some(tok) = self.peek().cloned() else {
-                break;
-            };
-            if self.is_stop(&tok, stop) {
-                break;
-            }
-            match &tok {
-                Token::MathShift | Token::DisplayShift => {
-                    return Err(ParseError::Malformed("unexpected math shift".into()));
-                }
-                Token::Command(n) if n == "color" => {
-                    self.bump();
-                    let c = self.parse_color_from_cmd()?;
-                    let rest = self.parse_list(stop)?;
-                    items.push(MathNode::Color(c, Box::new(rest)));
-                    break;
-                }
-                Token::Command(n) if n == "definecolor" => {
-                    self.bump();
-                    self.parse_definecolor()?;
-                    continue;
-                }
-                _ => {}
-            }
-            items.push(self.parse_atom()?);
-        }
-        Ok(wrap_row(items))
-    }
-
-    fn parse_atom(&mut self) -> Result<MathNode, ParseError> {
-        self.skip_ws();
-        let mut nucleus =
-            if matches!(self.peek(), Some(Token::Char('('))) && self.script_follows_parens() {
-                self.nested(|p| p.parse_paren_row())?
-            } else {
-                self.parse_nucleus()?
-            };
-        let mut limits = None;
-        loop {
-            match self.peek_ws() {
-                Some(Token::Command(n)) if n == "limits" => {
-                    self.bump();
-                    limits = Some(true);
-                }
-                Some(Token::Command(n)) if n == "nolimits" => {
-                    self.bump();
-                    limits = Some(false);
-                }
-                _ => break,
-            }
-        }
-        if let Some(flag) = limits {
-            if let MathNode::Operator(name, _) = nucleus {
-                nucleus = MathNode::Operator(name, flag);
-            }
-        }
-        self.bind_scripts(nucleus)
-    }
-
-    fn parse_nucleus(&mut self) -> Result<MathNode, ParseError> {
-        self.skip_ws();
-        match self.peek().cloned() {
-            None => Err(ParseError::Malformed("unexpected end of input".into())),
-            Some(Token::Char('\'') | Token::Superscript | Token::Subscript) => {
-                Err(ParseError::Malformed("script has no base".into()))
-            }
-            Some(Token::BeginGroup) => self.parse_group(),
-            Some(Token::Char(c)) => {
-                self.bump();
-                Ok(MathNode::Atom(c, atom_kind(c)))
-            }
-            Some(Token::Command(name)) => {
-                self.bump();
-                self.parse_command(&name)
-            }
-            Some(other) => Err(ParseError::Malformed(format!("unexpected token {other}"))),
-        }
-    }
-
-    fn parse_group(&mut self) -> Result<MathNode, ParseError> {
-        match self.bump() {
-            Some(Token::BeginGroup) => {}
-            _ => return Err(ParseError::Malformed("expected '{'".into())),
-        }
-        let inner = self.parse_list(Stop::group())?;
-        match self.bump() {
-            Some(Token::EndGroup) => Ok(inner),
-            _ => Err(ParseError::Malformed("unmatched '{'".into())),
-        }
-    }
-
-    fn parse_arg(&mut self) -> Result<MathNode, ParseError> {
-        self.nested(Self::parse_arg_inner)
-    }
-
-    fn parse_arg_inner(&mut self) -> Result<MathNode, ParseError> {
-        self.skip_ws();
-        match self.peek() {
-            Some(Token::BeginGroup) => self.parse_group(),
-            Some(Token::Char('(')) => self.parse_paren_row(),
-            Some(_) => self.parse_nucleus(),
-            None => Err(ParseError::Malformed("missing argument".into())),
-        }
-    }
-
     /// True when the `(` at `pos` has a match and the next token is `^`, `_`, or `'`.
     fn script_follows_parens(&self) -> bool {
         let mut i = self.pos;
@@ -666,389 +342,9 @@ impl Parser {
         false
     }
 
-    /// Balanced `(...)`, parentheses kept as atoms. Inner `(` binds a following
-    /// script; a following script of this row is left for the caller.
-    fn parse_paren_row(&mut self) -> Result<MathNode, ParseError> {
-        match self.bump() {
-            Some(Token::Char('(')) => {}
-            _ => return Err(ParseError::Malformed("expected '('".into())),
-        }
-        let mut items = vec![MathNode::Atom('(', AtomKind::Open)];
-        let mut depth = 1i32;
-        loop {
-            self.skip_ws();
-            match self.peek().cloned() {
-                None => return Err(ParseError::Malformed("unmatched '('".into())),
-                Some(Token::Char(')')) => {
-                    self.bump();
-                    items.push(MathNode::Atom(')', AtomKind::Close));
-                    depth -= 1;
-                    if depth == 0 {
-                        return Ok(wrap_row(items));
-                    }
-                }
-                Some(Token::Char('(')) if self.script_follows_parens() => {
-                    items.push(self.parse_atom()?);
-                }
-                Some(Token::Char('(')) => {
-                    self.bump();
-                    items.push(MathNode::Atom('(', AtomKind::Open));
-                    depth += 1;
-                }
-                Some(_) => items.push(self.parse_atom()?),
-            }
-        }
-    }
-
-    fn parse_script(&mut self) -> Result<MathNode, ParseError> {
-        self.parse_arg()
-    }
-
-    fn bind_scripts(&mut self, mut nucleus: MathNode) -> Result<MathNode, ParseError> {
-        let mut sub: Option<MathNode> = None;
-        let mut sup: Option<MathNode> = None;
-        let mut sup_from_prime = false;
-        loop {
-            match self.peek_ws() {
-                Some(Token::Subscript) => {
-                    self.bump();
-                    if sub.is_some() {
-                        return Err(ParseError::Malformed("double subscript".into()));
-                    }
-                    sub = Some(self.parse_script()?);
-                }
-                Some(Token::Superscript) => {
-                    self.bump();
-                    if sup_from_prime {
-                        // f'^2 is the square of primed f, the same tree as {f'}^2.
-                        nucleus = apply_scripts(nucleus, sub.take(), sup.take());
-                        sup_from_prime = false;
-                        sup = Some(self.parse_script()?);
-                    } else if sup.is_some() {
-                        return Err(ParseError::Malformed("double superscript".into()));
-                    } else {
-                        sup = Some(self.parse_script()?);
-                    }
-                }
-                Some(Token::Char('\'')) => {
-                    self.bump();
-                    let prime = MathNode::Atom('′', AtomKind::Ord);
-                    sup = Some(match sup.take() {
-                        None => prime,
-                        Some(prev) => wrap_row(vec![prev, prime]),
-                    });
-                    sup_from_prime = true;
-                }
-                _ => break,
-            }
-        }
-        Ok(apply_scripts(nucleus, sub, sup))
-    }
-
-    fn parse_command(&mut self, name: &str) -> Result<MathNode, ParseError> {
-        match name {
-            "frac" | "dfrac" | "tfrac" | "cfrac" => {
-                let n = self.parse_arg()?;
-                let d = self.parse_arg()?;
-                if is_empty_node(&n) && is_empty_node(&d) {
-                    return Err(ParseError::Malformed("empty fraction".into()));
-                }
-                Ok(MathNode::Fraction(Box::new(n), Box::new(d)))
-            }
-            "binom" | "dbinom" | "tbinom" => {
-                let n = self.parse_arg()?;
-                let k = self.parse_arg()?;
-                Ok(MathNode::Delimited(
-                    Delimiter::Char('('),
-                    Box::new(MathNode::Fraction(Box::new(n), Box::new(k))),
-                    Delimiter::Char(')'),
-                ))
-            }
-            "genfrac" => self.parse_genfrac(),
-            "sqrt" => {
-                let index = if matches!(self.peek_ws(), Some(Token::Char('['))) {
-                    self.bump();
-                    let idx = self.parse_list(Stop::index())?;
-                    match self.bump() {
-                        Some(Token::Char(']')) => {}
-                        _ => {
-                            return Err(ParseError::Malformed(
-                                "expected ']' after \\sqrt index".into(),
-                            ))
-                        }
-                    }
-                    Some(Box::new(idx))
-                } else {
-                    None
-                };
-                let rad = self.parse_arg()?;
-                Ok(MathNode::Radical(index, Box::new(rad)))
-            }
-            "left" => self.parse_delimited(),
-            "right" => Err(ParseError::UnmatchedDelimiter),
-            "begin" => self.parse_begin(),
-            "end" => Err(ParseError::Malformed("unexpected \\end".into())),
-            "over" => Err(ParseError::Malformed("\\over outside a group".into())),
-            "choose" => Err(ParseError::Malformed("\\choose outside a group".into())),
-            "hat" => self.accent(AccentKind::Hat),
-            "check" => self.accent(AccentKind::Check),
-            "breve" => self.accent(AccentKind::Breve),
-            "acute" => self.accent(AccentKind::Acute),
-            "grave" => self.accent(AccentKind::Grave),
-            "tilde" => self.accent(AccentKind::Tilde),
-            "bar" => self.accent(AccentKind::Bar),
-            "vec" => self.accent(AccentKind::Vec),
-            "dot" => self.accent(AccentKind::Dot),
-            "ddot" => self.accent(AccentKind::Ddot),
-            "dddot" => self.accent(AccentKind::Dddot),
-            "ddddot" => self.accent(AccentKind::Ddddot),
-            "widehat" => self.accent(AccentKind::WideHat),
-            "widetilde" => self.accent(AccentKind::WideTilde),
-            "overline" => self.accent(AccentKind::Overline),
-            "underline" => self.accent(AccentKind::Underline),
-            "overbrace" => self.accent(AccentKind::Overbrace),
-            "underbrace" => self.accent(AccentKind::Underbrace),
-            "overleftarrow" => self.accent(AccentKind::Overleftarrow),
-            "overrightarrow" => self.accent(AccentKind::Overrightarrow),
-            "overleftrightarrow" => self.accent(AccentKind::Overleftrightarrow),
-            "underleftarrow" => self.accent(AccentKind::Underleftarrow),
-            "underrightarrow" => self.accent(AccentKind::Underrightarrow),
-            "underleftrightarrow" => self.accent(AccentKind::Underleftrightarrow),
-            "cancel" => self.accent(AccentKind::Cancel),
-            "bcancel" => self.accent(AccentKind::BCancel),
-            "xcancel" => self.accent(AccentKind::XCancel),
-            "boxed" | "fbox" => self.accent(AccentKind::Boxed),
-            "mathring" => self.accent(AccentKind::Ring),
-            "cancelto" => {
-                let value = self.parse_arg()?;
-                let expr = self.parse_arg()?;
-                if is_empty_node(&expr) {
-                    return Err(ParseError::Malformed("empty accent base".into()));
-                }
-                Ok(MathNode::CancelTo(Box::new(value), Box::new(expr)))
-            }
-            "not" => {
-                let body = self.parse_nucleus()?;
-                Ok(MathNode::Accent(Box::new(body), AccentKind::Not))
-            }
-            "overset" => {
-                let over = self.parse_arg()?;
-                let base = self.parse_arg()?;
-                Ok(MathNode::OverUnder(
-                    Box::new(base),
-                    Some(Box::new(over)),
-                    None,
-                ))
-            }
-            "underset" => {
-                let under = self.parse_arg()?;
-                let base = self.parse_arg()?;
-                Ok(MathNode::OverUnder(
-                    Box::new(base),
-                    None,
-                    Some(Box::new(under)),
-                ))
-            }
-            "stackrel" => {
-                let over = self.parse_arg()?;
-                let base = self.parse_arg()?;
-                Ok(MathNode::OverUnder(
-                    Box::new(base),
-                    Some(Box::new(over)),
-                    None,
-                ))
-            }
-            "mathrm" | "textrm" => self.font(TextStyle::Rm),
-            "mathbf" | "textbf" => self.font(TextStyle::Bf),
-            "mathit" | "textit" => self.font(TextStyle::It),
-            "mathsf" | "textsf" => self.font(TextStyle::Sf),
-            "mathtt" | "texttt" => self.font(TextStyle::Tt),
-            "mathbb" => self.font(TextStyle::Bb),
-            "mathcal" => self.font(TextStyle::Cal),
-            "mathfrak" => self.font(TextStyle::Frak),
-            "mathscr" => self.font(TextStyle::Scr),
-            "boldsymbol" => self.font(TextStyle::Boldsymbol),
-            "pmb" => self.font(TextStyle::Pmb),
-            "xrightarrow" => self.parse_xarrow("longrightarrow"),
-            "xleftarrow" => self.parse_xarrow("longleftarrow"),
-            "text" | "mbox" => self.parse_text(TextStyle::Text),
-            "operatorname" => {
-                let name = self.collect_group_text()?;
-                Ok(MathNode::Operator(name, false))
-            }
-            "," => Ok(MathNode::Space(SpaceKind::Thin)),
-            ":" | ">" => Ok(MathNode::Space(SpaceKind::Medium)),
-            ";" => Ok(MathNode::Space(SpaceKind::Thick)),
-            "!" => Ok(MathNode::Space(SpaceKind::NegThin)),
-            "quad" => Ok(MathNode::Space(SpaceKind::Quad)),
-            "qquad" => Ok(MathNode::Space(SpaceKind::Qquad)),
-            " " => Ok(MathNode::Space(SpaceKind::ControlSpace)),
-            "hspace" => {
-                let spec = self.collect_group_text()?;
-                let d = parse_tex_dim(&spec)?;
-                Ok(MathNode::Space(SpaceKind::Hspace(d)))
-            }
-            "phantom" => {
-                let b = self.parse_arg()?;
-                Ok(MathNode::Phantom(PhantomKind::Full, Box::new(b)))
-            }
-            "vphantom" => {
-                let b = self.parse_arg()?;
-                Ok(MathNode::Phantom(PhantomKind::Vertical, Box::new(b)))
-            }
-            "hphantom" => {
-                let b = self.parse_arg()?;
-                Ok(MathNode::Phantom(PhantomKind::Horizontal, Box::new(b)))
-            }
-            "strut" => Ok(MathNode::Strut(Dim::ratio(7, 10), Dim::ratio(3, 10))),
-            "rule" => {
-                let _w = parse_tex_dim(&self.collect_group_text()?)?;
-                let h = parse_tex_dim(&self.collect_group_text()?)?;
-                Ok(MathNode::Strut(h, Dim::zero()))
-            }
-            "textcolor" => {
-                let c = self.parse_color_from_cmd()?;
-                let body = self.parse_arg()?;
-                Ok(MathNode::TextColor(c, Box::new(body)))
-            }
-            "colorbox" => {
-                let c = self.parse_color_from_cmd()?;
-                let body = self.parse_arg()?;
-                Ok(MathNode::ColorBox(c, Box::new(body)))
-            }
-            "fcolorbox" => {
-                let border = self.parse_color_from_cmd()?;
-                let fill = self.parse_color_from_cmd()?;
-                let body = self.parse_arg()?;
-                Ok(MathNode::FColorBox(border, fill, Box::new(body)))
-            }
-            "sum" => Ok(MathNode::Sum(None, None)),
-            "prod" => Ok(MathNode::Product(None, None)),
-            "int" => Ok(MathNode::Integral(IntegralKind::Int, None, None)),
-            "iint" => Ok(MathNode::Integral(IntegralKind::Iint, None, None)),
-            "iiint" => Ok(MathNode::Integral(IntegralKind::Iiint, None, None)),
-            "oint" => Ok(MathNode::Integral(IntegralKind::Oint, None, None)),
-            "oiint" => Ok(MathNode::Integral(IntegralKind::Oiint, None, None)),
-            "lim" => Ok(MathNode::Limit(None)),
-            "sin" | "cos" | "tan" | "cot" | "sec" | "csc" | "arcsin" | "arccos" | "arctan"
-            | "sinh" | "cosh" | "tanh" | "coth" | "log" | "ln" | "lg" | "exp" | "limsup"
-            | "liminf" | "sup" | "inf" | "max" | "min" | "det" | "dim" | "ker" | "deg" | "gcd"
-            | "lcm" | "Pr" | "arg" => Ok(MathNode::Operator(name.to_string(), false)),
-            "coprod" | "bigcup" | "bigcap" | "bigsqcup" | "bigvee" | "bigwedge" | "bigoplus"
-            | "bigotimes" | "biguplus" => Ok(MathNode::Operator(name.to_string(), true)),
-            "big" | "Big" | "bigg" | "Bigg" | "bigl" | "bigr" | "Bigl" | "Bigr" | "biggl"
-            | "biggr" | "Biggl" | "Biggr" | "bigm" | "Bigm" | "biggm" | "Biggm" => {
-                self.parse_sized_delim(name)
-            }
-            "tag" => {
-                let star = matches!(self.peek_ws(), Some(Token::Char('*')));
-                if star {
-                    self.bump();
-                }
-                let body = self.parse_arg()?;
-                Ok(MathNode::Tag {
-                    star,
-                    body: Box::new(body),
-                })
-            }
-            "label" => {
-                let key = self.collect_group_text()?;
-                Ok(MathNode::Label(key))
-            }
-            "ref" => {
-                let key = self.collect_group_text()?;
-                Ok(MathNode::Ref(key))
-            }
-            "nonumber" | "notag" => Ok(MathNode::NoNumber),
-            "hline" => Ok(MathNode::Hline),
-            "intertext" => {
-                let s = self.collect_group_text()?;
-                Ok(MathNode::Intertext(Box::new(MathNode::Text(
-                    s,
-                    TextStyle::Text,
-                ))))
-            }
-            "substack" => self.parse_substack(),
-            "displaystyle" | "textstyle" | "scriptstyle" | "scriptscriptstyle" | "limits"
-            | "nolimits" => self.parse_nucleus(),
-            "{" | "}" => {
-                let c = name.chars().next().unwrap_or('{');
-                Ok(MathNode::Atom(
-                    c,
-                    if name == "{" {
-                        AtomKind::Open
-                    } else {
-                        AtomKind::Close
-                    },
-                ))
-            }
-            "|" => Ok(MathNode::Symbol("Vert".into())),
-            "backslash" => Ok(MathNode::Symbol("backslash".into())),
-            _ => {
-                if name.starts_with("math")
-                    && name.len() > 4
-                    && name.chars().all(|c| c.is_ascii_alphabetic())
-                {
-                    return Err(ParseError::Unsupported(format!("font style {name}")));
-                }
-                if name.starts_with("wide") {
-                    return Err(ParseError::Unsupported(format!("accent {name}")));
-                }
-                self.parse_symbol_or_unknown(name)
-            }
-        }
-    }
-
-    fn accent(&mut self, kind: AccentKind) -> Result<MathNode, ParseError> {
-        let body = self.parse_arg()?;
-        if is_empty_node(&body) {
-            return Err(ParseError::Malformed("empty accent base".into()));
-        }
-        Ok(MathNode::Accent(Box::new(body), kind))
-    }
-
-    fn parse_xarrow(&mut self, arrow: &str) -> Result<MathNode, ParseError> {
-        let under = if matches!(self.peek_ws(), Some(Token::Char('['))) {
-            self.bump();
-            let u = self.parse_list(Stop::index())?;
-            match self.bump() {
-                Some(Token::Char(']')) => Some(Box::new(u)),
-                _ => {
-                    return Err(ParseError::Malformed(
-                        "expected ']' after x-arrow optional argument".into(),
-                    ))
-                }
-            }
-        } else {
-            None
-        };
-        let over = self.parse_arg()?;
-        Ok(MathNode::OverUnder(
-            Box::new(MathNode::Symbol(arrow.to_string())),
-            Some(Box::new(over)),
-            under,
-        ))
-    }
-
-    fn font(&mut self, style: TextStyle) -> Result<MathNode, ParseError> {
-        let inner = self.parse_arg()?;
-        Ok(collapse_text(apply_text_style(inner, style)))
-    }
-
     fn parse_text(&mut self, style: TextStyle) -> Result<MathNode, ParseError> {
         let s = self.collect_group_text()?;
         Ok(MathNode::Text(s, style))
-    }
-
-    fn parse_delimited(&mut self) -> Result<MathNode, ParseError> {
-        let open = self.parse_delimiter()?;
-        let body = self.parse_list(Stop::delim())?;
-        match self.bump() {
-            Some(Token::Command(n)) if n == "right" => {}
-            _ => return Err(ParseError::UnmatchedDelimiter),
-        }
-        let close = self.parse_delimiter()?;
-        Ok(MathNode::Delimited(open, Box::new(body), close))
     }
 
     fn parse_sized_delim(&mut self, name: &str) -> Result<MathNode, ParseError> {
@@ -1089,145 +385,6 @@ impl Parser {
         }
     }
 
-    fn parse_begin(&mut self) -> Result<MathNode, ParseError> {
-        let name = self.collect_group_text()?;
-        let colspec = if name == "array" {
-            let preamble = self.collect_group_text()?;
-            parse_colspec(&preamble)?
-        } else {
-            Vec::new()
-        };
-        let style = match name.as_str() {
-            "matrix" => MatrixStyle::Matrix,
-            "pmatrix" => MatrixStyle::Pmatrix,
-            "bmatrix" => MatrixStyle::Bmatrix,
-            "vmatrix" => MatrixStyle::Vmatrix,
-            "Vmatrix" => MatrixStyle::VVmatrix,
-            "Bmatrix" => MatrixStyle::BBmatrix,
-            "cases" => MatrixStyle::Cases,
-            "array" => MatrixStyle::Array,
-            "aligned" => MatrixStyle::Aligned,
-            "align" => MatrixStyle::Align,
-            "gather" => MatrixStyle::Gather,
-            "multline" => MatrixStyle::Multline,
-            "equation" => MatrixStyle::Equation,
-            "split" => MatrixStyle::Split,
-            other => {
-                return Err(ParseError::Unsupported(format!("environment {other}")));
-            }
-        };
-        let rows = self.parse_rows()?;
-        self.expect_end(&name)?;
-        Ok(MathNode::Matrix(style, colspec, rows))
-    }
-
-    fn parse_substack(&mut self) -> Result<MathNode, ParseError> {
-        self.skip_ws();
-        match self.bump() {
-            Some(Token::BeginGroup) => {}
-            _ => {
-                return Err(ParseError::Malformed(
-                    "expected '{' after \\substack".into(),
-                ))
-            }
-        }
-        let mut lines = Vec::new();
-        loop {
-            self.skip_ws();
-            if matches!(self.peek(), Some(Token::EndGroup)) {
-                self.bump();
-                break;
-            }
-            let line = self.parse_list(Stop::substack_line())?;
-            lines.push(line);
-            self.skip_ws();
-            match self.peek() {
-                Some(Token::Command(n)) if n == "\\" || n == "cr" => {
-                    self.bump();
-                }
-                Some(Token::EndGroup) => {
-                    self.bump();
-                    break;
-                }
-                None => return Err(ParseError::Malformed("unmatched '{' in \\substack".into())),
-                Some(other) => {
-                    return Err(ParseError::Malformed(format!(
-                        "unexpected token {other} in \\substack"
-                    )))
-                }
-            }
-        }
-        if lines.is_empty() {
-            return Err(ParseError::Malformed("empty \\substack".into()));
-        }
-        Ok(MathNode::Substack(lines))
-    }
-
-    fn parse_rows(&mut self) -> Result<Vec<EnvRow>, ParseError> {
-        self.skip_ws();
-        if matches!(self.peek(), Some(Token::Command(n)) if n == "end") {
-            return Ok(Vec::new());
-        }
-        let mut rows = Vec::new();
-        loop {
-            self.skip_ws();
-            if matches!(self.peek(), Some(Token::Command(n)) if n == "end") {
-                return Ok(rows);
-            }
-            if matches!(self.peek(), Some(Token::Command(n)) if n == "hline") {
-                self.bump();
-                rows.push(EnvRow::Hline);
-                continue;
-            }
-            if matches!(self.peek(), Some(Token::Command(n)) if n == "intertext") {
-                self.bump();
-                let s = self.collect_group_text()?;
-                rows.push(EnvRow::Intertext(Box::new(MathNode::Text(
-                    s,
-                    TextStyle::Text,
-                ))));
-                continue;
-            }
-            let mut cells = Vec::new();
-            let mut number = EqNumber::Default;
-            let mut labels = Vec::new();
-            loop {
-                let cell = self.parse_list(Stop::cell())?;
-                let cell = peel_row_meta(cell, &mut number, &mut labels);
-                cells.push(cell);
-                self.skip_ws();
-                match self.peek() {
-                    Some(Token::AlignmentTab) => {
-                        self.bump();
-                    }
-                    Some(Token::Command(n)) if n == "\\" || n == "cr" => {
-                        self.bump();
-                        rows.push(finish_env_row(cells, number, labels));
-                        self.skip_ws();
-                        if matches!(self.peek(), Some(Token::Command(e)) if e == "end") {
-                            return Ok(rows);
-                        }
-                        break;
-                    }
-                    Some(Token::Command(n)) if n == "end" => {
-                        rows.push(finish_env_row(cells, number, labels));
-                        return Ok(rows);
-                    }
-                    None => {
-                        return Err(ParseError::Malformed(
-                            "unmatched \\begin (missing \\end)".into(),
-                        ));
-                    }
-                    Some(other) => {
-                        return Err(ParseError::Malformed(format!(
-                            "unexpected token {other} in environment body"
-                        )));
-                    }
-                }
-            }
-        }
-    }
-
     fn expect_end(&mut self, name: &str) -> Result<(), ParseError> {
         match self.bump() {
             Some(Token::Command(n)) if n == "end" => {}
@@ -1240,24 +397,6 @@ impl Parser {
             )));
         }
         Ok(())
-    }
-
-    fn parse_genfrac(&mut self) -> Result<MathNode, ParseError> {
-        let ldel = self.collect_group_text()?;
-        let rdel = self.collect_group_text()?;
-        let _thickness = self.collect_group_text()?;
-        let _style = self.collect_group_text()?;
-        let num = self.parse_arg()?;
-        let den = self.parse_arg()?;
-        let frac = MathNode::Fraction(Box::new(num), Box::new(den));
-        if ldel.is_empty() && rdel.is_empty() {
-            return Ok(frac);
-        }
-        Ok(MathNode::Delimited(
-            delim_from_text(&ldel)?,
-            Box::new(frac),
-            delim_from_text(&rdel)?,
-        ))
     }
 
     fn parse_color_from_cmd(&mut self) -> Result<Color, ParseError> {
@@ -1447,33 +586,70 @@ fn parse_colspec(s: &str) -> Result<Vec<ColSpec>, ParseError> {
     Ok(out)
 }
 
-fn peel_row_meta(node: MathNode, number: &mut EqNumber, labels: &mut Vec<String>) -> MathNode {
-    match node {
-        MathNode::NoNumber => {
+fn peel_row_meta(mut node: MathNode, number: &mut EqNumber, labels: &mut Vec<String>) -> MathNode {
+    enum Kind {
+        NoNumber,
+        Tag,
+        Label,
+        Hline,
+        Intertext,
+        Row,
+        Other,
+    }
+    let kind = match &node {
+        MathNode::NoNumber => Kind::NoNumber,
+        MathNode::Tag { .. } => Kind::Tag,
+        MathNode::Label(_) => Kind::Label,
+        MathNode::Hline => Kind::Hline,
+        MathNode::Intertext(_) => Kind::Intertext,
+        MathNode::Row(_) => Kind::Row,
+        _ => Kind::Other,
+    };
+    match kind {
+        Kind::NoNumber => {
             *number = EqNumber::Suppress;
             MathNode::Row(Vec::new())
         }
-        MathNode::Tag { star, body } => {
-            *number = EqNumber::Tag { star, body };
+        Kind::Tag => {
+            if let MathNode::Tag { star, body } = &mut node {
+                *number = EqNumber::Tag {
+                    star: *star,
+                    body: std::mem::replace(body, Box::new(MathNode::Hline)),
+                };
+            }
             MathNode::Row(Vec::new())
         }
-        MathNode::Label(k) => {
-            labels.push(k);
+        Kind::Label => {
+            if let MathNode::Label(k) = &mut node {
+                labels.push(std::mem::take(k));
+            }
             MathNode::Row(Vec::new())
         }
-        MathNode::Hline => MathNode::Hline,
-        MathNode::Intertext(n) => MathNode::Intertext(n),
-        MathNode::Row(items) => {
+        Kind::Hline => MathNode::Hline,
+        Kind::Intertext => {
+            let body = if let MathNode::Intertext(body) = &mut node {
+                std::mem::replace(body, Box::new(MathNode::Hline))
+            } else {
+                Box::new(MathNode::Hline)
+            };
+            MathNode::Intertext(body)
+        }
+        Kind::Row => {
+            let items = if let MathNode::Row(items) = &mut node {
+                std::mem::take(items)
+            } else {
+                Vec::new()
+            };
             let mut kept = Vec::new();
             for it in items {
-                let p = peel_row_meta(it, number, labels);
-                if !is_empty_node(&p) {
-                    kept.push(p);
+                let peeled = peel_row_meta(it, number, labels);
+                if !is_empty_node(&peeled) {
+                    kept.push(peeled);
                 }
             }
             wrap_row(kept)
         }
-        other => other,
+        Kind::Other => node,
     }
 }
 
@@ -1501,35 +677,56 @@ fn is_empty_node(n: &MathNode) -> bool {
     }
 }
 
-fn apply_scripts(nucleus: MathNode, sub: Option<MathNode>, sup: Option<MathNode>) -> MathNode {
-    match nucleus {
-        MathNode::Sum(None, None) => MathNode::Sum(sub.map(Box::new), sup.map(Box::new)),
-        MathNode::Product(None, None) => MathNode::Product(sub.map(Box::new), sup.map(Box::new)),
-        MathNode::Integral(k, None, None) => {
-            MathNode::Integral(k, sub.map(Box::new), sup.map(Box::new))
+fn apply_scripts(mut nucleus: MathNode, sub: Option<MathNode>, sup: Option<MathNode>) -> MathNode {
+    enum Base {
+        Sum,
+        Product,
+        Integral(IntegralKind),
+        Limit,
+        Brace(AccentKind),
+        Other,
+    }
+    let base = match &nucleus {
+        MathNode::Sum(None, None) => Base::Sum,
+        MathNode::Product(None, None) => Base::Product,
+        MathNode::Integral(k, None, None) => Base::Integral(*k),
+        MathNode::Limit(None) => Base::Limit,
+        MathNode::Accent(_, k @ (AccentKind::Overbrace | AccentKind::Underbrace)) => {
+            Base::Brace(*k)
         }
-        MathNode::Limit(None) => {
+        _ => Base::Other,
+    };
+    match base {
+        Base::Sum => MathNode::Sum(sub.map(Box::new), sup.map(Box::new)),
+        Base::Product => MathNode::Product(sub.map(Box::new), sup.map(Box::new)),
+        Base::Integral(k) => MathNode::Integral(k, sub.map(Box::new), sup.map(Box::new)),
+        Base::Limit => {
             let lim = MathNode::Limit(sub.map(Box::new));
             match sup {
                 Some(s) => MathNode::Superscript(Box::new(lim), Box::new(s)),
                 None => lim,
             }
         }
-        MathNode::Accent(b, k @ (AccentKind::Overbrace | AccentKind::Underbrace)) => {
+        Base::Brace(k) => {
+            let body = if let MathNode::Accent(body, _) = &mut nucleus {
+                std::mem::replace(body, Box::new(MathNode::Hline))
+            } else {
+                Box::new(MathNode::Hline)
+            };
             match (sub, sup) {
-                (None, None) => MathNode::Accent(b, k),
+                (None, None) => MathNode::Accent(body, k),
                 (s, e) => MathNode::OverUnder(
-                    Box::new(MathNode::Accent(b, k)),
+                    Box::new(MathNode::Accent(body, k)),
                     e.map(Box::new),
                     s.map(Box::new),
                 ),
             }
         }
-        other => match (sub, sup) {
-            (None, None) => other,
-            (Some(s), None) => MathNode::Subscript(Box::new(other), Box::new(s)),
-            (None, Some(e)) => MathNode::Superscript(Box::new(other), Box::new(e)),
-            (Some(s), Some(e)) => MathNode::SubSup(Box::new(other), Box::new(s), Box::new(e)),
+        Base::Other => match (sub, sup) {
+            (None, None) => nucleus,
+            (Some(s), None) => MathNode::Subscript(Box::new(nucleus), Box::new(s)),
+            (None, Some(e)) => MathNode::Superscript(Box::new(nucleus), Box::new(e)),
+            (Some(s), Some(e)) => MathNode::SubSup(Box::new(nucleus), Box::new(s), Box::new(e)),
         },
     }
 }
@@ -1541,63 +738,301 @@ fn apply_scripts(nucleus: MathNode, sub: Option<MathNode>, sup: Option<MathNode>
 /// so this descends into scripts, fractions, radicals, accents and delimited
 /// bodies as well as rows. Delimiters themselves are `Delimiter` values rather
 /// than nodes and are left alone, as they are in LaTeX.
+///
+/// The descent is an explicit heap stack. A styled fraction nested up to
+/// `max_depth` does not grow the calling thread's stack.
 fn apply_text_style(node: MathNode, style: TextStyle) -> MathNode {
-    match node {
-        MathNode::Atom(c, _) if crate::style_map::is_stylable(c) => {
-            MathNode::Text(c.to_string(), style)
+    enum Task {
+        Go(MathNode),
+        Join(Join),
+    }
+    enum Join {
+        Superscript,
+        Subscript,
+        SubSup,
+        Fraction,
+        Radical(bool),
+        Accent(AccentKind),
+        Delim(Delimiter, Delimiter),
+        Row(usize),
+        Substack(usize),
+    }
+    enum Exploded {
+        Leaf(MathNode),
+        Kids { join: Join, kids: Vec<MathNode> },
+    }
+    fn take_box(slot: &mut Box<MathNode>) -> MathNode {
+        *std::mem::replace(slot, Box::new(MathNode::Hline))
+    }
+    let explode = |node: &mut MathNode| -> Exploded {
+        enum Shape {
+            StyledAtom,
+            Keep,
+            Text,
+            Symbol,
+            Row,
+            Substack,
+            Sup,
+            Sub,
+            SubSup,
+            Frac,
+            Radical,
+            Accent,
+            Delim,
         }
-        MathNode::Text(s, _) => MathNode::Text(s, style),
-        MathNode::Symbol(name) => {
-            if let Some(ch) = crate::symbols::glyph_char(&name) {
-                if crate::style_map::is_stylable(ch) {
-                    MathNode::Text(ch.to_string(), style)
+        let shape = match &*node {
+            MathNode::Atom(c, _) if crate::style_map::is_stylable(*c) => Shape::StyledAtom,
+            MathNode::Text(_, _) => Shape::Text,
+            MathNode::Symbol(_) => Shape::Symbol,
+            MathNode::Row(_) => Shape::Row,
+            MathNode::Substack(_) => Shape::Substack,
+            MathNode::Superscript(_, _) => Shape::Sup,
+            MathNode::Subscript(_, _) => Shape::Sub,
+            MathNode::SubSup(_, _, _) => Shape::SubSup,
+            MathNode::Fraction(_, _) => Shape::Frac,
+            MathNode::Radical(_, _) => Shape::Radical,
+            MathNode::Accent(_, _) => Shape::Accent,
+            MathNode::Delimited(_, _, _) => Shape::Delim,
+            _ => Shape::Keep,
+        };
+        match shape {
+            Shape::StyledAtom => {
+                let ch = match &*node {
+                    MathNode::Atom(c, _) => *c,
+                    _ => ' ',
+                };
+                Exploded::Leaf(MathNode::Text(ch.to_string(), style))
+            }
+            Shape::Keep => Exploded::Leaf(std::mem::replace(node, MathNode::Hline)),
+            Shape::Text => {
+                let s = if let MathNode::Text(s, _) = &mut *node {
+                    std::mem::take(s)
+                } else {
+                    String::new()
+                };
+                Exploded::Leaf(MathNode::Text(s, style))
+            }
+            Shape::Symbol => {
+                let name = if let MathNode::Symbol(name) = &mut *node {
+                    std::mem::take(name)
+                } else {
+                    String::new()
+                };
+                let styled = if let Some(ch) = crate::symbols::glyph_char(&name) {
+                    if crate::style_map::is_stylable(ch) {
+                        MathNode::Text(ch.to_string(), style)
+                    } else {
+                        MathNode::Symbol(name)
+                    }
                 } else {
                     MathNode::Symbol(name)
+                };
+                Exploded::Leaf(styled)
+            }
+            Shape::Row => {
+                let kids = if let MathNode::Row(v) = &mut *node {
+                    std::mem::take(v)
+                } else {
+                    Vec::new()
+                };
+                let n = kids.len();
+                Exploded::Kids {
+                    join: Join::Row(n),
+                    kids,
                 }
-            } else {
-                MathNode::Symbol(name)
+            }
+            Shape::Substack => {
+                let kids = if let MathNode::Substack(v) = &mut *node {
+                    std::mem::take(v)
+                } else {
+                    Vec::new()
+                };
+                let n = kids.len();
+                Exploded::Kids {
+                    join: Join::Substack(n),
+                    kids,
+                }
+            }
+            Shape::Sup => {
+                let kids = if let MathNode::Superscript(b, sup) = &mut *node {
+                    vec![take_box(b), take_box(sup)]
+                } else {
+                    Vec::new()
+                };
+                Exploded::Kids {
+                    join: Join::Superscript,
+                    kids,
+                }
+            }
+            Shape::Sub => {
+                let kids = if let MathNode::Subscript(b, sub) = &mut *node {
+                    vec![take_box(b), take_box(sub)]
+                } else {
+                    Vec::new()
+                };
+                Exploded::Kids {
+                    join: Join::Subscript,
+                    kids,
+                }
+            }
+            Shape::SubSup => {
+                let kids = if let MathNode::SubSup(b, sub, sup) = &mut *node {
+                    vec![take_box(b), take_box(sub), take_box(sup)]
+                } else {
+                    Vec::new()
+                };
+                Exploded::Kids {
+                    join: Join::SubSup,
+                    kids,
+                }
+            }
+            Shape::Frac => {
+                let kids = if let MathNode::Fraction(num, den) = &mut *node {
+                    vec![take_box(num), take_box(den)]
+                } else {
+                    Vec::new()
+                };
+                Exploded::Kids {
+                    join: Join::Fraction,
+                    kids,
+                }
+            }
+            Shape::Radical => {
+                let (had_index, kids) = if let MathNode::Radical(index, body) = &mut *node {
+                    let had = index.is_some();
+                    let mut kids = Vec::new();
+                    if let Some(index) = index.take() {
+                        kids.push(*index);
+                    }
+                    kids.push(take_box(body));
+                    (had, kids)
+                } else {
+                    (false, Vec::new())
+                };
+                Exploded::Kids {
+                    join: Join::Radical(had_index),
+                    kids,
+                }
+            }
+            Shape::Accent => {
+                let (kind, kids) = if let MathNode::Accent(body, kind) = &mut *node {
+                    (*kind, vec![take_box(body)])
+                } else {
+                    (AccentKind::Hat, Vec::new())
+                };
+                Exploded::Kids {
+                    join: Join::Accent(kind),
+                    kids,
+                }
+            }
+            Shape::Delim => {
+                let (open, close, kids) = if let MathNode::Delimited(open, body, close) = &mut *node
+                {
+                    (
+                        std::mem::replace(open, Delimiter::Empty),
+                        std::mem::replace(close, Delimiter::Empty),
+                        vec![take_box(body)],
+                    )
+                } else {
+                    (Delimiter::Empty, Delimiter::Empty, Vec::new())
+                };
+                Exploded::Kids {
+                    join: Join::Delim(open, close),
+                    kids,
+                }
             }
         }
-        MathNode::Row(v) => collapse_text(MathNode::Row(
-            v.into_iter().map(|n| apply_text_style(n, style)).collect(),
-        )),
-        MathNode::Substack(v) => {
-            MathNode::Substack(v.into_iter().map(|n| apply_text_style(n, style)).collect())
+    };
+    let mut tasks = vec![Task::Go(node)];
+    let mut vals = Vec::new();
+    while let Some(task) = tasks.pop() {
+        match task {
+            Task::Go(mut node) => match explode(&mut node) {
+                Exploded::Leaf(leaf) => vals.push(leaf),
+                Exploded::Kids { join, kids } => {
+                    tasks.push(Task::Join(join));
+                    for child in kids.into_iter().rev() {
+                        tasks.push(Task::Go(child));
+                    }
+                }
+            },
+            Task::Join(join) => {
+                let node = match join {
+                    Join::Superscript => {
+                        let sup = take_styled(&mut vals);
+                        let base = take_styled(&mut vals);
+                        MathNode::Superscript(Box::new(base), Box::new(sup))
+                    }
+                    Join::Subscript => {
+                        let sub = take_styled(&mut vals);
+                        let base = take_styled(&mut vals);
+                        MathNode::Subscript(Box::new(base), Box::new(sub))
+                    }
+                    Join::SubSup => {
+                        let sup = take_styled(&mut vals);
+                        let sub = take_styled(&mut vals);
+                        let base = take_styled(&mut vals);
+                        MathNode::SubSup(Box::new(base), Box::new(sub), Box::new(sup))
+                    }
+                    Join::Fraction => {
+                        let den = take_styled(&mut vals);
+                        let num = take_styled(&mut vals);
+                        MathNode::Fraction(Box::new(num), Box::new(den))
+                    }
+                    Join::Radical(true) => {
+                        let body = take_styled(&mut vals);
+                        let index = take_styled(&mut vals);
+                        MathNode::Radical(Some(Box::new(index)), Box::new(body))
+                    }
+                    Join::Radical(false) => {
+                        let body = take_styled(&mut vals);
+                        MathNode::Radical(None, Box::new(body))
+                    }
+                    Join::Accent(kind) => {
+                        let body = take_styled(&mut vals);
+                        MathNode::Accent(Box::new(body), kind)
+                    }
+                    Join::Delim(open, close) => {
+                        let body = take_styled(&mut vals);
+                        MathNode::Delimited(open, Box::new(body), close)
+                    }
+                    Join::Row(n) => {
+                        let built = take_many(&mut vals, n);
+                        collapse_text(MathNode::Row(built))
+                    }
+                    Join::Substack(n) => MathNode::Substack(take_many(&mut vals, n)),
+                };
+                vals.push(node);
+            }
         }
-        MathNode::Superscript(b, sup) => MathNode::Superscript(
-            Box::new(apply_text_style(*b, style)),
-            Box::new(apply_text_style(*sup, style)),
-        ),
-        MathNode::Subscript(b, sub) => MathNode::Subscript(
-            Box::new(apply_text_style(*b, style)),
-            Box::new(apply_text_style(*sub, style)),
-        ),
-        MathNode::SubSup(b, sub, sup) => MathNode::SubSup(
-            Box::new(apply_text_style(*b, style)),
-            Box::new(apply_text_style(*sub, style)),
-            Box::new(apply_text_style(*sup, style)),
-        ),
-        MathNode::Fraction(num, den) => MathNode::Fraction(
-            Box::new(apply_text_style(*num, style)),
-            Box::new(apply_text_style(*den, style)),
-        ),
-        MathNode::Radical(index, body) => MathNode::Radical(
-            index.map(|i| Box::new(apply_text_style(*i, style))),
-            Box::new(apply_text_style(*body, style)),
-        ),
-        MathNode::Accent(body, kind) => {
-            MathNode::Accent(Box::new(apply_text_style(*body, style)), kind)
-        }
-        MathNode::Delimited(open, body, close) => {
-            MathNode::Delimited(open, Box::new(apply_text_style(*body, style)), close)
-        }
-        other => other,
+    }
+    match vals.pop() {
+        Some(node) => node,
+        None => MathNode::Row(Vec::new()),
     }
 }
 
-fn collapse_text(node: MathNode) -> MathNode {
-    let MathNode::Row(v) = node else {
+fn take_styled(vals: &mut Vec<MathNode>) -> MathNode {
+    match vals.pop() {
+        Some(node) => node,
+        None => MathNode::Row(Vec::new()),
+    }
+}
+
+fn take_many(vals: &mut Vec<MathNode>, n: usize) -> Vec<MathNode> {
+    let start = vals.len().saturating_sub(n);
+    vals.split_off(start)
+}
+
+fn collapse_text(mut node: MathNode) -> MathNode {
+    let is_row = matches!(node, MathNode::Row(_));
+    if !is_row {
         return node;
+    }
+    let v = if let MathNode::Row(v) = &mut node {
+        std::mem::take(v)
+    } else {
+        Vec::new()
     };
     let mut out: Vec<MathNode> = Vec::new();
     for n in v {
@@ -1735,5 +1170,26 @@ mod tests {
     fn frac_gold() {
         let n = parse(r"\frac{1}{2}").unwrap();
         assert_eq!(n.gold(), r#"(frac (atom Ord "1") (atom Ord "2"))"#);
+    }
+
+    #[test]
+    fn brace_depth_follows_max_depth() {
+        let braces = |n: usize| "{".repeat(n) + "x" + &"}".repeat(n);
+        let opts = ParseOptions::new().with_max_depth(32);
+        assert!(parse_with_options(&braces(31), &opts).is_ok());
+        match parse_with_options(&braces(32), &opts) {
+            Err(ParseError::Malformed(msg)) => {
+                assert_eq!(msg, "input nests deeper than 32 levels");
+            }
+            other => panic!("32 braces: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn frac_depth_costs_two_levels() {
+        let frac = |n: usize| "\\frac{1}{".repeat(n) + "2" + &"}".repeat(n);
+        let opts = ParseOptions::default();
+        assert!(parse_with_options(&frac(15), &opts).is_ok());
+        assert!(parse_with_options(&frac(16), &opts).is_err());
     }
 }

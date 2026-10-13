@@ -80,7 +80,7 @@ fn pathological_input_errs_instead_of_aborting_on_small_stack() {
 
 #[test]
 fn caller_can_raise_and_lower_the_limit() {
-    // A raised limit needs a caller that has the stack for it, as the docs say.
+    // Layout of a raised limit still walks the tree on this thread's stack.
     std::thread::Builder::new()
         .stack_size(64 << 20)
         .spawn(|| {

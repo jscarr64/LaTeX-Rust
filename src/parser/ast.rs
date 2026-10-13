@@ -610,6 +610,113 @@ pub enum MathNode {
     Phantom(PhantomKind, Box<MathNode>),
 }
 
+impl Drop for MathNode {
+    fn drop(&mut self) {
+        // Box drop walks children on the native stack. A 10,000-deep `\left`
+        // or `\frac` is a valid tree under a raised `max_depth` and must drop
+        // on a 256 KiB thread, so the children move to a heap stack first.
+        let mut stack = Vec::new();
+        self.drain_children(&mut stack);
+        while let Some(mut child) = stack.pop() {
+            child.drain_children(&mut stack);
+        }
+    }
+}
+
+fn push_box(out: &mut Vec<MathNode>, slot: &mut Box<MathNode>) {
+    out.push(std::mem::replace(slot.as_mut(), MathNode::Hline));
+}
+
+fn push_opt(out: &mut Vec<MathNode>, slot: &mut Option<Box<MathNode>>) {
+    if let Some(child) = slot.take() {
+        out.push(*child);
+    }
+}
+
+impl MathNode {
+    fn drain_children(&mut self, out: &mut Vec<MathNode>) {
+        match self {
+            Self::Fraction(a, b) | Self::Superscript(a, b) | Self::Subscript(a, b) => {
+                push_box(out, a);
+                push_box(out, b);
+            }
+            Self::CancelTo(a, b) => {
+                push_box(out, a);
+                push_box(out, b);
+            }
+            Self::SubSup(a, b, c) => {
+                push_box(out, a);
+                push_box(out, b);
+                push_box(out, c);
+            }
+            Self::Radical(index, body) => {
+                push_opt(out, index);
+                push_box(out, body);
+            }
+            Self::Delimited(_, body, _) | Self::Intertext(body) => push_box(out, body),
+            Self::Row(items) | Self::Substack(items) => out.append(items),
+            Self::Matrix(_, _, rows) => {
+                for row in rows {
+                    row.drain_nodes(out);
+                }
+            }
+            Self::Tag { body, .. } => push_box(out, body),
+            Self::Sum(lower, upper) | Self::Product(lower, upper) => {
+                push_opt(out, lower);
+                push_opt(out, upper);
+            }
+            Self::Integral(_, lower, upper) => {
+                push_opt(out, lower);
+                push_opt(out, upper);
+            }
+            Self::Limit(lower) => push_opt(out, lower),
+            Self::OverUnder(base, over, under) => {
+                push_box(out, base);
+                push_opt(out, over);
+                push_opt(out, under);
+            }
+            Self::Accent(body, _)
+            | Self::Color(_, body)
+            | Self::TextColor(_, body)
+            | Self::ColorBox(_, body)
+            | Self::Phantom(_, body) => push_box(out, body),
+            Self::FColorBox(_, _, body) => push_box(out, body),
+            Self::Atom(_, _)
+            | Self::SizedDelim(_, _, _)
+            | Self::Ref(_)
+            | Self::Label(_)
+            | Self::NoNumber
+            | Self::Hline
+            | Self::Text(_, _)
+            | Self::Space(_)
+            | Self::Operator(_, _)
+            | Self::Symbol(_)
+            | Self::Strut(_, _) => {}
+        }
+    }
+}
+
+impl EnvRow {
+    fn drain_nodes(&mut self, out: &mut Vec<MathNode>) {
+        match self {
+            Self::Cells { cells, number, .. } => {
+                out.append(cells);
+                number.drain_node(out);
+            }
+            Self::Hline => {}
+            Self::Intertext(body) => push_box(out, body),
+        }
+    }
+}
+
+impl EqNumber {
+    fn drain_node(&mut self, out: &mut Vec<MathNode>) {
+        if let Self::Tag { body, .. } = self {
+            push_box(out, body);
+        }
+    }
+}
+
 impl MathNode {
     /// Gold-stable S-expression. One space between items; no trailing space.
     #[must_use]
