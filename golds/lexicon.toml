@@ -1,0 +1,221 @@
+# Equivalence golds. `expect` is the tree both sides must build.
+# Empty `flags` is the default parse. A flag name turns that lexicon on.
+# Flags off, the existing rows in parse.toml and accumath.toml stay the contract.
+
+[[gold]]
+name = "alias-leq"
+flags = ""
+input = "\\leq"
+pair = "\\le"
+expect = "(symbol leq)"
+
+[[gold]]
+name = "alias-geq"
+flags = ""
+input = "\\geq"
+pair = "\\ge"
+expect = "(symbol geq)"
+
+[[gold]]
+name = "alias-neq"
+flags = ""
+input = "\\neq"
+pair = "\\ne"
+expect = "(symbol neq)"
+
+[[gold]]
+name = "radical-sqrt-x"
+flags = ""
+input = "√x"
+pair = "\\sqrt{x}"
+expect = "(sqrt (atom Ord \"x\"))"
+
+[[gold]]
+name = "radical-sqrt-group"
+flags = ""
+input = "√{x}"
+pair = "\\sqrt{x}"
+expect = "(sqrt (atom Ord \"x\"))"
+
+[[gold]]
+name = "sup-2"
+flags = ""
+input = "x²"
+pair = "x^{2}"
+expect = "(sup (atom Ord \"x\") (atom Ord \"2\"))"
+
+[[gold]]
+name = "sup-3"
+flags = ""
+input = "x³"
+pair = "x^{3}"
+expect = "(sup (atom Ord \"x\") (atom Ord \"3\"))"
+
+[[gold]]
+name = "sup-n"
+flags = ""
+input = "xⁿ"
+pair = "x^{n}"
+expect = "(sup (atom Ord \"x\") (atom Ord \"n\"))"
+
+[[gold]]
+name = "sup-minus-one"
+flags = ""
+input = "x⁻¹"
+pair = "x^{-1}"
+expect = "(sup (atom Ord \"x\") (row (atom Bin \"-\") (atom Ord \"1\")))"
+
+[[gold]]
+name = "sup-run"
+flags = ""
+input = "x²³"
+pair = "x^{23}"
+expect = "(sup (atom Ord \"x\") (row (atom Ord \"2\") (atom Ord \"3\")))"
+
+[[gold]]
+name = "sup-run-minus"
+flags = ""
+input = "x²⁻¹"
+pair = "x^{2-1}"
+expect = "(sup (atom Ord \"x\") (row (atom Ord \"2\") (atom Bin \"-\") (atom Ord \"1\")))"
+
+[[gold]]
+name = "unicode-minus"
+flags = ""
+input = "−"
+pair = "-"
+expect = "(atom Bin \"-\")"
+
+[[gold]]
+name = "ascii-leq"
+flags = "ascii_relations"
+input = "<="
+pair = "\\leq"
+expect = "(symbol leq)"
+
+[[gold]]
+name = "ascii-geq"
+flags = "ascii_relations"
+input = ">="
+pair = "\\geq"
+expect = "(symbol geq)"
+
+[[gold]]
+name = "ascii-neq"
+flags = "ascii_relations"
+input = "!="
+pair = "\\neq"
+expect = "(symbol neq)"
+
+[[gold]]
+name = "bare-sin"
+flags = "bare_operators"
+input = "sin(x)"
+pair = "\\sin(x)"
+expect = "(row (op sin) (atom Open \"(\") (atom Ord \"x\") (atom Close \")\"))"
+
+[[gold]]
+name = "bare-zeta"
+flags = "bare_operators"
+input = "zeta(s,a)"
+pair = "\\zeta(s,a)"
+expect = "(row (symbol zeta) (atom Open \"(\") (atom Ord \"s\") (atom Punct \",\") (atom Ord \"a\") (atom Close \")\"))"
+
+[[gold]]
+name = "bare-otherwise"
+flags = "bare_operators"
+input = "\\begin{cases} 0 & otherwise \\end{cases}"
+pair = "\\begin{cases} 0 & \\text{otherwise} \\end{cases}"
+expect = "(matrix cases ((atom Ord \"0\") (text text \"otherwise\")))"
+
+[[gold]]
+name = "unicode-alpha"
+flags = "unicode_symbols"
+input = "α"
+pair = "\\alpha"
+expect = "(symbol alpha)"
+
+[[gold]]
+name = "unicode-Gamma"
+flags = "unicode_symbols"
+input = "Γ"
+pair = "\\Gamma"
+expect = "(symbol Gamma)"
+
+[[gold]]
+name = "unicode-pi"
+flags = "unicode_symbols"
+input = "π"
+pair = "\\pi"
+expect = "(symbol pi)"
+
+[[gold]]
+name = "unicode-leq"
+flags = "unicode_symbols"
+input = "≤"
+pair = "\\leq"
+expect = "(symbol leq)"
+
+[[gold]]
+name = "unicode-geq"
+flags = "unicode_symbols"
+input = "≥"
+pair = "\\geq"
+expect = "(symbol geq)"
+
+[[gold]]
+name = "unicode-neq"
+flags = "unicode_symbols"
+input = "≠"
+pair = "\\neq"
+expect = "(symbol neq)"
+
+[[gold]]
+name = "unicode-infty"
+flags = "unicode_symbols"
+input = "∞"
+pair = "\\infty"
+expect = "(symbol infty)"
+
+[[gold]]
+name = "unicode-times"
+flags = "unicode_symbols"
+input = "×"
+pair = "\\times"
+expect = "(symbol times)"
+
+[[gold]]
+name = "unicode-cdot"
+flags = "unicode_symbols"
+input = "·"
+pair = "\\cdot"
+expect = "(symbol cdot)"
+
+[[gold]]
+name = "unicode-dot-operator"
+flags = "unicode_symbols"
+input = "⋅"
+pair = "\\cdot"
+expect = "(symbol cdot)"
+
+[[gold]]
+name = "prime-one"
+flags = "prime_symbol"
+input = "f'"
+pair = "f^{\\prime}"
+expect = "(sup (atom Ord \"f\") (symbol prime))"
+
+[[gold]]
+name = "prime-two"
+flags = "prime_symbol"
+input = "f''"
+pair = "f^{\\prime\\prime}"
+expect = "(sup (atom Ord \"f\") (row (symbol prime) (symbol prime)))"
+
+[[gold]]
+name = "prime-three-stays-nested"
+flags = "prime_symbol"
+input = "f'''"
+pair = ""
+expect = "(sup (atom Ord \"f\") (row (row (symbol prime) (symbol prime)) (symbol prime)))"
+forbid = "(sup (atom Ord \"f\") (row (symbol prime) (symbol prime) (symbol prime)))"

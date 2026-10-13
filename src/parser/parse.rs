@@ -60,12 +60,25 @@ pub const DEFAULT_MAX_NESTING_DEPTH: usize = 32;
 pub struct ParseOptions {
     /// Deepest parser recursion accepted. Defaults to [`DEFAULT_MAX_NESTING_DEPTH`].
     pub max_depth: usize,
+    /// Map adjacent `<=`, `>=`, and `!=` to `\le`, `\ge`, and `\ne`. Default off.
+    pub ascii_relations: bool,
+    /// Read a whole ASCII-letter run as an operator, `\zeta`, or cases `otherwise`.
+    /// Default off.
+    pub bare_operators: bool,
+    /// Map a fixed set of unicode glyphs to symbol commands. Default off.
+    pub unicode_symbols: bool,
+    /// Spell `'` as `(symbol prime)` without flattening `f'''`. Default off.
+    pub prime_symbol: bool,
 }
 
 impl Default for ParseOptions {
     fn default() -> Self {
         Self {
             max_depth: DEFAULT_MAX_NESTING_DEPTH,
+            ascii_relations: false,
+            bare_operators: false,
+            unicode_symbols: false,
+            prime_symbol: false,
         }
     }
 }
@@ -92,6 +105,62 @@ impl ParseOptions {
     #[must_use]
     pub fn with_max_depth(mut self, max_depth: usize) -> Self {
         self.max_depth = max_depth;
+        self
+    }
+
+    /// Map adjacent `<=`, `>=`, and `!=` to the same symbols as `\le`, `\ge`, and `\ne`.
+    ///
+    /// Off by default, so those digraphs stay two atoms. The two characters
+    /// must be adjacent: `x <= 0` matches and `x < = 0` does not. `\le` and
+    /// `\leq` already share a tree with this flag off.
+    #[must_use]
+    pub fn with_ascii_relations(mut self, on: bool) -> Self {
+        self.ascii_relations = on;
+        self
+    }
+
+    /// Read a maximal run of ASCII letters as one identifier.
+    ///
+    /// The whole run is looked up in the operator table (`\sin`, `\sinh`,
+    /// `\log`, the big operators, and the rest of that list), plus `\zeta`.
+    /// `sinh` is `\sinh`, not `\sin` followed by `h`, because the longer
+    /// spelling is its own entry and the match is the whole run, not a
+    /// prefix. A run that is not in the table stays one atom per letter, so
+    /// `xsin` and `sinx` stay letters and `infty` is not `\inf`. A space
+    /// ends the run, so `x sin` is `x` times `\sin`. `ω` is not an ASCII
+    /// letter, so it is never part of the run: `sinω` is `\sin` followed by
+    /// `ω`, and `ω` itself stays an ordinary atom.
+    ///
+    /// Inside `cases`, the identifier `otherwise` is the text node of
+    /// `\text{otherwise}`. Outside `cases` that word stays letters.
+    ///
+    /// Off by default. `\sin(x)` is the same tree either way.
+    #[must_use]
+    pub fn with_bare_operators(mut self, on: bool) -> Self {
+        self.bare_operators = on;
+        self
+    }
+
+    /// Map `α`, `Γ`, `π`, `≤`, `≥`, `≠`, `∞`, `×`, `·` (U+00B7), and `⋅`
+    /// (U+22C5) to the symbol nodes of `\alpha`, `\Gamma`, `\pi`, `\leq`,
+    /// `\geq`, `\neq`, `\infty`, `\times`, and `\cdot`.
+    ///
+    /// Off by default, so each glyph stays an atom with its current class.
+    /// `ω` is not in this set.
+    #[must_use]
+    pub fn with_unicode_symbols(mut self, on: bool) -> Self {
+        self.unicode_symbols = on;
+        self
+    }
+
+    /// Spell `'` as `(symbol prime)`, the node of `\prime`.
+    ///
+    /// Off by default, so `f'` stays a superscript of U+2032. `f''` is a row
+    /// of two primes. `f'''` keeps its nested rows; this flag does not
+    /// flatten them.
+    #[must_use]
+    pub fn with_prime_symbol(mut self, on: bool) -> Self {
+        self.prime_symbol = on;
         self
     }
 }
