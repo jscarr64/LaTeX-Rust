@@ -64,6 +64,8 @@ const SEEDS: &[&str] = &[
     "roundtrip-g9-1410dba0",
     "roundtrip-canon-fence-open",
     "roundtrip-canon-option-bracket",
+    "roundtrip-canon-option-paren",
+    "roundtrip-canon-option-paren-open",
     "roundtrip-canon-prime-symbol",
     "roundtrip-canon-primed-close",
     "roundtrip-canon-primed-close-accent",
@@ -90,7 +92,7 @@ const SEEDS: &[&str] = &[
 
 /// Every crash seed either round-trips (property b and c) or is rejected
 /// with a typed error. The seed list is the corpus's named files: the 36
-/// text-mode seeds, the 15 depth seeds and the 9 canonical-print seeds.
+/// text-mode seeds, the 15 depth seeds and the 11 canonical-print seeds.
 #[test]
 fn crash_seeds_round_trip_or_reject() {
     let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/fuzz/corpus/parse");

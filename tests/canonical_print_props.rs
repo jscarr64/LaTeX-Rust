@@ -251,6 +251,14 @@ const FINDINGS: &[(&str, &str, u8)] = &[
     ("roundtrip-canon-primed-close-accent", r"(\not()'^x", 0),
     // A primed `(` base was not counted as open, so a later `)^` closed it.
     ("roundtrip-canon-primed-open", r"('^))^\ ", 0),
+    // A `(` or `)` in an optional argument is not hidden from the paren
+    // lookahead, so it paired with a `(` before the command (fuzz).
+    ("roundtrip-canon-option-paren", r"(^)\xleftarrow[)^x]]", 0),
+    (
+        "roundtrip-canon-option-paren-open",
+        "(^)\\xleftarrow[(]x))^\u{8}",
+        0,
+    ),
 ];
 
 #[test]
