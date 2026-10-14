@@ -62,7 +62,7 @@ pub struct ParseOptions {
     pub bare_operators: bool,
     /// Map a fixed set of unicode glyphs to symbol commands. Default off.
     pub unicode_symbols: bool,
-    /// Spell `'` as `(symbol prime)` without flattening `f'''`. Default off.
+    /// Spell `'` as `(symbol prime)`. A run such as `f'''` is one flat row. Default off.
     pub prime_symbol: bool,
 }
 
@@ -151,8 +151,7 @@ impl ParseOptions {
     /// Spell `'` as `(symbol prime)`, the node of `\prime`.
     ///
     /// Off by default, so `f'` stays a superscript of U+2032. `f''` is a row
-    /// of two primes. `f'''` keeps its nested rows; this flag does not
-    /// flatten them.
+    /// of two primes and `f'''` a flat row of three, with or without this flag.
     #[must_use]
     pub fn with_prime_symbol(mut self, on: bool) -> Self {
         self.prime_symbol = on;
