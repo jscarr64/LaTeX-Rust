@@ -31,6 +31,10 @@ Notes:
   regressions of the brace economy, fixed in 68ecd89.
 - canon-primed-open: fuzz crash in the 1800 s run on b6919b9, the mirror case
   (a primed `(` base was not counted as open); fixed in 77a271b.
+- canon-option-paren*: fuzz crashes in the 1800 s run on e5d6f1e (a `(` or
+  `)` in an optional argument paired with an outer `(`); fixed in ee73242.
+- canon-primed-open and canon-option-paren* pass at c846b58: regressions of
+  the brace economy.
 
 | id | minimal input | root-cause class | fixing commit | regression seed |
 |---|---|---|---|---|
@@ -94,6 +98,8 @@ Notes:
 | canon-primed-close | `(^))'^)` | printer canonical form | 68ecd89 | `roundtrip-canon-primed-close` |
 | canon-primed-close-accent | `(\not()'^x` | printer canonical form | 68ecd89 | `roundtrip-canon-primed-close-accent` |
 | canon-primed-open | `('^))^\ ` | printer canonical form | 77a271b | `roundtrip-canon-primed-open` |
+| canon-option-paren | `(^)\xleftarrow[)^x]]` | printer canonical form | ee73242 | `roundtrip-canon-option-paren` |
+| canon-option-paren-open | `(^)\xleftarrow[(]x))^\u{8}` | printer canonical form | ee73242 | `roundtrip-canon-option-paren-open` |
 
 ## Count per class
 
@@ -101,7 +107,7 @@ Notes:
 |---|---|
 | preprocess rewrite | 8 |
 | text decode | 2 |
-| printer canonical form | 27 |
+| printer canonical form | 29 |
 | depth | 16 |
 | other | 7 |
-| **total** | **60** |
+| **total** | **62** |
