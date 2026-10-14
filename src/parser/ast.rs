@@ -1698,10 +1698,22 @@ fn write_node<'a>(out: &mut LatexBuf<'a>, node: &'a MathNode) {
             write_group(out, expr);
         }
         MathNode::Text(text, style) => {
-            write_cmd(out, style_cmd(*style));
-            out.push('{');
-            push_escaped(out, text);
-            out.push('}');
+            if *style == TextStyle::Text
+                || !text.is_empty() && text.chars().all(|c| c.is_ascii_alphabetic())
+            {
+                write_cmd(out, style_cmd(*style));
+                out.push('{');
+                push_escaped(out, text);
+                out.push('}');
+            } else {
+                write_cmd(out, style_cmd(*style));
+                out.push('{');
+                write_cmd(out, "text");
+                out.push('{');
+                push_escaped(out, text);
+                out.push('}');
+                out.push('}');
+            }
         }
         MathNode::Space(kind) => write_space(out, kind),
         MathNode::Operator(name, limits) => write_operator(out, name, *limits),
