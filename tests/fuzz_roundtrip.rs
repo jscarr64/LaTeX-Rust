@@ -105,3 +105,20 @@ fn empty_binomials_are_rejected() {
         round_trip(input);
     }
 }
+
+/// Group 6: a vertical tab or form feed was a math atom, but the
+/// preprocessor trims it as whitespace, so a reprinted lone atom vanished.
+#[test]
+fn vertical_tab_and_form_feed_are_whitespace() {
+    for input in [
+        " $$ \u{c} $$  ",
+        "$\u{b}$",
+        "\n$\u{b}$\n\n\n ",
+        "$$\r\r\r\r\r\r\r\r\r\r\u{c}\r\r\r\r\r$$",
+        "{\u{b}}",
+        "a\u{c}b",
+        "x^\u{b}2",
+    ] {
+        round_trip(input);
+    }
+}
