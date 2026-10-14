@@ -134,8 +134,8 @@ This release lists every finding and its fix. Nothing in this section is publish
   symbol nodes of `\alpha`, `\Gamma`, `\pi`, `\leq`, `\geq`, `\neq`,
   `\infty`, `\times`, and `\cdot`. `f'` stays a superscript of U+2032.
   `with_prime_symbol` spells `'` as `(symbol prime)`. `f''` is a row of
-  two primes. `f'''` keeps its nested rows; it is not rewritten into a
-  flat row of three primes.
+  two primes. `f'''` is one flat row of three primes (see the prime-run
+  entry above).
 
   Migration: both flags default to off, so `f'` and `f^{\prime}` stay
   different nodes unless `prime_symbol` is on. `ω` stays an ordinary
@@ -253,6 +253,38 @@ This release lists every finding and its fix. Nothing in this section is publish
   `is_none_or` instead of `map_or(true, …)`. SHA-256 walks blocks with
   `as_chunks` instead of `chunks_exact`. No parse or layout change.
 
+- **Fuzz round-trip crashes: 32 crashes, 7 root causes (G1–G7).** The
+  `parse` fuzz target checks parse → `to_latex` → parse. Each root cause has
+  a test in `tests/fuzz_roundtrip.rs` and minimized seeds in
+  `fuzz/corpus/parse/roundtrip-g1-*` through `roundtrip-g7-*` (31 seed files).
+
+  - G1: `to_latex` escapes `$`, `&`, `_`, and `^` in text, as it already did
+    `\`, `{`, `}`, and `%`. Migration: none; the reprint changes, the tree
+    does not.
+  - G2: a control symbol of whitespace in text (`\` before a newline, tab,
+    or CR) is a space, as in TeX. Migration: `\text{a\<newline>b}` now holds
+    `a b`; the text used to contain the raw newline.
+  - G3: a leading space, `[`, or `]` in printed group text is escaped
+    (`\text{\ (}`), so the reprint is not unbraced by the `{ )}` / `{[}`
+    preprocessor rewrite. Migration: none for the tree; reprinted text can
+    start with `\ `, `\[`, or `\]`.
+  - G4: styled text that is empty or not all ASCII letters prints as
+    `\mathX{\text{…}}` (for example `{\it\text{}}`, `\mathbb{\text{x y}}`),
+    so it reparses as text. All-letter styled text keeps `\mathX{…}`.
+    Migration: compare trees, not strings; that reprint is longer.
+  - G5: a binomial with both sides empty (`\binom{}{}`, `{\choose}`) is
+    `Err(Malformed("empty binomial"))`, like `\frac{}{}`. One empty side
+    still parses. Migration: callers that rendered an empty binomial must
+    supply at least one side or handle `Err`.
+  - G6: vertical tab (U+000B) and form feed (U+000C) are whitespace in the
+    tokenizer, like tab and newline. Migration: those characters no longer
+    produce an atom; stored `gold()` that contained one changes.
+  - G7: the `\over` / `\choose` preprocessor copies a control symbol whole,
+    so `\\over` and an escaped `\{` no longer start an infix rewrite.
+    `\over` or `\choose` inside text (`\text{…\over…}`, `\mbox{…\choose…}`)
+    is rejected with `Err`, as `\text{\over}` already was. Migration:
+    `{a \over b}` in math is unchanged; move a fraction out of the text.
+
 ### Changed
 
 - **MSRV is 1.99.** `rust-version` is `"1.99"`. `rust-toolchain.toml`
@@ -288,7 +320,7 @@ This release lists every finding and its fix. Nothing in this section is publish
 
 ### Known issues
 
-3.0.0 is not published.
+None.
 
 ## [2.1.1] — 2026-10-06
 
