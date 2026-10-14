@@ -2121,9 +2121,17 @@ fn write_braced_text(out: &mut LatexBuf<'_>, cmd: &str, text: &str) {
     out.push('}');
 }
 
+/// Escapes special LaTeX characters in text.
+///
+/// The first character is escaped if it is a space, '[', or ']'.
+/// All characters are escaped if they are '\', '{', '}', '%', '$', '&', '_', or '^'.
 fn push_escaped(out: &mut LatexBuf<'_>, text: &str) {
-    for c in text.chars() {
+    for (i, c) in text.chars().enumerate() {
         match c {
+            ' ' | '[' | ']' if i == 0 => {
+                out.push('\\');
+                out.push(c);
+            }
             '\\' | '{' | '}' | '%' | '$' | '&' | '_' | '^' => {
                 out.push('\\');
                 out.push(c);
