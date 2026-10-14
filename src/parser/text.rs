@@ -202,10 +202,8 @@ fn scan_math(raw: &str, start: usize, close: Close) -> Option<(&str, usize)> {
                 }
                 depth -= 1;
             }
-            '$' => {
-                if close == Close::Dollar && depth == 0 {
-                    return Some((&raw[start..start + pos], start + pos + 1));
-                }
+            '$' if close == Close::Dollar && depth == 0 => {
+                return Some((&raw[start..start + pos], start + pos + 1));
             }
             _ => (),
         }
