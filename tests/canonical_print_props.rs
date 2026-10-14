@@ -103,6 +103,8 @@ const LEAVES: &[&str] = &[
     "{\\bf b}",
     "\\ref{e1}",
     "\\binom{n}{k}",
+    "{\\(}",
+    "\\)",
     "{}",
 ];
 
@@ -239,6 +241,10 @@ const FINDINGS: &[(&str, &str, u8)] = &[
         "\\textcolor{blue}{{x}^ ′}",
         8,
     ),
+    // A print starting with `\(` was read as an unclosed math fence (fuzz).
+    ("roundtrip-canon-fence-open", r"{\( }x", 0),
+    // A `\)` symbol inside text math closed the `\(` early.
+    ("roundtrip-canon-text-math-close", r"\text{t $ \) $ u}", 0),
 ];
 
 #[test]
