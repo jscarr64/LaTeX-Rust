@@ -805,7 +805,7 @@ fn step_scripts(
             };
             st.sup = Some(Box::new(match st.sup.take() {
                 None => prime,
-                Some(prev) => wrap_row(vec![*prev, prime]),
+                Some(prev) => push_prime(*prev, prime, st.sup_from_prime),
             }));
             st.sup_from_prime = true;
             Ok(Step::Again)
@@ -845,6 +845,20 @@ fn unbox(node: Option<Box<MathNode>>, what: &str) -> Result<MathNode, ParseError
         Some(node) => Ok(*node),
         None => Err(internal(what)),
     }
+}
+
+/// Append one prime to a superscript. When the previous token was also a
+/// prime, `prev` is the run so far, so the run stays one flat row and the
+/// printer never nests deeper than the source. `MathNode` implements `Drop`,
+/// so the row is extended in place rather than destructured.
+fn push_prime(mut prev: MathNode, prime: MathNode, run: bool) -> MathNode {
+    if run {
+        if let MathNode::Row(items) = &mut prev {
+            items.push(prime);
+            return prev;
+        }
+    }
+    MathNode::Row(vec![prev, prime])
 }
 
 fn pair(
