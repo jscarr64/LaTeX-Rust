@@ -221,26 +221,22 @@ fn default_limit_rejects_3531_braces() {
 }
 
 /// Inside `with_max_depth(20_000)` the parse is `Ok`. One level past it is
-/// `Malformed` naming 20,000. A brace or `\left` is one level. `\frac`,
-/// `\sqrt`, a superscript, and `\mathrm` each cost two.
+/// `Malformed` naming 20,000. A brace, `\left`, `\frac`, `\sqrt`, a
+/// superscript and `\mathrm` each cost one level: a braced command argument
+/// costs no more than a bare one (spec 5, Q2).
 #[test]
 fn raised_limit_must_not_abort() {
     for n in [10_000_usize, 19_999] {
-        on_every_stack("braces", n, "20000", "ok");
-        on_every_stack("left", n, "20000", "ok");
+        for name in ["braces", "left", "frac", "sqrt", "sup", "mathrm"] {
+            on_every_stack(name, n, "20000", "ok");
+        }
     }
     on_every_stack("left", 3_531, "20000", "ok");
-    for name in ["frac", "sqrt", "sup", "mathrm"] {
-        on_every_stack(name, 3_531, "20000", "ok");
-        on_every_stack(name, 9_999, "20000", "ok");
-    }
-    // `\mathrm{\frac…}` starts two levels down, so 9,998 still fits and 9,999 does not.
+    // `\mathrm{\frac…}` starts one level down, so 19,998 still fits and 19,999 does not.
     on_every_stack("styled_frac", 3_531, "20000", "ok");
-    on_every_stack("styled_frac", 9_998, "20000", "ok");
-    on_every_stack("braces", 20_000, "20000", "err");
-    on_every_stack("left", 20_000, "20000", "err");
-    for name in ["frac", "sqrt", "sup", "mathrm"] {
-        on_every_stack(name, 10_000, "20000", "err");
+    on_every_stack("styled_frac", 19_998, "20000", "ok");
+    for name in ["braces", "left", "frac", "sqrt", "sup", "mathrm"] {
+        on_every_stack(name, 20_000, "20000", "err");
     }
-    on_every_stack("styled_frac", 9_999, "20000", "err");
+    on_every_stack("styled_frac", 19_999, "20000", "err");
 }
