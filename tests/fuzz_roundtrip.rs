@@ -147,3 +147,36 @@ fn escaped_backslash_and_brace_hide_infix_commands() {
         assert!(parse(input).is_err(), "{input:?} should be rejected");
     }
 }
+
+/// Group 8: the `{ )}` / `{[}` preprocessor rewrite matched the brace of an
+/// escaped `\{`, so `\text{\{ )}` lost its closing brace. A control space
+/// `\ ` prints as a plain space in text, which builds that byte sequence.
+#[test]
+fn escaped_brace_hides_delimiter_groups() {
+    for input in [
+        // fuzz finding and its minimization
+        "(???????\\text {\\{\\ ) }\\ ) t{}Bb",
+        "\\text{\\{\\ )}",
+        // variants
+        "\\text{\\{\\ ) }",
+        "\\text{\\{\\ (}",
+        "\\text{\\{ )}",
+        "\\text{\\{[}",
+        "\\text{\\{]}",
+        "\\text{a\\{\\ ( }b",
+        "\\text{{\\{\\ )}}",
+        "\\text{\\{}",
+        "\\text{\\}}",
+        "\\text{\\}\\ )}",
+        "\\text{a\\ }",
+        "\\text{\\{\\ }",
+        "\\text{\\{\\ )}\\ ",
+        "\\text{}",
+        "\\text{\\\\{ )}}",
+        // unescaped groups are still rewritten
+        "{ (}a{ )}",
+        "{[}a{]}",
+    ] {
+        round_trip(input);
+    }
+}
