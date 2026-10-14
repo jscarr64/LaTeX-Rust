@@ -238,8 +238,10 @@ pub fn parse_with_colors(input: &str) -> Result<(MathNode, ColorTable), ParseErr
 /// ```
 /// use latex_rust::{parse_with_options, ParseOptions};
 ///
-/// let tight = ParseOptions::new().with_max_depth(4);
-/// assert!(parse_with_options(r"\frac{1}{\frac{1}{\frac{1}{2}}}", &tight).is_err());
+/// // The top level and each `\frac` cost one level, braced or not.
+/// let deep = r"\frac{1}{\frac{1}{\frac{1}{2}}}";
+/// assert!(parse_with_options(deep, &ParseOptions::new().with_max_depth(3)).is_err());
+/// assert!(parse_with_options(deep, &ParseOptions::new().with_max_depth(4)).is_ok());
 /// ```
 pub fn parse_with_options(
     input: &str,
