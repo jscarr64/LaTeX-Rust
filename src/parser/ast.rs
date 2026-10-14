@@ -1864,14 +1864,14 @@ fn write_node<'a>(out: &mut LatexBuf<'a>, node: &'a MathNode) {
             {
                 write_cmd(out, style_cmd(*style));
                 out.push('{');
-                push_escaped(out, &text.to_plain_string());
+                print_run(out, text);
                 out.push('}');
             } else {
                 write_cmd(out, style_cmd(*style));
                 out.push('{');
                 write_cmd(out, "text");
                 out.push('{');
-                push_escaped(out, &text.to_plain_string());
+                print_run(out, text);
                 out.push('}');
                 out.push('}');
             }
@@ -2116,7 +2116,7 @@ fn write_intertext<'a>(out: &mut LatexBuf<'a>, body: &'a MathNode) {
     write_cmd(out, "intertext");
     out.push('{');
     if let MathNode::Text(text, _) = body {
-        push_escaped(out, &text.to_plain_string());
+        print_run(out, text);
     } else {
         out.node(body);
     }
@@ -2298,6 +2298,68 @@ fn write_braced_text(out: &mut LatexBuf<'_>, cmd: &str, text: &str) {
 ///
 /// The first character is escaped if it is a space, '[', or ']'.
 /// All characters are escaped if they are '\', '{', '}', '%', '$', '&', '_', or '^'.
+/// Command for a nested text run of `style` inside text.
+fn text_cmd(style: TextStyle) -> &'static str {
+    match style {
+        TextStyle::Text => "text",
+        TextStyle::Rm => "textrm",
+        TextStyle::Bf => "textbf",
+        TextStyle::It => "textit",
+        TextStyle::Sf => "textsf",
+        TextStyle::Tt => "texttt",
+        _ => "text",
+    }
+}
+
+/// Canonical text-mode print of a run (spec 2.5). `parse` reads it back to
+/// the same run, and math-level code never looks inside it.
+fn print_run<'a>(out: &mut LatexBuf<'a>, run: &'a TextRun) {
+    let mut stack = vec![run.items().iter()];
+
+    while let Some(mut iter) = stack.pop() {
+        if let Some(item) = iter.next() {
+            stack.push(iter);
+
+            match item {
+                TextItem::Str(s) => {
+                    for c in s.chars() {
+                        match c {
+                            '\\' => out.push_str(r"\textbackslash{}"),
+                            '^' => out.push_str(r"\textasciicircum{}"),
+                            '~' => out.push_str(r"\textasciitilde{}"),
+                            '{' | '}' | '$' | '%' | '&' | '#' | '_' => {
+                                out.push('\\');
+                                out.push(c);
+                            }
+                            _ => out.push(c),
+                        }
+                    }
+                }
+                TextItem::Space => out.push(' '),
+                TextItem::ControlSpace => out.push_str(r"\ "),
+                TextItem::NoBreakSpace => out.push('~'),
+                TextItem::Symbol(name) => {
+                    out.push('\\');
+                    out.push_str(name);
+                    out.push_str("{}");
+                }
+                TextItem::Nested(style, nested_run) => {
+                    write_cmd(out, text_cmd(*style));
+                    out.push('{');
+                    stack.push(nested_run.items().iter());
+                }
+                TextItem::Math(node) => {
+                    out.push_str(r"\(");
+                    out.node(node);
+                    out.push_str(r"\)");
+                }
+            }
+        } else if !stack.is_empty() {
+            out.push('}');
+        }
+    }
+}
+
 fn push_escaped(out: &mut LatexBuf<'_>, text: &str) {
     for (i, c) in text.chars().enumerate() {
         match c {
