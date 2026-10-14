@@ -50,3 +50,19 @@ fn control_whitespace_in_text_is_a_space() {
         round_trip(input);
     }
 }
+
+/// A printed text group must not look like the `{ )}` / `{[}` shorthand the
+/// preprocessor unbraces.
+#[test]
+fn text_groups_survive_the_preprocessor() {
+    for input in [
+        "(\\text {\\ ) }\0(BB",
+        "(\\text {\\ ) }\0(BB(BB",
+        "\\text{\\ (}",
+        "\\text{\\ ( }",
+        "\\text{\\[}",
+        "\\text{\\]}",
+    ] {
+        round_trip(input);
+    }
+}
