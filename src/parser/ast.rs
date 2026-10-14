@@ -1396,6 +1396,16 @@ impl MathNode {
                 }
             }
         }
+        // The parser strips `\(…\)` and `\[…\]` fences around the whole
+        // input and rejects an unclosed one, so a print that only starts
+        // with `\(` or `\[` is one group.
+        let fenced = ["\\(", "\\["]
+            .iter()
+            .any(|open| buf.out.starts_with(open) && buf.out.len() > open.len());
+        if fenced {
+            buf.out.insert(0, '{');
+            buf.out.push('}');
+        }
         buf.out
     }
 }
@@ -2313,6 +2323,27 @@ fn after_delimiter_command(before: &[char]) -> bool {
     )
 }
 
+/// True when `printed` contains `pattern` outside every brace group, not
+/// as the second character of a control symbol.
+fn has_top_level(printed: &str, pattern: &[char]) -> bool {
+    let chars: Vec<char> = printed.chars().collect();
+    let mut braces = 0usize;
+    let mut i = 0;
+    while let Some(&c) = chars.get(i) {
+        if braces == 0 && chars.get(i..i + pattern.len()) == Some(pattern) {
+            return true;
+        }
+        match c {
+            '\\' => i += 1,
+            '{' => braces += 1,
+            '}' => braces = braces.saturating_sub(1),
+            _ => {}
+        }
+        i += 1;
+    }
+    false
+}
+
 /// `[…]` around an optional argument. A `]` at brace level zero would end
 /// the option early, so such content is grouped; a lone `]` keeps two
 /// groups, since `{]}` is read as a bare `]`.
@@ -2741,9 +2772,23 @@ fn print_run<'a>(out: &mut LatexBuf<'a>, run: &'a TextRun) {
                     stack.push(nested_run.items().iter());
                 }
                 TextItem::Math(node) => {
-                    out.push_str(r"\(");
-                    out.node(node);
-                    out.push_str(r"\)");
+                    // A `\)` in the body would close `\(` early. Such a body
+                    // uses `$…$`, or one group when it also has a `$`.
+                    let body = node.to_latex();
+                    let close = has_top_level(&body, &['\\', ')']);
+                    if close && !has_top_level(&body, &['$']) {
+                        out.push('$');
+                        out.node(node);
+                        out.push('$');
+                    } else if close {
+                        out.push_str(r"\({");
+                        out.node(node);
+                        out.push_str(r"}\)");
+                    } else {
+                        out.push_str(r"\(");
+                        out.node(node);
+                        out.push_str(r"\)");
+                    }
                 }
             }
         } else if !stack.is_empty() {
