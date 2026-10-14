@@ -266,6 +266,7 @@ pub fn parse_with_options(
         cases_depth: 0,
         plain_letters_until: 0,
         text_left: TEXT_LEVELS,
+        in_option: false,
     };
     let node = drive::parse_top(&mut p)?;
     p.skip_ws();
@@ -357,6 +358,9 @@ struct Parser {
     plain_letters_until: usize,
     /// Text nesting levels still allowed (starts at [`TEXT_LEVELS`]).
     text_left: usize,
+    /// The list now reading atoms ends at `]` (an optional argument), so the
+    /// paren lookahead stops there (spec 5, Q1).
+    in_option: bool,
 }
 
 /// Bounds the native recursion text → inline math → text. Text nesting also
@@ -406,7 +410,7 @@ impl Parser {
     /// True when the `(` at `pos` starts a scripted paren group; see
     /// [`paren_script_match`].
     fn script_follows_parens(&self) -> bool {
-        paren_script_match(&self.tokens, self.pos).is_some()
+        paren_script_match(&self.tokens, self.pos, self.in_option).is_some()
     }
 
     /// Lexes the [`Token::TextArg`] after a text command (spec 3.2).
@@ -449,6 +453,7 @@ impl Parser {
             cases_depth: 0,
             plain_letters_until: 0,
             text_left: left,
+            in_option: false,
         };
         let result = drive::parse_top(&mut parser)?;
         parser.skip_ws();
@@ -651,8 +656,10 @@ impl Parser {
 /// balanced groups and stops at an unbalanced `}` (spec 3.3). It also
 /// skips the delimiter after `\left`, `\right`, `\middle` and the `\big`
 /// family, and the `[…]` option of a command that takes one, since those
-/// parens belong to the command (spec 5, Q1).
-pub(crate) fn paren_script_match(tokens: &[Token], pos: usize) -> Option<usize> {
+/// parens belong to the command (spec 5, Q1). With `in_option` (the `(` is
+/// in a list that a `]` ends), the scan stops at that `]`: an option is a
+/// unit from inside as well as from outside.
+pub(crate) fn paren_script_match(tokens: &[Token], pos: usize, in_option: bool) -> Option<usize> {
     let mut i = pos;
     let mut depth = 0i32;
     let mut braces = 0usize;
@@ -694,6 +701,7 @@ pub(crate) fn paren_script_match(tokens: &[Token], pos: usize) -> Option<usize> 
                     return None;
                 }
             }
+            Token::Char(']') if in_option => return None,
             _ => {}
         }
         i += 1;

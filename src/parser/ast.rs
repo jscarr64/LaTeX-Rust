@@ -2206,7 +2206,7 @@ fn paren_groups(items: &[MathNode], braced: &mut [bool], literal_primes: bool) {
             .zip(braced.iter())
             .zip(&first)
             .filter(|((item, flag), _)| !**flag && starts_with_open_paren(item))
-            .find_map(|(_, pos)| paren_script_match(&tokens, *pos))
+            .find_map(|(_, pos)| paren_script_match(&tokens, *pos, false))
             .and_then(|m| owner.get(m).copied());
         match hit.and_then(|j| braced.get_mut(j)) {
             Some(flag) if !*flag => *flag = true,

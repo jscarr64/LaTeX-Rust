@@ -359,7 +359,9 @@ This release lists every finding and its fix. Nothing in this section is publish
   `\xleftarrow`, `\color`, `\textcolor`, `\colorbox` and `\fcolorbox`. Those
   parens belong to their command. Effect: `(\big( a)^2` is now one scripted
   group (before, the `\big(` hid the match), and `(\big)^2` and
-  `(\sqrt[)^2]{x}` now parse (before, they were errors). Migration: inputs
+  `(\sqrt[)^2]{x}` now parse (before, they were errors). An option is a unit
+  from inside too: a `(` inside `[…]` cannot pair with a `)` after the `]`
+  (`\xleftarrow[(]{)})^2` used to fail). Migration: inputs
   where a `(` paired with a delimiter or an option paren now parse
   differently. That pairing was never intended.
 

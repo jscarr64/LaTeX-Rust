@@ -513,7 +513,11 @@ change to the lookahead changes the printer with it.
 2. **Q1, approved: the lookahead skips `[…]` options** of `\sqrt`,
    `\xrightarrow`, `\xleftarrow`, `\color`, `\textcolor`, `\colorbox` and
    `\fcolorbox`. So G2 no longer applies inside options; only a top-level
-   `]` groups an option.
+   `]` groups an option. Refinement (fuzz r10, `\xleftarrow[(]))^\x08`):
+   an option is a unit from inside as well. A lookahead that starts in a
+   list ended by `]` stops at that `]` (`Parser::in_option`, set by
+   `step_list` from its `Stop`). Without this, the braced body after the
+   option let an inner `(` pair with a `)` beyond the `]`.
 3. **Q2, approved: bare command arguments still parse, but print braced.**
    Correction to the earlier text of this item: TeX and KaTeX do accept
    single-token arguments such as `\frac12`. What TeX does not read as
