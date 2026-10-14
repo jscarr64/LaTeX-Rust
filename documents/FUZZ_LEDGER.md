@@ -29,6 +29,8 @@ Notes:
 - canon-primed-close*: two fuzz crashes in the final 1800 s run on 2267377
   (a primed `)` after an unclosed `(`); both pass at c846b58, so they are
   regressions of the brace economy, fixed in 68ecd89.
+- canon-primed-open: fuzz crash in the 1800 s run on b6919b9, the mirror case
+  (a primed `(` base was not counted as open); fixed in 77a271b.
 
 | id | minimal input | root-cause class | fixing commit | regression seed |
 |---|---|---|---|---|
@@ -91,6 +93,7 @@ Notes:
 | canon-text-math-close | `\text{t $ \) $ u}` | printer canonical form | 2267377 | `roundtrip-canon-text-math-close` |
 | canon-primed-close | `(^))'^)` | printer canonical form | 68ecd89 | `roundtrip-canon-primed-close` |
 | canon-primed-close-accent | `(\not()'^x` | printer canonical form | 68ecd89 | `roundtrip-canon-primed-close-accent` |
+| canon-primed-open | `('^))^\ ` | printer canonical form | 77a271b | `roundtrip-canon-primed-open` |
 
 ## Count per class
 
@@ -98,7 +101,7 @@ Notes:
 |---|---|
 | preprocess rewrite | 8 |
 | text decode | 2 |
-| printer canonical form | 26 |
+| printer canonical form | 27 |
 | depth | 16 |
 | other | 7 |
-| **total** | **59** |
+| **total** | **60** |
