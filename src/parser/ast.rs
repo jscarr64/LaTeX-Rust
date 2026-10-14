@@ -2360,15 +2360,16 @@ fn has_top_level(printed: &str, pattern: &[char]) -> bool {
 }
 
 /// `[…]` around an optional argument. A `]` at brace level zero would end
-/// the option early, so such content is grouped; a lone `]` keeps two
-/// groups, since `{]}` is read as a bare `]`.
+/// the option early, and a `(` or `)` there is seen by the paren lookahead of
+/// a `(` before the command, so such content is grouped. A lone `]`, `(` or
+/// `)` keeps two groups, since `{]}`, `{(}` and `{)}` are read as bare tokens.
 fn write_option<'a>(out: &mut LatexBuf<'a>, node: &'a MathNode) {
     out.push('[');
-    if matches!(node, MathNode::Atom(']', _)) {
+    if matches!(node, MathNode::Atom(']' | '(' | ')', _)) {
         out.push('{');
         write_group(out, node);
         out.push('}');
-    } else if closes_option(&node.to_latex()) {
+    } else if option_needs_group(&node.to_latex()) {
         write_group(out, node);
     } else {
         out.node(node);
@@ -2376,8 +2377,9 @@ fn write_option<'a>(out: &mut LatexBuf<'a>, node: &'a MathNode) {
     out.push(']');
 }
 
-/// True when `printed` has an unescaped `]` outside every brace group.
-fn closes_option(printed: &str) -> bool {
+/// True when `printed` has an unescaped `]`, `(` or `)` outside every brace
+/// group.
+fn option_needs_group(printed: &str) -> bool {
     let mut braces = 0usize;
     let mut escaped = false;
     for c in printed.chars() {
@@ -2386,7 +2388,7 @@ fn closes_option(printed: &str) -> bool {
             '\\' => escaped = true,
             '{' => braces += 1,
             '}' => braces = braces.saturating_sub(1),
-            ']' if braces == 0 => return true,
+            ']' | '(' | ')' if braces == 0 => return true,
             _ => {}
         }
     }
