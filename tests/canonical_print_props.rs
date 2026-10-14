@@ -249,6 +249,8 @@ const FINDINGS: &[(&str, &str, u8)] = &[
     // scripted paren group (fuzz).
     ("roundtrip-canon-primed-close", "(^))'^)", 0),
     ("roundtrip-canon-primed-close-accent", r"(\not()'^x", 0),
+    // A primed `(` base was not counted as open, so a later `)^` closed it.
+    ("roundtrip-canon-primed-open", r"('^))^\ ", 0),
 ];
 
 #[test]
