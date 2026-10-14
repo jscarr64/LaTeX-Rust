@@ -38,6 +38,9 @@ Notes:
 - canon-text-math-fence: fuzz crash in the 1800 s run on 155c728. The
   `$…$` choice for text math looked at the fence-wrapped print (2267377)
   while the body was written unwrapped; fixed in 3f5f2d6.
+- dim-dot: fuzz crash in the 1800 s run on 8742778. A dimension with no digit
+  parsed to NaN (present since the parser was written); fixed in d5f097d by
+  rejecting it in `parse_tex_dim`.
 
 | id | minimal input | root-cause class | fixing commit | regression seed |
 |---|---|---|---|---|
@@ -104,6 +107,7 @@ Notes:
 | canon-option-paren | `(^)\xleftarrow[)^x]]` | printer canonical form | ee73242 | `roundtrip-canon-option-paren` |
 | canon-option-paren-open | `(^)\xleftarrow[(]x))^\u{8}` | printer canonical form | ee73242 | `roundtrip-canon-option-paren-open` |
 | canon-text-math-fence | `\text{$\(\)$}` | printer canonical form | 3f5f2d6 | `roundtrip-canon-text-math-fence` |
+| dim-dot | `\rule{2}{.}` | other | d5f097d | `roundtrip-dim-dot` |
 
 ## Count per class
 
@@ -113,5 +117,5 @@ Notes:
 | text decode | 2 |
 | printer canonical form | 30 |
 | depth | 16 |
-| other | 7 |
-| **total** | **63** |
+| other | 8 |
+| **total** | **64** |
