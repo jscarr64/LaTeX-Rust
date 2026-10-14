@@ -17,6 +17,6 @@ jobs:
       - name: cargo-fuzz
         run: cargo install cargo-fuzz --version 0.12.0 --locked
       - name: parse
-        run: cargo fuzz run parse -- -max_total_time=960
+        run: cargo +nightly fuzz run parse -- -max_total_time=960
       - name: preprocess
-        run: cargo fuzz run preprocess -- -max_total_time=120
+        run: cargo +nightly fuzz run preprocess -- -max_total_time=120

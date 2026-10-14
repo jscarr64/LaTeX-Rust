@@ -45,4 +45,4 @@ jobs:
       - name: cargo-fuzz
         run: cargo install cargo-fuzz --version 0.12.0 --locked
       - name: fuzz smoke
-        run: cargo fuzz run parse -- -max_total_time=60
+        run: cargo +nightly fuzz run parse -- -max_total_time=60
