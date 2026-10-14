@@ -219,6 +219,24 @@ This release lists every finding and its fix. Nothing in this section is publish
   printed, laid out, and rendered to SVG on a 256 KiB thread, in debug
   and release.
 
+- **A trailing control space was a stray backslash.** `preprocess` used
+  `str::trim`. That deleted the space in `\ ` and in the reprint of
+  `\ %comment`, and the tokenizer then reported `trailing backslash`.
+  The space after an odd run of backslashes is the control space, so
+  trimming keeps it. `to_latex` still prints `\ `, and that reprint
+  parses again. An even run (`\\ `) is a control symbol plus an ordinary
+  space, and that space is still trimmed. The fuzz seed is
+  `fuzz/corpus/parse/control-space-comment` (`\ %@QJXi`).
+
+  Migration: `\ ` at the end of input, and a control space before a
+  comment, parse as `(space control)`. The end-of-input form used to be
+  `trailing backslash`. The comment form parsed once and failed when the
+  reprint was parsed again.
+
+- **rustc 1.99 clippy.** The radical and delimiter variant tests use
+  `is_none_or` instead of `map_or(true, …)`. SHA-256 walks blocks with
+  `as_chunks` instead of `chunks_exact`. No parse or layout change.
+
 ### Changed
 
 - **MSRV is 1.99.** `rust-version` is `"1.99"`. `rust-toolchain.toml`

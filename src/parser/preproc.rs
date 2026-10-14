@@ -21,7 +21,9 @@
 /// ```
 #[must_use]
 pub fn preprocess(raw_input: &str) -> String {
-    let input = raw_input.trim().to_string();
+    // `str::trim` would delete the space in a trailing `\ `, and the tokenizer
+    // would then see a stray backslash. `trim_math` keeps that one space.
+    let input = trim_math(raw_input).to_string();
     if input.is_empty() {
         return input;
     }
@@ -36,6 +38,39 @@ pub fn preprocess(raw_input: &str) -> String {
     input = convert_choose(&input);
     input = input.replace(r"\mbox{", r"\text{");
     input
+}
+
+/// Drop surrounding whitespace, but keep the ASCII space of a trailing
+/// control space.
+///
+/// A control space is an odd-length run of backslashes followed by one
+/// space (`\ `, `\\\ `, …). [`str::trim`] deletes that space and leaves a
+/// stray `\`, which the tokenizer reports as a trailing backslash. Extra
+/// whitespace after that space is still dropped. An even run (`\\ `) is a
+/// control symbol plus an ordinary space, so the space goes.
+fn trim_math(input: &str) -> &str {
+    let start = input.len() - input.trim_start().len();
+    let body = &input[start..];
+    let kept = body.trim_end();
+    if kept.len() == body.len() || !ends_with_odd_backslash(kept) {
+        return &input[start..start + kept.len()];
+    }
+    // The first discarded character is the control space only when it is an
+    // ASCII space. A trailing newline after `\` is not a control space.
+    if body.as_bytes().get(kept.len()) == Some(&b' ') {
+        &input[start..start + kept.len() + 1]
+    } else {
+        &input[start..start + kept.len()]
+    }
+}
+
+fn ends_with_odd_backslash(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    let mut n = 0usize;
+    while n < bytes.len() && bytes[bytes.len() - 1 - n] == b'\\' {
+        n += 1;
+    }
+    n % 2 == 1
 }
 
 fn convert_plain_tex_font_scopes(input: &str) -> String {
@@ -56,7 +91,7 @@ fn convert_plain_tex_font_scopes(input: &str) -> String {
             if abs > 0 && result.as_bytes()[abs - 1] == b'{' {
                 if let Some(close) = result[abs..].find('}') {
                     let end = abs + close;
-                    let content = result[body..end].trim();
+                    let content = trim_math(&result[body..end]);
                     let rep = format!("{new}{{{content}}}");
                     result.replace_range((abs - 1)..=end, &rep);
                     search = abs - 1 + rep.len();
@@ -131,7 +166,8 @@ struct FracHead {
 
 impl FracHead {
     fn emit(&self, den: &str) -> String {
-        let num = self.num.trim();
+        let num = trim_math(&self.num);
+        let den = trim_math(den);
         match self.kind {
             InfixKind::Over => format!(r"\frac{{{}}}{{{}}}", num, den),
             InfixKind::Choose => format!(r"\binom{{{}}}{{{}}}", num, den),
@@ -139,7 +175,7 @@ impl FracHead {
     }
 
     fn open_only(&self) -> String {
-        let num = self.num.trim();
+        let num = trim_math(&self.num);
         match self.kind {
             InfixKind::Over => format!(r"\frac{{{}}}", num),
             InfixKind::Choose => format!(r"\binom{{{}}}", num),
@@ -278,7 +314,7 @@ fn close_denominator(layers: &mut Vec<Layer>) -> bool {
     for open in &pending.earlier {
         rep.push_str(&open.open_only());
     }
-    rep.push_str(&pending.head.emit(done.out.trim()));
+    rep.push_str(&pending.head.emit(&done.out));
     let Some(parent) = layers.last_mut() else {
         return false;
     };
@@ -394,6 +430,16 @@ mod tests {
     #[test]
     fn trailing_period_kept() {
         assert_eq!(preprocess("x^2."), "x^2.");
+    }
+
+    #[test]
+    fn control_space_survives_trim() {
+        assert_eq!(preprocess(r"\ "), r"\ ");
+        assert_eq!(preprocess(r"  \   "), r"\ ");
+        assert_eq!(preprocess("\\ %@QJXi"), "\\ %@QJXi");
+        assert_eq!(preprocess(r"\\ "), r"\\");
+        assert_eq!(preprocess(r"\\\ "), r"\\\ ");
+        assert_eq!(preprocess(r"{a \over \ }"), r"\frac{a}{\ }");
     }
 
     #[test]

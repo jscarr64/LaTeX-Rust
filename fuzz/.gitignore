@@ -1,3 +1,6 @@
 target
-corpus
 artifacts
+corpus/*
+!corpus/parse/
+corpus/parse/*
+!corpus/parse/control-space-comment

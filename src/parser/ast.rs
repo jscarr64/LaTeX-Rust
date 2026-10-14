@@ -1977,6 +1977,10 @@ fn write_space(out: &mut LatexBuf<'_>, kind: &SpaceKind) {
         SpaceKind::NegThin => out.push_str("\\!"),
         SpaceKind::Quad => write_cmd(out, "quad"),
         SpaceKind::Qquad => write_cmd(out, "qquad"),
+        // The space is the control symbol, not disposable padding. `preprocess`
+        // keeps one trailing ASCII space after an odd run of backslashes, so
+        // this reprint parses again. Do not drop the space or replace it with
+        // a token that trimming would delete.
         SpaceKind::ControlSpace => out.push_str("\\ "),
         SpaceKind::Hspace(dim) => {
             write_cmd(out, "hspace");
