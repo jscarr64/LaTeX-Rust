@@ -921,15 +921,20 @@ fn step_cmd(
         },
         Cmd::Binom { num, phase } => match pair(num, phase, ready)? {
             Pair::Step(step) => Ok(step),
-            Pair::Both(n, k) => Ok(Step::Done(MathNode::Delimited(
-                Delimiter::Char('('),
-                Box::new(MathNode::Fraction(
-                    FracStyle::Frac,
-                    Box::new(n),
-                    Box::new(k),
-                )),
-                Delimiter::Char(')'),
-            ))),
+            Pair::Both(n, k) => {
+                if is_empty_node(&n) && is_empty_node(&k) {
+                    return Err(ParseError::Malformed("empty binomial".into()));
+                }
+                Ok(Step::Done(MathNode::Delimited(
+                    Delimiter::Char('('),
+                    Box::new(MathNode::Fraction(
+                        FracStyle::Frac,
+                        Box::new(n),
+                        Box::new(k),
+                    )),
+                    Delimiter::Char(')'),
+                )))
+            }
         },
         Cmd::Genfrac {
             left,
