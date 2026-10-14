@@ -10,7 +10,7 @@ mod token;
 
 pub use ast::{
     AccentKind, AtomKind, ColSpec, DelimSize, Delimiter, EnvRow, EqNumber, FracStyle, IntegralKind,
-    MathNode, MatrixStyle, PhantomKind, SpaceKind, TextStyle,
+    MathNode, MatrixStyle, PhantomKind, SpaceKind, TextItem, TextRun, TextStyle,
 };
 pub use parse::{
     parse, parse_with_colors, parse_with_options, ParseOptions, DEFAULT_MAX_NESTING_DEPTH,

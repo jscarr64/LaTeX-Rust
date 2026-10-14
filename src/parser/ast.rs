@@ -189,6 +189,127 @@ impl TextStyle {
     }
 }
 
+/// One item of a text-mode run (`\text{…}` body).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TextItem {
+    /// A maximal run of plain characters (no whitespace).
+    Str(String),
+    /// Collapsed inter-word space.
+    Space,
+    /// A `\ ` control space.
+    ControlSpace,
+    /// A `~` no-break space.
+    NoBreakSpace,
+    /// A text symbol such as `\ldots`, `\quad`, `\qquad`.
+    Symbol(&'static str),
+    /// A nested text command with its own style.
+    Nested(TextStyle, TextRun),
+    /// Math embedded in text with `\(…\)` or `$…$`.
+    Math(Box<MathNode>),
+}
+
+/// Body of a text-mode command. Adjacent `Str` items are merged, no `Str` is
+/// empty, and no `Space` follows a `Space`.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct TextRun(Vec<TextItem>);
+
+impl TextRun {
+    /// Creates a new `TextRun` from a vector of items, enforcing invariants.
+    #[must_use]
+    pub fn new(items: Vec<TextItem>) -> Self {
+        let mut run = Self::default();
+        for item in items {
+            run.push(item);
+        }
+        run
+    }
+
+    /// Creates a `TextRun` from a plain string, converting spaces to `Space` items.
+    #[must_use]
+    pub fn plain(s: &str) -> Self {
+        let mut run = Self::default();
+        for c in s.chars() {
+            if c == ' ' {
+                run.push(TextItem::Space);
+            } else {
+                run.push_char(c);
+            }
+        }
+        run
+    }
+
+    /// Appends an item to the run, maintaining invariants.
+    pub fn push(&mut self, item: TextItem) {
+        match (self.0.last_mut(), item) {
+            (_, TextItem::Str(s)) if s.is_empty() => {}
+            (Some(TextItem::Str(prev)), TextItem::Str(s)) => prev.push_str(&s),
+            (Some(TextItem::Space), TextItem::Space) => {}
+            (_, item) => self.0.push(item),
+        }
+    }
+
+    /// Appends a character to the last `Str` item or creates a new one.
+    pub fn push_char(&mut self, c: char) {
+        if let Some(TextItem::Str(s)) = self.0.last_mut() {
+            s.push(c);
+        } else {
+            self.0.push(TextItem::Str(c.to_string()));
+        }
+    }
+
+    /// Appends all items from another `TextRun`.
+    pub fn append(&mut self, other: TextRun) {
+        for item in other.0 {
+            self.push(item);
+        }
+    }
+
+    /// Returns a slice of the items in this run.
+    #[must_use]
+    pub fn items(&self) -> &[TextItem] {
+        &self.0
+    }
+
+    /// Checks if the run is empty.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Returns `Some` only when the run contains exactly one `Str` item.
+    #[must_use]
+    pub fn as_str(&self) -> Option<&str> {
+        match self.0.as_slice() {
+            [TextItem::Str(s)] => Some(s),
+            _ => None,
+        }
+    }
+
+    /// Converts the run to a plain string representation.
+    #[must_use]
+    pub fn to_plain_string(&self) -> String {
+        let mut result = String::new();
+        for item in &self.0 {
+            match item {
+                TextItem::Str(s) => result.push_str(s),
+                TextItem::Space | TextItem::ControlSpace | TextItem::NoBreakSpace => {
+                    result.push(' ');
+                }
+                TextItem::Symbol(name) => {
+                    if *name == "ldots" {
+                        result.push('\u{2026}');
+                    } else {
+                        result.push(' ');
+                    }
+                }
+                TextItem::Nested(_, run) => result.push_str(&run.to_plain_string()),
+                TextItem::Math(_) => {}
+            }
+        }
+        result
+    }
+}
+
 /// Horizontal skip.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SpaceKind {
