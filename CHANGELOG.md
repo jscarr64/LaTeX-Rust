@@ -314,7 +314,7 @@ This release lists every finding and its fix. Nothing in this section is publish
 
 - **Reprints that did not parse back.** A whole-grammar property
   (`print(parse(print(x))) == print(x)` and `parse(print(t)) == t`, over every
-  `MathNode` kind, with each parser option) and fuzzing found six more. Each
+  `MathNode` kind, with each parser option) and fuzzing found eight more. Each
   is a seed (`roundtrip-canon-*`) and a table row:
   - a `]` in an optional argument ended it early: `\xrightarrow[\mathrm{]}]`
     printed `\xrightarrow []]`. Such an argument is now grouped (`\sqrt[…]`
@@ -325,9 +325,11 @@ This release lists every finding and its fix. Nothing in this section is publish
     unclosed math fence. Such a print is now one group;
   - a `\)` symbol inside text math (`\text{$\)$}`) closed the `\(` early. That
     body now prints between `$…$`;
-  - two that the new printer briefly had before release: a primed base
-    before more primes (`{x_x'}'`), and `'` marks read back as `\prime` under
-    `prime_symbol` (see `to_latex_with` below).
+  - four that the new printer briefly had before release: a primed base
+    before more primes (`{x_x'}'`); `'` marks read back as `\prime` under
+    `prime_symbol` (see `to_latex_with` below); and a primed `)` after an
+    unclosed `(` (`(\not()'^x`, `(^))'^)`), whose `'` made the reparse read
+    `(…)'` as a scripted paren group. That item is now grouped.
 
 ### Changed
 

@@ -2152,7 +2152,17 @@ fn write_row_items<'a>(out: &mut LatexBuf<'a>, items: &'a [MathNode]) {
 
 /// True when the final `)` of `node` would close one of the `open` bare `(`
 /// before it in the row, so a script after it reads as a scripted paren group.
+/// Prime superscripts are peeled first: `)'` prints its `)` right before a
+/// `'` mark, which starts the paren lookahead just like `^`.
 fn closes_open(node: &MathNode, open: usize) -> bool {
+    let mut node = node;
+    while let MathNode::Superscript(base, sup) = node {
+        if is_primes(sup) {
+            node = base;
+        } else {
+            break;
+        }
+    }
     matches!(paren_need(node), Some(k) if k >= 1 && k <= open)
 }
 
