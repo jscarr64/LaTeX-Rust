@@ -1726,6 +1726,26 @@ fn write_node<'a>(out: &mut LatexBuf<'a>, node: &'a MathNode) {
     }
 }
 
+/// The items of a row of two or more primes of one spelling (all U+2032
+/// atoms, or all `\prime` symbols). Such a run prints unbraced inside one
+/// `^{…}` group, so its reprint costs one brace level for any run length.
+fn prime_run(node: &MathNode) -> Option<&[MathNode]> {
+    match node {
+        MathNode::Row(items)
+            if items.len() >= 2
+                && (items
+                    .iter()
+                    .all(|item| matches!(item, MathNode::Atom('′', AtomKind::Ord)))
+                    || items
+                        .iter()
+                        .all(|item| matches!(item, MathNode::Symbol(name) if name == "prime"))) =>
+        {
+            Some(items)
+        }
+        _ => None,
+    }
+}
+
 fn write_scripts<'a>(
     out: &mut LatexBuf<'a>,
     base: &'a MathNode,
@@ -1739,7 +1759,16 @@ fn write_scripts<'a>(
     }
     if let Some(sup) = sup {
         out.push('^');
-        write_group(out, sup);
+        match prime_run(sup) {
+            Some(items) => {
+                out.push('{');
+                for item in items {
+                    out.node(item);
+                }
+                out.push('}');
+            }
+            None => write_group(out, sup),
+        }
     }
 }
 
