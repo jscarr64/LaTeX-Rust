@@ -248,6 +248,13 @@ const FINDINGS: &[(&str, &str, u8)] = &[
     // A `\big(` delimiter paren was counted by the paren lookahead (fuzz r9,
     // before Q1).
     ("roundtrip-canon-big-paren", r"(^x(\big())x^))^x", 0),
+    // A `(` inside an option paired with a `)` after the option's `]` once
+    // the body printed braced (fuzz r10).
+    (
+        "roundtrip-canon-option-inner-paren",
+        "\\xleftarrow[(]))^\u{8}",
+        0,
+    ),
     // The `\)` check saw the fence-wrapped body `{\(\)}`, but the printer
     // wrote it unwrapped inside `\(…\)` (fuzz).
     ("roundtrip-canon-text-math-fence", r"\text{$\(\)$}", 0),

@@ -63,6 +63,25 @@ fn lookahead_skips_optional_arguments() {
 }
 
 #[test]
+fn lookahead_from_inside_an_option_stops_at_its_close() {
+    // The `(` is inside the option: its match cannot be after the `]`.
+    for src in [
+        r"\xleftarrow[(]{)})^2",
+        r"\sqrt[(]{)}^2",
+        r"\xleftarrow[(]))^2",
+    ] {
+        round_trip(src);
+    }
+    // Outside any option a `]` does not stop the scan.
+    match parse(r"(a]b)^2") {
+        Ok(MathNode::Superscript(ref base, _)) => {
+            assert!(matches!(base.as_ref(), MathNode::Row(_)));
+        }
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
 fn a_real_paren_script_still_reads_as_one() {
     for src in [
         r"(a)^2",
