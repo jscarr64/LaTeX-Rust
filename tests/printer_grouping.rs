@@ -171,3 +171,44 @@ fn row_paren_pass_groups_the_item_holding_the_match() {
         round_trip(src);
     }
 }
+
+// Cost ---------------------------------------------------------------------
+
+/// A print must take time linear in the tree. The row paren pass once printed
+/// each nested row twice per level, so `{(` nested k deep cost 2^k (fuzz r11,
+/// slow unit `roundtrip-perf-paren-row`: 0.8 s for 2 KB).
+#[test]
+fn nested_paren_rows_print_in_linear_time() {
+    let start = std::time::Instant::now();
+    for k in [8usize, 16, 22, 64] {
+        let src = "{(".repeat(k) + "x" + &")}".repeat(k);
+        let (tree, _) = parse_with_options(&src, &ParseOptions::new().with_max_depth(512))
+            .unwrap_or_else(|e| panic!("k={k}: {e}"));
+        let printed = tree.to_latex();
+        assert!(printed.len() >= 2 * k, "k={k}");
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(2),
+            "k={k}: {:?}",
+            start.elapsed()
+        );
+    }
+}
+
+#[test]
+fn the_slow_seed_prints_fast() {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/fuzz/corpus/parse/roundtrip-perf-paren-row"
+    );
+    let bytes = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
+    let src = String::from_utf8_lossy(&bytes).into_owned();
+    let tree = parse(&src).unwrap_or_else(|e| panic!("{e}"));
+    let start = std::time::Instant::now();
+    let printed = tree.to_latex();
+    assert!(
+        start.elapsed() < std::time::Duration::from_millis(100),
+        "{:?}",
+        start.elapsed()
+    );
+    assert_eq!(parse(&printed).ok().as_ref(), Some(&tree));
+}

@@ -92,6 +92,7 @@ const SEEDS: &[&str] = &[
     "roundtrip-depth-cbe83c33",
     "roundtrip-depth-fa46a27f",
     "roundtrip-dim-dot",
+    "roundtrip-perf-paren-row",
 ];
 
 /// Every crash seed either round-trips (property b and c) or is rejected
