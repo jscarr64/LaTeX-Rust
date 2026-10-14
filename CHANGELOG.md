@@ -312,6 +312,11 @@ This release lists every finding and its fix. Nothing in this section is publish
   `roundtrip-depth-*`) and for a generated grammar. Migration: none for
   trees; `to_latex` output changes as described below.
 
+- **Dimensions with no number.** `\rule{2}{.}` and `\hspace{1.2.3em}` parsed to
+  a NaN dimension that printed as `NaNem` and did not read back (fuzz,
+  `roundtrip-dim-dot`). A dimension now needs at least one digit and at most
+  one point; anything else is `ParseError::Malformed("invalid dimension …")`.
+
 - **Reprints that did not parse back.** A whole-grammar property
   (`print(parse(print(x))) == print(x)` and `parse(print(t)) == t`, over every
   `MathNode` kind, with each parser option) and fuzzing found twelve more. Each

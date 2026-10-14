@@ -1239,10 +1239,19 @@ fn parse_tex_dim(s: &str) -> Result<Dim, ParseError> {
     if i < b.len() && (b[i] == b'+' || b[i] == b'-') {
         i += 1;
     }
+    // At least one digit and at most one point; `.` or `1.2.3` would make a
+    // NaN that prints as `NaNem`.
+    let mut points = 0usize;
+    let mut has_digit = false;
     while i < b.len() && (b[i].is_ascii_digit() || b[i] == b'.') {
+        if b[i] == b'.' {
+            points += 1;
+        } else {
+            has_digit = true;
+        }
         i += 1;
     }
-    if i == 0 || (i == 1 && (b[0] == b'+' || b[0] == b'-')) {
+    if !has_digit || points > 1 {
         return Err(ParseError::Malformed(format!("invalid dimension `{s}`")));
     }
     let num = Dim::parse(&s[..i]);
