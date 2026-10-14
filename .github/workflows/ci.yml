@@ -21,6 +21,21 @@ jobs:
       - name: test release
         run: cargo test --release
 
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The lockfile is resolved with the same toolchain as the test job.
+      # cargo-audit 0.22 needs a newer rustc to read the current advisory DB.
+      - uses: dtolnay/rust-toolchain@1.83.0
+      - name: lockfile
+        run: cargo generate-lockfile
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - name: cargo-audit
+        run: |
+          cargo install cargo-audit --version 0.22.2 --locked
+          cargo audit --deny warnings
+
   fuzz:
     runs-on: ubuntu-latest
     steps:

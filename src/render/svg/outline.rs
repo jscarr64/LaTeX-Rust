@@ -1,13 +1,13 @@
 //! TrueType/CFF outline → SVG path `d` (font units, y-up).
 //!
-//! `ttf-parser` delivers outline points as hardware `f32`. Those bits are
+//! The scaler delivers outline points as hardware `f32`. Those bits are
 //! converted immediately to [`Dim`](crate::Dim) — they are never used as layout
 //! arithmetic terminals.
 
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
-use ttf_parser::{GlyphId, OutlineBuilder};
+use skrifa::outline::OutlinePen;
 
 use crate::dim::Dim;
 use crate::error::{Error, FontError};
@@ -21,7 +21,7 @@ fn coord(x: f32) -> String {
     Dim::from_ieee32_bits(x.to_bits()).to_svg_string()
 }
 
-impl OutlineBuilder for PathBuilder {
+impl OutlinePen for PathBuilder {
     fn move_to(&mut self, x: f32, y: f32) {
         self.d.push('M');
         self.d.push(' ');
@@ -98,10 +98,9 @@ pub fn glyph_path_d(font: &MathFont, glyph_id: u16) -> Result<String, Error> {
 }
 
 fn glyph_path_d_uncached(font: &MathFont, glyph_id: u16) -> Result<String, Error> {
-    let face = font.face();
     let mut b = PathBuilder { d: String::new() };
-    let bbox = face.outline_glyph(GlyphId(glyph_id), &mut b);
-    if bbox.is_none() && b.d.is_empty() {
+    let drew = font.draw_glyph(glyph_id, &mut b);
+    if !drew && b.d.is_empty() {
         return Err(FontError::MissingGlyph { ch: '\u{FFFD}' }.into());
     }
     if b.d.ends_with(' ') {

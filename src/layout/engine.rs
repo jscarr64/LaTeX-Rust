@@ -1,7 +1,10 @@
 //! `MathNode` → `MathBox`. All sizes are [`Dim`](crate::Dim).
 
-use core::cell::Cell;
+use core::cell::{Cell, RefCell};
 use core::cmp::Ordering;
+
+#[path = "engine_walk.rs"]
+mod walk;
 
 use crate::atoms::symbol_atom_kind;
 use crate::color::Color;
@@ -15,7 +18,7 @@ use crate::layout::style::MathStyle;
 use crate::layout::{BoxContent, MathBox};
 use crate::parser::DEFAULT_MAX_NESTING_DEPTH;
 use crate::parser::{
-    AccentKind, AtomKind, ColSpec, DelimSize, Delimiter, EnvRow, IntegralKind, MathNode,
+    AccentKind, AtomKind, ColSpec, DelimSize, Delimiter, EnvRow, FracStyle, IntegralKind, MathNode,
     MatrixStyle, PhantomKind, SpaceKind, TextStyle,
 };
 use crate::style_map::styled_char;
@@ -224,8 +227,8 @@ fn layout_impl(
     }
 
     let params = MathParams::from_font(font)?;
-    let script_placement = ScriptPlacementParams::from_font(font)?;
-    let substack = SubstackParams::from_font(font, &params)?;
+    let script_placement = ScriptPlacementParams::from_params(&params);
+    let substack = SubstackParams::from_params(&params);
     let delimiter_shortfall = &Dim::from_i64(TEX_DELIMITER_SHORTFALL_PT) / em_size_pt;
     let start = state.collect(node);
     Engine {
@@ -237,7 +240,9 @@ fn layout_impl(
         root_em_size_pt: em_size_pt.clone(),
         numbers: state,
         idx: Cell::new(start),
-        depth: Cell::new(0),
+        kids: RefCell::new(Vec::new()),
+        kid_i: Cell::new(0),
+        arena: RefCell::new(Vec::new()),
         max_depth,
     }
     .layout(node, style)
@@ -252,11 +257,18 @@ struct Engine<'a> {
     root_em_size_pt: Dim,
     numbers: &'a NumberingState,
     idx: Cell<usize>,
-    /// Current nesting depth, bounded by `max_depth`.
-    depth: Cell<usize>,
+    /// Precomputed children for the node currently being assembled.
+    kids: RefCell<Vec<Item>>,
+    kid_i: Cell<usize>,
+    /// Synthetic nodes built while planning (`\begin{equation}` rows, aligned
+    /// prefixes). Each node is boxed so its address stays valid when the
+    /// arena vec grows.
+    arena: RefCell<Vec<ArenaNode>>,
     /// Deepest nesting accepted.
     max_depth: usize,
 }
+
+struct ArenaNode(Box<MathNode>);
 
 struct ScriptPlacementParams {
     subscript_top_max: Dim,
@@ -267,32 +279,16 @@ struct ScriptPlacementParams {
 }
 
 impl ScriptPlacementParams {
-    fn from_font(font: &MathFont) -> Result<Self, Error> {
-        let math = font
-            .face()
-            .tables()
-            .math
-            .ok_or_else(|| Error::Unsupported {
-                what: "OpenType MATH table".into(),
-            })?;
-
-        let constants = math.constants.ok_or_else(|| Error::Unsupported {
-            what: "MATH constants".into(),
-        })?;
-
-        let units_per_em = font.units_per_em();
-
-        let fu = |value: i16| Dim::from_font_units(i64::from(value), units_per_em);
-
-        Ok(Self {
-            subscript_top_max: fu(constants.subscript_top_max().value),
-            subscript_baseline_drop_min: fu(constants.subscript_baseline_drop_min().value),
-            superscript_bottom_min: fu(constants.superscript_bottom_min().value),
-            superscript_bottom_max_with_subscript: fu(constants
-                .superscript_bottom_max_with_subscript()
-                .value),
-            superscript_baseline_drop_max: fu(constants.superscript_baseline_drop_max().value),
-        })
+    fn from_params(params: &MathParams) -> Self {
+        Self {
+            subscript_top_max: params.subscript_top_max.clone(),
+            subscript_baseline_drop_min: params.subscript_baseline_drop_min.clone(),
+            superscript_bottom_min: params.superscript_bottom_min.clone(),
+            superscript_bottom_max_with_subscript: params
+                .superscript_bottom_max_with_subscript
+                .clone(),
+            superscript_baseline_drop_max: params.superscript_baseline_drop_max.clone(),
+        }
     }
 }
 
@@ -302,36 +298,13 @@ struct SubstackParams {
 }
 
 impl SubstackParams {
-    fn from_font(font: &MathFont, params: &MathParams) -> Result<Self, Error> {
-        let math = font
-            .face()
-            .tables()
-            .math
-            .ok_or_else(|| Error::Unsupported {
-                what: "OpenType MATH table".into(),
-            })?;
-
-        let constants = math.constants.ok_or_else(|| Error::Unsupported {
-            what: "MATH constants".into(),
-        })?;
-
-        let units_per_em = font.units_per_em();
-
-        let fu = |value: i16| Dim::from_font_units(i64::from(value), units_per_em);
-
+    fn from_params(params: &MathParams) -> Self {
         let script_scale = params.scale(MathStyle::Script);
-
-        let top = fu(constants.stack_top_shift_up().value);
-
-        let bottom = fu(constants.stack_bottom_shift_down().value);
-
-        let gap = fu(constants.stack_gap_min().value);
-
-        Ok(Self {
-            baseline_skip: &(&top + &bottom) * &script_scale,
-
-            line_skip: &gap * &script_scale,
-        })
+        Self {
+            baseline_skip: &(&params.stack_top_shift_up + &params.stack_bottom_shift_down)
+                * &script_scale,
+            line_skip: &params.stack_gap_min * &script_scale,
+        }
     }
 }
 struct Item {
@@ -344,22 +317,13 @@ impl Engine<'_> {
         Ok(self.item(node, style)?.bx)
     }
 
-    /// Lay out `node` one level deeper, refusing to descend past `max_depth`.
+    /// Lay out `node`, refusing to descend past `max_depth`.
     ///
-    /// `parse` bounds the depth of any tree it builds, so this catches only a
-    /// tree assembled by hand. It exists because `layout` is public and must
-    /// not overflow the caller's stack whatever it is handed.
+    /// The walk is an explicit heap stack. A tree `parse` accepts — including
+    /// one built at a raised `max_depth` — does not grow the caller's stack
+    /// with the tree.
     fn item(&self, node: &MathNode, style: MathStyle) -> Result<Item, Error> {
-        let depth = self.depth.get();
-        if depth >= self.max_depth {
-            return Err(Error::Unsupported {
-                what: format!("tree nests deeper than {} levels", self.max_depth),
-            });
-        }
-        self.depth.set(depth + 1);
-        let out = self.item_inner(node, style);
-        self.depth.set(depth);
-        out
+        self.drive(node, style)
     }
 
     fn item_inner(&self, node: &MathNode, style: MathStyle) -> Result<Item, Error> {
@@ -380,7 +344,9 @@ impl Engine<'_> {
                 })
             }
             MathNode::Row(items) => self.row(items, style),
-            MathNode::Fraction(num, den) => self.fraction(num, den, style),
+            MathNode::Fraction(kind, num, den) => {
+                self.fraction(num, den, frac_math_style(*kind, style))
+            }
             MathNode::Radical(deg, rad) => self.radical(deg.as_deref(), rad, style),
             MathNode::Superscript(base, exp) => self.scripts(base, None, Some(exp), style),
             MathNode::Subscript(base, sub) => self.scripts(base, Some(sub), None, style),
@@ -412,7 +378,7 @@ impl Engine<'_> {
                 })
             }
             MathNode::Phantom(kind, inner) => {
-                let mut bx = self.layout(inner, style)?;
+                let mut bx = self.take_box()?;
                 match kind {
                     PhantomKind::Full => bx.content = BoxContent::Empty,
                     PhantomKind::Vertical => {
@@ -450,14 +416,14 @@ impl Engine<'_> {
                     })
                 }
             }
-            MathNode::OverUnder(base, over, under) => {
-                let mut b = self.layout(base, style)?;
+            MathNode::OverUnder(_base, over, under) => {
+                let mut b = self.take_box()?;
                 let mut needed = b.width.clone();
-                if let Some(o) = over {
-                    needed = needed.max(&self.layout(o, style.into_script())?.width);
+                if let Some(_o) = over {
+                    needed = needed.max(&self.take_box()?.width);
                 }
-                if let Some(u) = under {
-                    needed = needed.max(&self.layout(u, style.into_script())?.width);
+                if let Some(_u) = under {
+                    needed = needed.max(&self.take_box()?.width);
                 }
                 b = self.stretch_h(b, &needed, style)?;
                 self.attach_limits(b, over.as_deref(), under.as_deref(), style, true)
@@ -475,27 +441,27 @@ impl Engine<'_> {
             MathNode::Hline => Err(Error::Unsupported {
                 what: "hline outside array".into(),
             }),
-            MathNode::Intertext(n) => Ok(Item {
+            MathNode::Intertext(_n) => Ok(Item {
                 class: Some(AtomKind::Ord),
-                bx: self.layout(n, MathStyle::Text)?,
+                bx: self.take_box()?,
             }),
             MathNode::Color(c, body) | MathNode::TextColor(c, body) => {
-                let inner = self.layout(body, style)?;
+                let inner = self.take_box()?;
                 Ok(Item {
                     class: class_of(body),
                     bx: color_wrap(*c, inner),
                 })
             }
-            MathNode::ColorBox(c, body) => {
-                let inner = self.layout(body, style)?;
+            MathNode::ColorBox(c, _body) => {
+                let inner = self.take_box()?;
                 let pad = self.params.mu(style) * Dim::from_i64(3);
                 Ok(Item {
                     class: Some(AtomKind::Inner),
                     bx: back_color_wrap(*c, pad_box(inner, &pad)),
                 })
             }
-            MathNode::FColorBox(border, fill, body) => {
-                let inner = self.layout(body, style)?;
+            MathNode::FColorBox(border, fill, _body) => {
+                let inner = self.take_box()?;
                 let pad = self.params.mu(style) * Dim::from_i64(3);
                 let thick = self.params.fraction_rule_thickness.clone() * self.params.scale(style);
                 Ok(Item {
@@ -623,8 +589,8 @@ impl Engine<'_> {
             });
         }
         let mut laid = Vec::new();
-        for n in items {
-            laid.push(self.item(n, style)?);
+        for _n in items {
+            laid.push(self.take_item()?);
         }
         let n = laid.len();
         let mut classes: Vec<Option<AtomKind>> = Vec::with_capacity(n);
@@ -661,9 +627,9 @@ impl Engine<'_> {
         })
     }
 
-    fn fraction(&self, num: &MathNode, den: &MathNode, style: MathStyle) -> Result<Item, Error> {
-        let num_b = self.layout(num, style.numerator())?;
-        let den_b = self.layout(den, style.denominator())?;
+    fn fraction(&self, _num: &MathNode, _den: &MathNode, style: MathStyle) -> Result<Item, Error> {
+        let num_b = self.take_box()?;
+        let den_b = self.take_box()?;
         let s = self.params.scale(style);
         let axis = &self.params.axis_height * &s;
         let thick = &self.params.fraction_rule_thickness * &s;
@@ -714,10 +680,10 @@ impl Engine<'_> {
     fn radical(
         &self,
         deg: Option<&MathNode>,
-        rad: &MathNode,
+        _rad: &MathNode,
         style: MathStyle,
     ) -> Result<Item, Error> {
-        let rad_b = self.layout(rad, style.cramp())?;
+        let rad_b = self.take_box()?;
         let s = self.params.scale(style);
         let thick = &self.params.radical_rule_thickness * &s;
         let extra = &self.params.radical_extra_ascender * &s;
@@ -755,11 +721,14 @@ impl Engine<'_> {
             content: BoxContent::Overlap(vec![bar, rad_b.clone()]),
         };
         let mut kids = vec![surd, rad_col];
-        let mut width = MathBox::hpack(vec![kids[0].clone(), kids[1].clone()]).width;
+        let mut width = {
+            let packed = MathBox::hpack(vec![kids[0].clone(), kids[1].clone()]);
+            packed.width.clone()
+        };
         let mut height = &inner_ascent + &extra;
         let mut depth = rad_b.depth.max(&surd_descent);
-        if let Some(d) = deg {
-            let db = self.layout(d, MathStyle::ScriptScript)?;
+        if let Some(_d) = deg {
+            let db = self.take_box()?;
             let before = &self.params.radical_kern_before_degree * &s;
             let after = &self.params.radical_kern_after_degree * &s;
             let pct = Dim::from_i64(i64::from(self.params.radical_degree_bottom_raise_percent))
@@ -778,7 +747,10 @@ impl Engine<'_> {
                 kids[0].clone(),
                 kids[1].clone(),
             ];
-            width = MathBox::hpack(kids.clone()).width;
+            width = {
+                let packed = MathBox::hpack(kids.clone());
+                packed.width.clone()
+            };
         }
         Ok(Item {
             class: Some(AtomKind::Inner),
@@ -795,12 +767,12 @@ impl Engine<'_> {
 
     fn scripts(
         &self,
-        base: &MathNode,
+        _base: &MathNode,
         sub: Option<&MathNode>,
         sup: Option<&MathNode>,
         style: MathStyle,
     ) -> Result<Item, Error> {
-        let base_it = self.item(base, style)?;
+        let base_it = self.take_item()?;
         self.attach_scripts_to_box(base_it.bx, base_it.class, sub, sup, style)
     }
 
@@ -816,24 +788,23 @@ impl Engine<'_> {
             return Ok(Item { bx: base, class });
         }
         let s = self.params.scale(style);
-        let ss = style.into_script();
         let simple_character_nucleus = matches!(&base.content, BoxContent::Glyph { .. });
         let after = &self.params.space_after_script * &self.params.scale(style);
         let mut sup_shift = Dim::zero();
         let mut sub_shift = Dim::zero();
-        let sup_laid = if let Some(e) = sup {
+        let sup_laid = if let Some(_e) = sup {
             sup_shift = if style.is_cramped() {
                 &self.params.superscript_shift_up_cramped * &s
             } else {
                 &self.params.superscript_shift_up * &s
             };
-            Some(self.layout(e, ss.cramp())?)
+            Some(self.take_box()?)
         } else {
             None
         };
-        let sub_laid = if let Some(u) = sub {
+        let sub_laid = if let Some(_u) = sub {
             sub_shift = &self.params.subscript_shift_down * &s;
-            Some(self.layout(u, ss)?)
+            Some(self.take_box()?)
         } else {
             None
         };
@@ -947,11 +918,11 @@ impl Engine<'_> {
     fn delimited(
         &self,
         open: &Delimiter,
-        body: &MathNode,
+        _body: &MathNode,
         close: &Delimiter,
         style: MathStyle,
     ) -> Result<Item, Error> {
-        let body_b = self.layout(body, style)?;
+        let body_b = self.take_box()?;
         let s = self.params.scale(style);
         let axis = &self.params.axis_height * &s;
         let needed = self.delimiter_target(&body_b.height, &body_b.depth, &axis);
@@ -1178,14 +1149,13 @@ impl Engine<'_> {
         style: MathStyle,
     ) -> Result<Item, Error> {
         let scale = self.params.scale(style);
-        let script_style = style.into_script();
 
         let sup_laid = match sup {
-            Some(node) => Some(self.layout(node, script_style.cramp())?),
+            Some(_) => Some(self.take_box()?),
             None => None,
         };
         let sub_laid = match sub {
-            Some(node) => Some(self.layout(node, script_style)?),
+            Some(_) => Some(self.take_box()?),
             None => None,
         };
 
@@ -1306,11 +1276,11 @@ impl Engine<'_> {
         let op_d = (&op.depth - &op_shift).clamp_nonneg();
 
         let over_b = match over {
-            Some(o) => Some(self.layout(o, style.into_script())?),
+            Some(_) => Some(self.take_box()?),
             None => None,
         };
         let under_b = match under {
-            Some(u) => Some(self.layout(u, style.into_script())?),
+            Some(_) => Some(self.take_box()?),
             None => None,
         };
 
@@ -1384,11 +1354,11 @@ impl Engine<'_> {
         let op_h = op.height.clone();
         let op_d = op.depth.clone();
         let over_b = match over {
-            Some(o) => Some(self.layout(o, style.into_script())?),
+            Some(_) => Some(self.take_box()?),
             None => None,
         };
         let under_b = match under {
-            Some(u) => Some(self.layout(u, style.into_script())?),
+            Some(_) => Some(self.take_box()?),
             None => None,
         };
         let mut width = op.width.clone();
@@ -1459,12 +1429,7 @@ impl Engine<'_> {
     }
 
     fn accent(&self, base: &MathNode, kind: AccentKind, style: MathStyle) -> Result<Item, Error> {
-        let nucleus_style = if is_tex_accent(kind) {
-            style.cramp()
-        } else {
-            style
-        };
-        let b = self.layout(base, nucleus_style)?;
+        let b = self.take_box()?;
         if kind == AccentKind::Not {
             return self.not_overlay(base, b, style);
         }
@@ -1645,9 +1610,14 @@ impl Engine<'_> {
 
         (&base.height - &base_height).clamp_nonneg()
     }
-    fn cancelto(&self, value: &MathNode, expr: &MathNode, style: MathStyle) -> Result<Item, Error> {
-        let b = self.layout(expr, style)?;
-        let val = self.layout(value, style.into_script())?;
+    fn cancelto(
+        &self,
+        _value: &MathNode,
+        _expr: &MathNode,
+        style: MathStyle,
+    ) -> Result<Item, Error> {
+        let b = self.take_box()?;
+        let val = self.take_box()?;
         let mut kids = vec![b.clone()];
         kids.extend(self.cancel_lines(&b, AccentKind::Cancel, style));
         let gap = self.params.space_after_script.clone() * self.params.scale(style);
@@ -1830,8 +1800,8 @@ impl Engine<'_> {
         self.text_run(s, TextStyle::Rm, style)
     }
 
-    fn tag_box(&self, star: bool, body: &MathNode, style: MathStyle) -> Result<Item, Error> {
-        let inner = self.layout(body, MathStyle::Text)?;
+    fn tag_box(&self, star: bool, _body: &MathNode, style: MathStyle) -> Result<Item, Error> {
+        let inner = self.take_box()?;
         let bx = if star {
             inner
         } else {
@@ -1857,8 +1827,8 @@ impl Engine<'_> {
         // even when the surrounding expression is already Script.
         let mut laid = Vec::with_capacity(lines.len());
 
-        for line in lines {
-            laid.push(self.layout(line, MathStyle::Script)?);
+        for _line in lines {
+            laid.push(self.take_box()?);
         }
 
         let width = laid
@@ -2008,11 +1978,11 @@ impl Engine<'_> {
 
             let mut laid = Vec::with_capacity(row.len());
 
-            for (column, cell) in row.iter().enumerate() {
-                let mut bx = self.layout(cell, MathStyle::Display)?;
+            for (column, _cell) in row.iter().enumerate() {
+                let mut bx = self.take_box()?;
 
                 if column % 2 == 1 {
-                    let leading = self.aligned_leading_ord_space(cell)?;
+                    let leading = self.aligned_leading_ord_space()?;
 
                     if !leading.is_zero() {
                         bx = MathBox::hpack(vec![MathBox::kern(leading), bx]);
@@ -2060,38 +2030,20 @@ impl Engine<'_> {
     fn layout_environment_rows(
         &self,
         rows: &[Vec<MathNode>],
-        style: MathStyle,
+        _style: MathStyle,
     ) -> Result<Vec<Vec<MathBox>>, Error> {
         rows.iter()
             .map(|row| {
                 row.iter()
-                    .map(|cell| self.layout(cell, style))
+                    .map(|_cell| self.take_box())
                     .collect::<Result<Vec<_>, _>>()
             })
             .collect()
     }
 
-    fn aligned_leading_ord_space(&self, cell: &MathNode) -> Result<Dim, Error> {
-        let bare = self.layout(cell, MathStyle::Display)?;
-
-        let empty_ord = MathNode::Row(Vec::new());
-
-        let prefixed = match cell {
-            MathNode::Row(items) => {
-                let mut with_ord = Vec::with_capacity(items.len().saturating_add(1));
-
-                with_ord.push(empty_ord);
-
-                with_ord.extend(items.iter().cloned());
-
-                MathNode::Row(with_ord)
-            }
-
-            _ => MathNode::Row(vec![empty_ord, cell.clone()]),
-        };
-
-        let with_ord = self.layout(&prefixed, MathStyle::Display)?;
-
+    fn aligned_leading_ord_space(&self) -> Result<Dim, Error> {
+        let bare = self.take_box()?;
+        let with_ord = self.take_box()?;
         Ok((&with_ord.width - &bare.width).clamp_nonneg())
     }
 
@@ -2247,15 +2199,13 @@ impl Engine<'_> {
                 EnvRow::Hline => {
                     extras.push(RowKind::Hline);
                 }
-                EnvRow::Intertext(n) => {
-                    extras.push(RowKind::Intertext(Box::new(
-                        self.layout(n, MathStyle::Text)?,
-                    )));
+                EnvRow::Intertext(_) => {
+                    extras.push(RowKind::Intertext(Box::new(self.take_box()?)));
                 }
                 EnvRow::Cells { cells, .. } => {
                     let mut rboxes = Vec::new();
-                    for c in cells {
-                        rboxes.push(self.layout(c, style)?);
+                    for _cell in cells {
+                        rboxes.push(self.take_box()?);
                     }
                     ncols = ncols.max(rboxes.len());
                     math_rows.push(rboxes);
@@ -2269,6 +2219,18 @@ impl Engine<'_> {
                 }
             }
         }
+        self.finish_align(math_rows, nums, extras, ncols, style, numbered)
+    }
+
+    fn finish_align(
+        &self,
+        math_rows: Vec<Vec<MathBox>>,
+        nums: Vec<Option<MathBox>>,
+        extras: Vec<RowKind>,
+        ncols: usize,
+        style: MathStyle,
+        numbered: bool,
+    ) -> Result<Item, Error> {
         let mut col_w = vec![Dim::zero(); ncols];
         for row in &math_rows {
             for (j, cell) in row.iter().enumerate() {
@@ -2335,18 +2297,11 @@ impl Engine<'_> {
                         what: "hline in gather".into(),
                     });
                 }
-                EnvRow::Intertext(n) => {
-                    kinds.push(RowKind::Intertext(Box::new(
-                        self.layout(n, MathStyle::Text)?,
-                    )));
+                EnvRow::Intertext(_) => {
+                    kinds.push(RowKind::Intertext(Box::new(self.take_box()?)));
                 }
-                EnvRow::Cells { cells, .. } => {
-                    let node = if cells.len() == 1 {
-                        cells[0].clone()
-                    } else {
-                        MathNode::Row(cells.clone())
-                    };
-                    bodies.push(self.layout(&node, style)?);
+                EnvRow::Cells { .. } => {
+                    bodies.push(self.take_box()?);
                     kinds.push(RowKind::Cells);
                 }
             }
@@ -2388,13 +2343,8 @@ impl Engine<'_> {
             });
         }
         let mut bodies = Vec::new();
-        for row in &data {
-            let node = if row.len() == 1 {
-                row[0].clone()
-            } else {
-                MathNode::Row(row.clone())
-            };
-            bodies.push(self.layout(&node, style)?);
+        for _row in &data {
+            bodies.push(self.take_box()?);
         }
         let max_w = bodies.iter().fold(Dim::zero(), |w, b| w.max(&b.width));
         let n = bodies.len();
@@ -2426,18 +2376,8 @@ impl Engine<'_> {
     }
 
     fn equation_env(&self, rows: &[EnvRow], style: MathStyle) -> Result<Item, Error> {
-        let data = data_cells(rows)?;
-        let mut parts = Vec::new();
-        for row in &data {
-            for (i, c) in row.iter().enumerate() {
-                if i > 0 {
-                    parts.push(MathNode::Space(SpaceKind::Quad));
-                }
-                parts.push(c.clone());
-            }
-        }
-        let node = wrap_nodes(parts);
-        let body = self.layout(&node, style)?;
+        let _data = data_cells(rows)?;
+        let body = self.take_box()?;
         let num = match self.take_number() {
             Some(s) => Some(self.number_box(&s, MathStyle::Text)?),
             None => None,
@@ -2463,15 +2403,13 @@ impl Engine<'_> {
         for row in rows {
             match row {
                 EnvRow::Hline => kinds.push(RowKind::Hline),
-                EnvRow::Intertext(n) => {
-                    kinds.push(RowKind::Intertext(Box::new(
-                        self.layout(n, MathStyle::Text)?,
-                    )));
+                EnvRow::Intertext(_) => {
+                    kinds.push(RowKind::Intertext(Box::new(self.take_box()?)));
                 }
                 EnvRow::Cells { cells, .. } => {
                     let mut rboxes = Vec::new();
-                    for c in cells {
-                        rboxes.push(self.layout(c, style)?);
+                    for _cell in cells {
+                        rboxes.push(self.take_box()?);
                     }
                     ncols_data = ncols_data.max(rboxes.len());
                     data.push(rboxes);
@@ -2645,17 +2583,6 @@ fn pad_row(mut row: Vec<MathBox>, ncols: usize) -> Vec<MathBox> {
     row
 }
 
-fn wrap_nodes(items: Vec<MathNode>) -> MathNode {
-    if items.len() == 1 {
-        items
-            .into_iter()
-            .next()
-            .unwrap_or(MathNode::Row(Vec::new()))
-    } else {
-        MathNode::Row(items)
-    }
-}
-
 fn align_in(inner: MathBox, width: &Dim, align: ColSpec) -> MathBox {
     if matches!(align, ColSpec::VRule) || inner.width.eq_dim(width) {
         return inner;
@@ -2666,27 +2593,27 @@ fn align_in(inner: MathBox, width: &Dim, align: ColSpec) -> MathBox {
         ColSpec::Left => {
             let h = inner.height.clone();
             let d = inner.depth.clone();
-            let packed = MathBox::hpack(vec![inner, MathBox::kern(extra)]);
+            let mut packed = MathBox::hpack(vec![inner, MathBox::kern(extra)]);
             MathBox {
-                width: packed.width,
+                width: packed.width.clone(),
                 height: h,
                 depth: d,
                 italic: Dim::zero(),
                 shift: Dim::zero(),
-                content: packed.content,
+                content: std::mem::replace(&mut packed.content, BoxContent::Empty),
             }
         }
         ColSpec::Right => {
             let h = inner.height.clone();
             let d = inner.depth.clone();
-            let packed = MathBox::hpack(vec![MathBox::kern(extra), inner]);
+            let mut packed = MathBox::hpack(vec![MathBox::kern(extra), inner]);
             MathBox {
-                width: packed.width,
+                width: packed.width.clone(),
                 height: h,
                 depth: d,
                 italic: Dim::zero(),
                 shift: Dim::zero(),
-                content: packed.content,
+                content: std::mem::replace(&mut packed.content, BoxContent::Empty),
             }
         }
         ColSpec::VRule => inner,
@@ -2756,18 +2683,18 @@ fn center_in(inner: MathBox, width: &Dim) -> MathBox {
     let half = &extra / &Dim::from_i64(2);
     let h = inner.height.clone();
     let d = inner.depth.clone();
-    let packed = MathBox::hpack(vec![
+    let mut packed = MathBox::hpack(vec![
         MathBox::kern(half.clone()),
         inner,
         MathBox::kern(&extra - &half),
     ]);
     MathBox {
-        width: packed.width,
+        width: packed.width.clone(),
         height: h,
         depth: d,
         italic: Dim::zero(),
         shift: Dim::zero(),
-        content: packed.content,
+        content: std::mem::replace(&mut packed.content, BoxContent::Empty),
     }
 }
 
@@ -2777,14 +2704,14 @@ fn shift_x(inner: MathBox, x: Dim) -> MathBox {
     }
     let h = inner.height.clone();
     let d = inner.depth.clone();
-    let packed = MathBox::hpack(vec![MathBox::kern(x), inner]);
+    let mut packed = MathBox::hpack(vec![MathBox::kern(x), inner]);
     MathBox {
-        width: packed.width,
+        width: packed.width.clone(),
         height: h,
         depth: d,
         italic: Dim::zero(),
         shift: Dim::zero(),
-        content: packed.content,
+        content: std::mem::replace(&mut packed.content, BoxContent::Empty),
     }
 }
 
@@ -2811,46 +2738,49 @@ fn overlay_accent(base: MathBox, acc: MathBox, x_off: Dim, raise: Dim) -> MathBo
 }
 
 fn single_glyph_id(b: &MathBox) -> Option<u16> {
-    match &b.content {
-        BoxContent::Glyph { glyph_id, .. } => Some(*glyph_id),
-
-        BoxContent::HList(children) | BoxContent::VList(children) => {
-            let mut found = None;
-
-            for child in children {
-                if matches!(&child.content, BoxContent::Empty | BoxContent::Kern(_)) {
-                    continue;
-                }
-
-                let glyph_id = single_glyph_id(child)?;
-
-                if found.replace(glyph_id).is_some() {
+    let mut stack = vec![b];
+    let mut found = None;
+    while let Some(b) = stack.pop() {
+        match &b.content {
+            BoxContent::Glyph { glyph_id, .. } => {
+                if found.replace(*glyph_id).is_some() {
                     return None;
                 }
             }
-
-            found
+            BoxContent::HList(children) | BoxContent::VList(children) => {
+                for child in children.iter().rev() {
+                    if matches!(&child.content, BoxContent::Empty | BoxContent::Kern(_)) {
+                        continue;
+                    }
+                    stack.push(child);
+                }
+            }
+            BoxContent::Color(_, inner)
+            | BoxContent::BackColor(_, inner)
+            | BoxContent::Frame { inner, .. } => stack.push(inner),
+            _ => return None,
         }
-
-        BoxContent::Color(_, inner)
-        | BoxContent::BackColor(_, inner)
-        | BoxContent::Frame { inner, .. } => single_glyph_id(inner),
-
-        _ => None,
     }
+    found
 }
 
 fn first_glyph_id(b: &MathBox) -> Option<u16> {
-    match &b.content {
-        BoxContent::Glyph { glyph_id, .. } => Some(*glyph_id),
-        BoxContent::HList(v) | BoxContent::VList(v) | BoxContent::Overlap(v) => {
-            v.iter().find_map(first_glyph_id)
+    let mut stack = vec![b];
+    while let Some(b) = stack.pop() {
+        match &b.content {
+            BoxContent::Glyph { glyph_id, .. } => return Some(*glyph_id),
+            BoxContent::HList(v) | BoxContent::VList(v) | BoxContent::Overlap(v) => {
+                for child in v.iter().rev() {
+                    stack.push(child);
+                }
+            }
+            BoxContent::Color(_, inner)
+            | BoxContent::BackColor(_, inner)
+            | BoxContent::Frame { inner, .. } => stack.push(inner),
+            _ => {}
         }
-        BoxContent::Color(_, inner)
-        | BoxContent::BackColor(_, inner)
-        | BoxContent::Frame { inner, .. } => first_glyph_id(inner),
-        _ => None,
     }
+    None
 }
 
 fn is_tex_accent(kind: AccentKind) -> bool {
@@ -2983,42 +2913,53 @@ fn accent_candidates(kind: AccentKind) -> &'static [char] {
     }
 }
 
+fn frac_math_style(kind: FracStyle, ambient: MathStyle) -> MathStyle {
+    match kind {
+        FracStyle::Frac => ambient,
+        FracStyle::Dfrac | FracStyle::Cfrac => MathStyle::Display,
+        FracStyle::Tfrac => MathStyle::Text,
+    }
+}
+
 fn class_of(n: &MathNode) -> Option<AtomKind> {
-    match n {
-        MathNode::Atom(_, k) => Some(*k),
-        MathNode::Symbol(s) => Some(symbol_class(s)),
-        MathNode::Operator(_, _)
-        | MathNode::Sum(_, _)
-        | MathNode::Product(_, _)
-        | MathNode::Integral(_, _, _)
-        | MathNode::Limit(_) => Some(AtomKind::Op),
-        MathNode::Fraction(_, _)
-        | MathNode::Radical(_, _)
-        | MathNode::Matrix(_, _, _)
-        | MathNode::Substack(_)
-        | MathNode::Delimited(_, _, _) => Some(AtomKind::Inner),
-        MathNode::SizedDelim(_, _, k) => Some(*k),
-        MathNode::Superscript(b, _)
-        | MathNode::Subscript(b, _)
-        | MathNode::SubSup(b, _, _)
-        | MathNode::Accent(b, _)
-        | MathNode::OverUnder(b, _, _)
-        | MathNode::CancelTo(_, b)
-        | MathNode::Tag { body: b, .. }
-        | MathNode::Intertext(b) => class_of(b),
-        MathNode::Text(_, _) | MathNode::Ref(_) => Some(AtomKind::Ord),
-        MathNode::Color(_, b)
-        | MathNode::TextColor(_, b)
-        | MathNode::ColorBox(_, b)
-        | MathNode::FColorBox(_, _, b)
-        | MathNode::Phantom(_, b) => class_of(b),
-        MathNode::Row(v) if v.len() == 1 => class_of(&v[0]),
-        MathNode::Row(_) => Some(AtomKind::Ord),
-        MathNode::Space(_)
-        | MathNode::Strut(_, _)
-        | MathNode::Label(_)
-        | MathNode::NoNumber
-        | MathNode::Hline => None,
+    let mut n = n;
+    loop {
+        match n {
+            MathNode::Atom(_, k) => return Some(*k),
+            MathNode::Symbol(s) => return Some(symbol_class(s)),
+            MathNode::Operator(_, _)
+            | MathNode::Sum(_, _)
+            | MathNode::Product(_, _)
+            | MathNode::Integral(_, _, _)
+            | MathNode::Limit(_) => return Some(AtomKind::Op),
+            MathNode::Fraction(_, _, _)
+            | MathNode::Radical(_, _)
+            | MathNode::Matrix(_, _, _)
+            | MathNode::Substack(_)
+            | MathNode::Delimited(_, _, _) => return Some(AtomKind::Inner),
+            MathNode::SizedDelim(_, _, k) => return Some(*k),
+            MathNode::Superscript(b, _)
+            | MathNode::Subscript(b, _)
+            | MathNode::SubSup(b, _, _)
+            | MathNode::Accent(b, _)
+            | MathNode::OverUnder(b, _, _)
+            | MathNode::CancelTo(_, b)
+            | MathNode::Tag { body: b, .. }
+            | MathNode::Intertext(b)
+            | MathNode::Color(_, b)
+            | MathNode::TextColor(_, b)
+            | MathNode::ColorBox(_, b)
+            | MathNode::FColorBox(_, _, b)
+            | MathNode::Phantom(_, b) => n = b,
+            MathNode::Text(_, _) | MathNode::Ref(_) => return Some(AtomKind::Ord),
+            MathNode::Row(v) if v.len() == 1 => n = &v[0],
+            MathNode::Row(_) => return Some(AtomKind::Ord),
+            MathNode::Space(_)
+            | MathNode::Strut(_, _)
+            | MathNode::Label(_)
+            | MathNode::NoNumber
+            | MathNode::Hline => return None,
+        }
     }
 }
 

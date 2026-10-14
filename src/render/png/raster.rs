@@ -7,8 +7,8 @@
 
 use std::collections::HashMap;
 
+use skrifa::outline::OutlinePen;
 use tiny_skia::{FillRule, Paint, Path, PathBuilder, Pixmap, Rect, Stroke, Transform};
-use ttf_parser::{GlyphId, OutlineBuilder};
 
 use super::{PngBackground, PngOptions};
 use crate::color::Color;
@@ -106,6 +106,13 @@ fn px(d: &Dim) -> f32 {
     f32::from_bits(d.to_ieee32_bits())
 }
 
+struct PngTask<'a> {
+    bx: &'a MathBox,
+    origin_x: Dim,
+    parent_baseline: Dim,
+    fill: Color,
+}
+
 #[allow(clippy::too_many_arguments)]
 fn emit(
     bx: &MathBox,
@@ -117,6 +124,48 @@ fn emit(
     fill: Color,
     cache: &mut HashMap<u16, Path>,
     pixmap: &mut Pixmap,
+) -> Result<(), Error> {
+    let mut stack = vec![PngTask {
+        bx,
+        origin_x: origin_x.clone(),
+        parent_baseline: parent_baseline.clone(),
+        fill,
+    }];
+    while let Some(PngTask {
+        bx,
+        origin_x,
+        parent_baseline,
+        fill,
+    }) = stack.pop()
+    {
+        emit_one(
+            bx,
+            font,
+            em_px,
+            fu_px,
+            &origin_x,
+            &parent_baseline,
+            fill,
+            cache,
+            pixmap,
+            &mut stack,
+        )?;
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn emit_one<'a>(
+    bx: &'a MathBox,
+    font: &MathFont,
+    em_px: &Dim,
+    fu_px: &Dim,
+    origin_x: &Dim,
+    parent_baseline: &Dim,
+    fill: Color,
+    cache: &mut HashMap<u16, Path>,
+    pixmap: &mut Pixmap,
+    stack: &mut Vec<PngTask<'a>>,
 ) -> Result<(), Error> {
     let baseline = parent_baseline - &(bx.shift.clone() * em_px);
     match &bx.content {
@@ -137,9 +186,18 @@ fn emit(
         BoxContent::Rule => fill_box_rect(bx, origin_x, &baseline, em_px, fill, pixmap),
         BoxContent::HList(kids) => {
             let mut x = origin_x.clone();
+            let mut placed = Vec::with_capacity(kids.len());
             for k in kids {
-                emit(k, font, em_px, fu_px, &x, &baseline, fill, cache, pixmap)?;
+                placed.push((k, x.clone()));
                 x = &x + &(k.width.clone() * em_px);
+            }
+            for (k, x) in placed.into_iter().rev() {
+                stack.push(PngTask {
+                    bx: k,
+                    origin_x: x,
+                    parent_baseline: baseline.clone(),
+                    fill,
+                });
             }
             Ok(())
         }
@@ -147,43 +205,53 @@ fn emit(
             if kids.is_empty() {
                 return Ok(());
             }
-            emit(
-                &kids[0], font, em_px, fu_px, origin_x, &baseline, fill, cache, pixmap,
-            )?;
+            let mut placed = Vec::with_capacity(kids.len());
+            placed.push((&kids[0], baseline.clone()));
             let mut y_below = kids[0].depth.clone() * em_px;
             for k in kids.iter().skip(1) {
                 let child_base = &baseline + &y_below + &(k.height.clone() * em_px);
-                emit(
-                    k,
-                    font,
-                    em_px,
-                    fu_px,
-                    origin_x,
-                    &child_base,
-                    fill,
-                    cache,
-                    pixmap,
-                )?;
+                placed.push((k, child_base));
                 y_below = &y_below + &((&k.height + &k.depth) * em_px);
+            }
+            for (k, child_base) in placed.into_iter().rev() {
+                stack.push(PngTask {
+                    bx: k,
+                    origin_x: origin_x.clone(),
+                    parent_baseline: child_base,
+                    fill,
+                });
             }
             Ok(())
         }
         BoxContent::Overlap(kids) => {
-            for k in kids {
-                emit(
-                    k, font, em_px, fu_px, origin_x, &baseline, fill, cache, pixmap,
-                )?;
+            for k in kids.iter().rev() {
+                stack.push(PngTask {
+                    bx: k,
+                    origin_x: origin_x.clone(),
+                    parent_baseline: baseline.clone(),
+                    fill,
+                });
             }
             Ok(())
         }
-        BoxContent::Color(c, inner) => emit(
-            inner, font, em_px, fu_px, origin_x, &baseline, *c, cache, pixmap,
-        ),
+        BoxContent::Color(c, inner) => {
+            stack.push(PngTask {
+                bx: inner,
+                origin_x: origin_x.clone(),
+                parent_baseline: baseline,
+                fill: *c,
+            });
+            Ok(())
+        }
         BoxContent::BackColor(c, inner) => {
             fill_box_rect(bx, origin_x, &baseline, em_px, *c, pixmap)?;
-            emit(
-                inner, font, em_px, fu_px, origin_x, &baseline, fill, cache, pixmap,
-            )
+            stack.push(PngTask {
+                bx: inner,
+                origin_x: origin_x.clone(),
+                parent_baseline: baseline,
+                fill,
+            });
+            Ok(())
         }
         BoxContent::Line {
             x1,
@@ -238,9 +306,13 @@ fn emit(
                     );
                 }
             }
-            emit(
-                inner, font, em_px, fu_px, origin_x, &baseline, fill, cache, pixmap,
-            )
+            stack.push(PngTask {
+                bx: inner,
+                origin_x: origin_x.clone(),
+                parent_baseline: baseline,
+                fill,
+            });
+            Ok(())
         }
     }
 }
@@ -279,11 +351,10 @@ fn glyph_path(
 }
 
 fn outline_path(font: &MathFont, glyph_id: u16) -> Result<Path, Error> {
-    let face = font.face();
     let mut b = DimOutline {
         pb: PathBuilder::new(),
     };
-    if face.outline_glyph(GlyphId(glyph_id), &mut b).is_none() {
+    if !font.draw_glyph(glyph_id, &mut b) {
         return Err(FontError::MissingGlyph { ch: '\u{FFFD}' }.into());
     }
     b.pb.finish()
@@ -301,7 +372,7 @@ impl DimOutline {
     }
 }
 
-impl OutlineBuilder for DimOutline {
+impl OutlinePen for DimOutline {
     fn move_to(&mut self, x: f32, y: f32) {
         self.pb.move_to(Self::pt(x), Self::pt(y));
     }

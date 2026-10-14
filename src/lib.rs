@@ -60,10 +60,6 @@ pub mod parser;
 /// Box model → SVG, PNG, or egui primitives.
 pub mod render;
 
-/// The OpenType parser this crate uses, re-exported so that consumers of
-/// [`MathFont::face`] name the same version.
-pub use ttf_parser;
-
 pub use atoms::symbol_atom_kind;
 pub use color::{named_color, parse_color_spec, Color, ColorTable};
 pub use dim::{Dim, DIM_PREC};
@@ -78,8 +74,8 @@ pub use layout::{
 };
 pub use parser::{
     format_tokens, parse, parse_with_colors, parse_with_options, preprocess, tokenize, AccentKind,
-    AtomKind, ColSpec, DelimSize, Delimiter, EnvRow, EqNumber, IntegralKind, MathNode, MatrixStyle,
-    ParseOptions, PhantomKind, SpaceKind, TextStyle, Token, DEFAULT_MAX_NESTING_DEPTH,
+    AtomKind, ColSpec, DelimSize, Delimiter, EnvRow, EqNumber, FracStyle, IntegralKind, MathNode,
+    MatrixStyle, ParseOptions, PhantomKind, SpaceKind, TextStyle, Token, DEFAULT_MAX_NESTING_DEPTH,
 };
 #[cfg(feature = "egui")]
 pub use render::egui::{latex_to_shapes, paint_egui, shapes};

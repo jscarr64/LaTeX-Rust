@@ -14,7 +14,7 @@ use crate::color::Color;
 use crate::dim::Dim;
 use crate::error::ParseError;
 use crate::parser::ast::{
-    AccentKind, AtomKind, ColSpec, Delimiter, EnvRow, EqNumber, IntegralKind, MathNode,
+    AccentKind, AtomKind, ColSpec, Delimiter, EnvRow, EqNumber, FracStyle, IntegralKind, MathNode,
     MatrixStyle, PhantomKind, SpaceKind, TextStyle,
 };
 use crate::parser::token::Token;
@@ -175,6 +175,7 @@ struct BeginState {
 
 enum Cmd {
     Frac {
+        style: FracStyle,
         num: Option<Box<MathNode>>,
         phase: Seq,
     },
@@ -891,20 +892,28 @@ fn step_cmd(
     ready: &mut Option<MathNode>,
 ) -> Result<Step, ParseError> {
     match cmd {
-        Cmd::Frac { num, phase } => match pair(num, phase, ready)? {
+        Cmd::Frac { style, num, phase } => match pair(num, phase, ready)? {
             Pair::Step(step) => Ok(step),
             Pair::Both(n, d) => {
                 if is_empty_node(&n) && is_empty_node(&d) {
                     return Err(ParseError::Malformed("empty fraction".into()));
                 }
-                Ok(Step::Done(MathNode::Fraction(Box::new(n), Box::new(d))))
+                Ok(Step::Done(MathNode::Fraction(
+                    *style,
+                    Box::new(n),
+                    Box::new(d),
+                )))
             }
         },
         Cmd::Binom { num, phase } => match pair(num, phase, ready)? {
             Pair::Step(step) => Ok(step),
             Pair::Both(n, k) => Ok(Step::Done(MathNode::Delimited(
                 Delimiter::Char('('),
-                Box::new(MathNode::Fraction(Box::new(n), Box::new(k))),
+                Box::new(MathNode::Fraction(
+                    FracStyle::Frac,
+                    Box::new(n),
+                    Box::new(k),
+                )),
                 Delimiter::Char(')'),
             ))),
         },
@@ -916,7 +925,7 @@ fn step_cmd(
         } => match pair(num, phase, ready)? {
             Pair::Step(step) => Ok(step),
             Pair::Both(n, d) => {
-                let frac = MathNode::Fraction(Box::new(n), Box::new(d));
+                let frac = MathNode::Fraction(FracStyle::Frac, Box::new(n), Box::new(d));
                 if left.is_empty() && right.is_empty() {
                     return Ok(Step::Done(frac));
                 }
@@ -1278,10 +1287,20 @@ fn finish_begin(parser: &mut super::Parser, st: &mut BeginState) -> Result<Step,
 #[inline(never)]
 fn classify(parser: &mut super::Parser, name: &str) -> Result<Classified, ParseError> {
     match name {
-        "frac" | "dfrac" | "tfrac" | "cfrac" => Ok(Classified::Cmd(Cmd::Frac {
-            num: None,
-            phase: Seq::First,
-        })),
+        "frac" | "dfrac" | "tfrac" | "cfrac" => {
+            let style = match name {
+                "dfrac" => FracStyle::Dfrac,
+                "tfrac" => FracStyle::Tfrac,
+                "cfrac" => FracStyle::Cfrac,
+                _ => FracStyle::Frac,
+            };
+            Ok(Classified::Cmd(Cmd::Frac {
+                style,
+                num: None,
+                phase: Seq::First,
+            }))
+        }
+        "\\" | "cr" => Err(ParseError::RowBreakOutside),
         "binom" | "dbinom" | "tbinom" => Ok(Classified::Cmd(Cmd::Binom {
             num: None,
             phase: Seq::First,

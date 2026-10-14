@@ -14,22 +14,12 @@ fn substack_rows(ast: &MathNode) -> &[MathNode] {
     lines
 }
 
-fn stack_constants(font: &MathFont, params: &MathParams) -> (Dim, Dim) {
-    let math = font.face().tables().math.expect("MATH table");
-
-    let constants = math.constants.expect("MATH constants");
-
-    let units_per_em = font.units_per_em();
-
-    let fu = |value: i16| Dim::from_font_units(i64::from(value), units_per_em);
-
+fn stack_constants(params: &MathParams) -> (Dim, Dim) {
     let scale = params.scale(MathStyle::Script);
 
-    let baseline_skip = &(fu(constants.stack_top_shift_up().value)
-        + fu(constants.stack_bottom_shift_down().value))
-        * &scale;
+    let baseline_skip = &(&params.stack_top_shift_up + &params.stack_bottom_shift_down) * &scale;
 
-    let line_skip = &fu(constants.stack_gap_min().value) * &scale;
+    let line_skip = &params.stack_gap_min * &scale;
 
     (baseline_skip, line_skip)
 }
@@ -88,7 +78,7 @@ fn substack_uses_scriptstyle_rows_math_stack_spacing_and_vcenter() {
 
     assert!(tree.width.eq_dim(&script_width,));
 
-    let (baseline_skip, line_skip) = stack_constants(&font, &params);
+    let (baseline_skip, line_skip) = stack_constants(&params);
 
     let gaps = expected_gaps(&script_rows, &baseline_skip, &line_skip);
 

@@ -64,7 +64,9 @@ This release lists every finding and its fix. Nothing in this section is publish
   20,000 of them at that limit return `Err(Malformed)`. A braced argument
   such as `\frac` or a superscript costs two levels, so 10,000 of those
   return `Err(Malformed)`. Callers on the default limit of 32 see no change.
-  Layout of a deep tree still uses the calling thread's stack.
+  `gold`, `to_latex`, layout, and SVG/PNG/egui render walk a heap stack, and
+  so do `MathNode` / `MathBox` clone and drop. A tree the parser accepts can
+  take those paths on a 256 KiB thread.
 
 - **Empty input parsed as an empty row.** `parse("")` and whitespace returned
   `(row)`. `\frac{}{}` was a fraction of two empty rows. A bare prime was a
@@ -146,12 +148,13 @@ This release lists every finding and its fix. Nothing in this section is publish
 - `MathNode::to_latex` reprints a tree as LaTeX. It is total. Every
   script, accent, fraction, and `\overset` / `\underset` argument is
   braced, an alphabetic control word is followed by a space, and
-  `\overline` is the full command. Every `Fraction` prints as `\frac`,
-  including one that came from `\dfrac`, `\tfrac`, `\cfrac`, or `\over`.
-  Braces and spaces may differ from the source; compare trees, then
-  compare a reprint to a reprint.
+  `\overline` is the full command. A `Fraction` prints as the command in
+  its `FracStyle`. `\over` is stored as `FracStyle::Frac`, so it prints
+  `\frac`. Braces and spaces may differ from the source; compare trees,
+  then compare a reprint to a reprint.
 
-  Migration: new method. No parse change. `gold()` strings are unchanged.
+  Migration: new method. `\frac` gold strings are unchanged. A styled
+  fraction's gold spelling is in the `FracStyle` note below.
 
 - `tests/roundtrip.rs` checks `parse(to_latex(t)) == t` and an idempotent
   reprint on the `parse.toml`, `accumath.toml`, and `lexicon.toml` golds,
@@ -162,22 +165,70 @@ This release lists every finding and its fix. Nothing in this section is publish
   keeps `max_depth` at the default, because an abort kills the fuzzer.
 - `.github/workflows/ci.yml` runs fmt, clippy (`--all-targets
   --all-features -D warnings`), `cargo test`, `cargo test --release`,
-  and a 60-second parse fuzz. `.github/workflows/fuzz-nightly.yml` runs
-  the release tests, then parse for 16 minutes and preprocess for 2.
+  and a 60-second parse fuzz. A separate job resolves the lockfile with
+  rustc 1.83 and runs `cargo audit --deny warnings` with cargo-audit
+  0.22.2 (that binary needs rustc 1.88 to read the current advisory
+  database). `.github/workflows/fuzz-nightly.yml` runs the release
+  tests, then parse for 16 minutes and preprocess for 2.
+
+### Fixed
+
+- **`\dfrac`, `\tfrac`, and `\cfrac` kept their style.** The tree is
+  `Fraction(FracStyle, numerator, denominator)`. `gold()` spells them
+  `(dfrac …)`, `(tfrac …)`, and `(cfrac …)`. `\frac` and `{a \over b}`
+  stay `(frac …)`, byte-identical to the previous gold. `to_latex`
+  prints `\dfrac `, `\tfrac `, `\cfrac `, or `\frac `. Layout forces
+  display style for `\dfrac` and `\cfrac`, and text style for `\tfrac`.
+  `\dbinom` and `\tbinom` stay `\binom`.
+
+  Migration: a match on `Fraction(num, den)` becomes
+  `Fraction(style, num, den)`. `\over` still prints `\frac`. Stored
+  `gold()` for `\frac` is unchanged. Stored `gold()` for a styled
+  fraction changes from `(frac …)` to the styled spelling.
+
+- **A stray `\\` names itself.** Outside a row environment,
+  `ParseError::RowBreakOutside` displays
+  `row break \\ outside an environment`. `\cr` uses the same error.
+  Inside `matrix`, `aligned`, and `\substack`, `\\` and `\cr` are still
+  row breaks.
+
+  Migration: callers that matched `ParseError::Unknown` for `\\` should
+  match `RowBreakOutside`. The message is no longer
+  `unknown command: \\`.
+
+- **RUSTSEC-2026-0192, direct dependency.** `ttf-parser` has no patched
+  release. This crate no longer depends on it. Outlines and `hmtx` /
+  `cmap` / `GSUB` come from `skrifa` 0.39. The MATH table is read here,
+  because `read-fonts` 0.36 (the last release the 1.83 toolchain can
+  build) does not expose MATH. MSRV is 1.82. `MathFont::face` and the
+  `ttf_parser` re-export are gone. `MathParams` carries the
+  script-placement and stack constants layout already used. PNG and
+  egui golds are unchanged.
+
+  Migration: delete `ttf_parser` from downstream `use` lists. Replace
+  `font.face()` with `glyph`, `glyph_id`, `glyph_count`,
+  `italic_correction`, `top_accent_attachment`, `horizontal_variants`,
+  `vertical_variants`, and `horizontal_assembly_parts`. A match that
+  builds `MathParams` by field name needs the new fields.
+
+- **A tree the parser accepts does not overflow the caller stack.**
+  `gold`, `to_latex`, layout, SVG, PNG, and egui emission, and clone
+  and drop of `MathNode` and `MathBox`, use an explicit heap stack.
+
+  Migration: `layout_with_max_depth` is a nesting limit, not a stack
+  budget. 3,531 brace groups and 9,999 `\frac` at limit 20,000 can be
+  printed, laid out, and rendered to SVG on a 256 KiB thread, in debug
+  and release.
 
 ### Known issues
 
-`\dfrac`, `\tfrac`, and `\cfrac` still erase display style. The tree is
-the same `Fraction` as `\frac`, and `to_latex` prints `\frac`. Restoring
-the style needs a field this release does not add.
+The optional `egui` feature still resolves `ttf-parser` 0.25 through
+`egui` 0.28, `epaint`, and `ab_glyph` (RUSTSEC-2026-0192). This crate's
+renderer does not call that parser. `epaint` 0.34 is the release that
+switched the dependency to `skrifa`, and it requires rustc 1.92. The
+1.83 toolchain cannot take it. There is no patched `ttf-parser`.
 
-`\\` outside a row break is still `ParseError::Unknown` with message
-`unknown command: \\`. The error is typed. The wording is easy to
-misread, and this release does not add a variant for it.
-
-`ttf-parser` 0.25 stays. It is flagged unmaintained (RUSTSEC-2026-0192,
-informational, no patched release). See the 2.1.1 note. PNG and egui
-were not part of the audit's render pass.
+3.0.0 is not published.
 
 ## [2.1.1] — 2026-10-06
 

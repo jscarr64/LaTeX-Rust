@@ -9,8 +9,8 @@ mod preproc;
 mod token;
 
 pub use ast::{
-    AccentKind, AtomKind, ColSpec, DelimSize, Delimiter, EnvRow, EqNumber, IntegralKind, MathNode,
-    MatrixStyle, PhantomKind, SpaceKind, TextStyle,
+    AccentKind, AtomKind, ColSpec, DelimSize, Delimiter, EnvRow, EqNumber, FracStyle, IntegralKind,
+    MathNode, MatrixStyle, PhantomKind, SpaceKind, TextStyle,
 };
 pub use parse::{
     parse, parse_with_colors, parse_with_options, ParseOptions, DEFAULT_MAX_NESTING_DEPTH,

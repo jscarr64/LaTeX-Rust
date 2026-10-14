@@ -76,7 +76,8 @@ assert!(svg.contains("<svg"));
 Layout math is exact rationals in this crate. It does not depend on a numeric
 library.
 
-MSRV is **1.76** (matches optional `egui` 0.28).
+MSRV is **1.82** (`skrifa` 0.39). Optional `egui` 0.28 allows 1.76; the font
+crate is the higher bar.
 
 ## Usage
 
@@ -167,9 +168,13 @@ expression is on the order of the layout+SVG rows above after the face is loaded
 
 ## Fonts
 
-The crate embeds **STIX Two Math** 2.13 (SIL OFL 1.1) and loads metrics through
-`ttf-parser` using integer font units converted to `Dim`. Glyph outlines become
-SVG `<path>` elements (and PNG/egui meshes when those features are on).
+The crate embeds **STIX Two Math** 2.13 (SIL OFL 1.1). Horizontal metrics and
+outlines come from `skrifa` in integer font units converted to `Dim`. The
+OpenType MATH table is read in this crate. Glyph outlines become SVG `<path>`
+elements (and PNG/egui meshes when those features are on). The optional
+`egui` 0.28 feature still pulls `ttf-parser` through `ab_glyph`. This
+crate does not call it. The `epaint` release that uses `skrifa` needs
+rustc 1.92.
 
 ## Notes
 
@@ -203,14 +208,6 @@ STIX Two Math remains under the SIL Open Font License 1.1. See `NOTICE`.
 
 This crate was developed with help from AI assistants by SpaceXAI, Anthropic,
 OpenAI, Google, and Meta.
-
-## Known issues
-
-`ttf-parser` 0.25 is unmaintained (RUSTSEC-2026-0192). `MathFont::face` and the
-re-exported `ttf_parser` types are public API, and layout needs that crate's
-MATH table and outlines. `skrifa` / `read-fonts` is the maintained successor
-and can now read MATH. Its types differ from `ttf_parser::Face`, so swapping
-parsers is a breaking change and stays deferred. This is the only open item.
 
 ## License
 

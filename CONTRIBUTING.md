@@ -12,8 +12,8 @@ a second symbol list.
 - **100% pure Rust.** No C, no Python, no shell commands, no shelling out
   (`std::process`, `Command`, `system`), no Node/JavaScript, no external tools.
 - **This crate is standalone.** Layout math is in-tree exact rationals (`Dim`).
-  Allowed render/font stack only: `ttf-parser`, `tiny-skia` (feature `png`),
-  `egui` (feature `egui`). Do not add a numeric crate.
+  Allowed render/font stack only: `skrifa` (no `libm` feature), `tiny-skia`
+  (feature `png`), `egui` (feature `egui`). Do not add a numeric crate.
 - **If it cannot be done in Rust, return `Err`.** Do not call something else.
   Never invent a render.
 - **Fix code to pass gold — never change gold to pass code.** Gold is the

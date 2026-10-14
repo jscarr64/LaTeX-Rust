@@ -24,7 +24,7 @@ use crate::font::MathFont;
 /// Glyphs carry an OpenType id from the math face. Lists compose children.
 /// Color wrappers do not change dimensions. [`BoxContent::Line`] and
 /// [`BoxContent::Frame`] are decorations from cancel / boxed constructs.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum BoxContent {
     /// Empty box (strut or placeholder).
     Empty,
@@ -93,7 +93,7 @@ pub enum BoxContent {
 /// ]);
 /// assert_eq!(packed.width, Dim::ratio(3, 2));
 /// ```
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct MathBox {
     /// Width.
     pub width: Dim,
@@ -238,5 +238,334 @@ impl MathBox {
             self.height.to_dec_string(),
             self.depth.to_dec_string()
         )
+    }
+}
+
+impl Clone for MathBox {
+    fn clone(&self) -> Self {
+        clone_math_box(self)
+    }
+}
+
+impl Clone for BoxContent {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Empty => Self::Empty,
+            Self::Rule => Self::Rule,
+            Self::Kern(w) => Self::Kern(w.clone()),
+            Self::Glyph {
+                ch,
+                glyph_id,
+                scale,
+            } => Self::glyph(*ch, *glyph_id, scale.clone()),
+            Self::Line {
+                x1,
+                y1,
+                x2,
+                y2,
+                thickness,
+            } => Self::Line {
+                x1: x1.clone(),
+                y1: y1.clone(),
+                x2: x2.clone(),
+                y2: y2.clone(),
+                thickness: thickness.clone(),
+            },
+            Self::HList(children) => Self::HList(children.iter().map(MathBox::clone).collect()),
+            Self::VList(children) => Self::VList(children.iter().map(MathBox::clone).collect()),
+            Self::Overlap(children) => Self::Overlap(children.iter().map(MathBox::clone).collect()),
+            Self::Color(color, inner) => Self::Color(*color, Box::new(MathBox::clone(inner))),
+            Self::BackColor(color, inner) => {
+                Self::BackColor(*color, Box::new(MathBox::clone(inner)))
+            }
+            Self::Frame {
+                thickness,
+                stroke,
+                inner,
+            } => Self::Frame {
+                thickness: thickness.clone(),
+                stroke: *stroke,
+                inner: Box::new(MathBox::clone(inner)),
+            },
+        }
+    }
+}
+
+impl Drop for MathBox {
+    fn drop(&mut self) {
+        // Derived drop walks `HList` / `Overlap` / `Frame` on the native
+        // stack. A fraction chain the parser accepts is that deep, so the
+        // children move to a heap stack first.
+        let mut stack = Vec::new();
+        drain_box(self, &mut stack);
+        while let Some(mut child) = stack.pop() {
+            drain_box(&mut child, &mut stack);
+        }
+    }
+}
+
+fn drain_box(bx: &mut MathBox, out: &mut Vec<MathBox>) {
+    match &mut bx.content {
+        BoxContent::HList(children)
+        | BoxContent::VList(children)
+        | BoxContent::Overlap(children) => out.append(children),
+        BoxContent::Color(_, inner) | BoxContent::BackColor(_, inner) => {
+            out.push(std::mem::replace(inner.as_mut(), MathBox::empty()));
+        }
+        BoxContent::Frame { inner, .. } => {
+            out.push(std::mem::replace(inner.as_mut(), MathBox::empty()));
+        }
+        BoxContent::Empty
+        | BoxContent::Rule
+        | BoxContent::Kern(_)
+        | BoxContent::Glyph { .. }
+        | BoxContent::Line { .. } => {}
+    }
+}
+
+enum CloneTask<'a> {
+    Box(&'a MathBox),
+    List {
+        width: Dim,
+        height: Dim,
+        depth: Dim,
+        italic: Dim,
+        shift: Dim,
+        kind: ListKind,
+        n: usize,
+    },
+    Wrap {
+        width: Dim,
+        height: Dim,
+        depth: Dim,
+        italic: Dim,
+        shift: Dim,
+        kind: WrapKind,
+    },
+}
+
+enum ListKind {
+    H,
+    V,
+    Overlap,
+}
+
+enum WrapKind {
+    Color(Color),
+    BackColor(Color),
+    Frame {
+        thickness: Dim,
+        stroke: Option<Color>,
+    },
+}
+
+fn clone_math_box(root: &MathBox) -> MathBox {
+    let mut tasks = vec![CloneTask::Box(root)];
+    let mut done: Vec<MathBox> = Vec::new();
+    while let Some(task) = tasks.pop() {
+        match task {
+            CloneTask::Box(bx) => push_box_task(bx, &mut tasks, &mut done),
+            CloneTask::List {
+                width,
+                height,
+                depth,
+                italic,
+                shift,
+                kind,
+                n,
+            } => {
+                let start = done.len().saturating_sub(n);
+                let children = done.split_off(start);
+                let content = match kind {
+                    ListKind::H => BoxContent::HList(children),
+                    ListKind::V => BoxContent::VList(children),
+                    ListKind::Overlap => BoxContent::Overlap(children),
+                };
+                done.push(MathBox {
+                    width,
+                    height,
+                    depth,
+                    italic,
+                    shift,
+                    content,
+                });
+            }
+            CloneTask::Wrap {
+                width,
+                height,
+                depth,
+                italic,
+                shift,
+                kind,
+            } => {
+                let inner = done.pop().unwrap_or_else(MathBox::empty);
+                let content = match kind {
+                    WrapKind::Color(c) => BoxContent::Color(c, Box::new(inner)),
+                    WrapKind::BackColor(c) => BoxContent::BackColor(c, Box::new(inner)),
+                    WrapKind::Frame { thickness, stroke } => BoxContent::Frame {
+                        thickness,
+                        stroke,
+                        inner: Box::new(inner),
+                    },
+                };
+                done.push(MathBox {
+                    width,
+                    height,
+                    depth,
+                    italic,
+                    shift,
+                    content,
+                });
+            }
+        }
+    }
+    done.pop().unwrap_or_else(MathBox::empty)
+}
+
+fn push_box_task<'a>(bx: &'a MathBox, tasks: &mut Vec<CloneTask<'a>>, done: &mut Vec<MathBox>) {
+    let width = bx.width.clone();
+    let height = bx.height.clone();
+    let depth = bx.depth.clone();
+    let italic = bx.italic.clone();
+    let shift = bx.shift.clone();
+    match &bx.content {
+        BoxContent::Empty => done.push(MathBox {
+            width,
+            height,
+            depth,
+            italic,
+            shift,
+            content: BoxContent::Empty,
+        }),
+        BoxContent::Rule => done.push(MathBox {
+            width,
+            height,
+            depth,
+            italic,
+            shift,
+            content: BoxContent::Rule,
+        }),
+        BoxContent::Kern(w) => done.push(MathBox {
+            width,
+            height,
+            depth,
+            italic,
+            shift,
+            content: BoxContent::Kern(w.clone()),
+        }),
+        BoxContent::Glyph {
+            ch,
+            glyph_id,
+            scale,
+        } => done.push(MathBox {
+            width,
+            height,
+            depth,
+            italic,
+            shift,
+            content: BoxContent::glyph(*ch, *glyph_id, scale.clone()),
+        }),
+        BoxContent::Line {
+            x1,
+            y1,
+            x2,
+            y2,
+            thickness,
+        } => done.push(MathBox {
+            width,
+            height,
+            depth,
+            italic,
+            shift,
+            content: BoxContent::Line {
+                x1: x1.clone(),
+                y1: y1.clone(),
+                x2: x2.clone(),
+                y2: y2.clone(),
+                thickness: thickness.clone(),
+            },
+        }),
+        BoxContent::HList(children) => {
+            tasks.push(CloneTask::List {
+                width,
+                height,
+                depth,
+                italic,
+                shift,
+                kind: ListKind::H,
+                n: children.len(),
+            });
+            for child in children.iter().rev() {
+                tasks.push(CloneTask::Box(child));
+            }
+        }
+        BoxContent::VList(children) => {
+            tasks.push(CloneTask::List {
+                width,
+                height,
+                depth,
+                italic,
+                shift,
+                kind: ListKind::V,
+                n: children.len(),
+            });
+            for child in children.iter().rev() {
+                tasks.push(CloneTask::Box(child));
+            }
+        }
+        BoxContent::Overlap(children) => {
+            tasks.push(CloneTask::List {
+                width,
+                height,
+                depth,
+                italic,
+                shift,
+                kind: ListKind::Overlap,
+                n: children.len(),
+            });
+            for child in children.iter().rev() {
+                tasks.push(CloneTask::Box(child));
+            }
+        }
+        BoxContent::Color(c, inner) => {
+            tasks.push(CloneTask::Wrap {
+                width,
+                height,
+                depth,
+                italic,
+                shift,
+                kind: WrapKind::Color(*c),
+            });
+            tasks.push(CloneTask::Box(inner));
+        }
+        BoxContent::BackColor(c, inner) => {
+            tasks.push(CloneTask::Wrap {
+                width,
+                height,
+                depth,
+                italic,
+                shift,
+                kind: WrapKind::BackColor(*c),
+            });
+            tasks.push(CloneTask::Box(inner));
+        }
+        BoxContent::Frame {
+            thickness,
+            stroke,
+            inner,
+        } => {
+            tasks.push(CloneTask::Wrap {
+                width,
+                height,
+                depth,
+                italic,
+                shift,
+                kind: WrapKind::Frame {
+                    thickness: thickness.clone(),
+                    stroke: *stroke,
+                },
+            });
+            tasks.push(CloneTask::Box(inner));
+        }
     }
 }

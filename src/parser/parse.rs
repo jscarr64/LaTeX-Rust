@@ -4,8 +4,8 @@
 //! The math list itself is a TeX-style row of atoms, not an arithmetic tree.
 
 use super::ast::{
-    AccentKind, AtomKind, ColSpec, DelimSize, Delimiter, EnvRow, EqNumber, IntegralKind, MathNode,
-    TextStyle,
+    AccentKind, AtomKind, ColSpec, DelimSize, Delimiter, EnvRow, EqNumber, FracStyle, IntegralKind,
+    MathNode, TextStyle,
 };
 use super::preproc::preprocess;
 use super::token::{tokenize, Token};
@@ -31,17 +31,11 @@ use crate::symbols::{lookup, SymbolKind as CatalogKind};
 /// group), so the default admits `\frac{1}{…}` nested 15 deep. Real mathematics
 /// rarely nests beyond five levels.
 ///
-/// Layout still walks the tree on the calling thread's stack. Measured on
-/// Linux x86-64 with the deepest input 32 admits in each nesting shape, laid
-/// out, rendered to SVG and dropped: an optimised build survives on a 1 MiB
-/// stack (the `wasm32` default) with about three times the headroom needed,
-/// and an unoptimised build survives on the 2 MiB stack of a default
-/// `std::thread` worker with about twice. An unoptimised build on a 1 MiB
-/// stack is *not* covered: layout overflows there at about 14 nested radicals
-/// or scripts. A caller that knows it has more stack can raise the layout
-/// limit with [`layout_with_max_depth`](crate::layout_with_max_depth); a caller
-/// on a smaller stack should lower it. Parsing is raised separately with
-/// [`ParseOptions::with_max_depth`].
+/// Layout, `gold`, `to_latex`, and render walk an explicit heap stack, the
+/// same way parsing does. A tree this limit accepts can be laid out and
+/// rendered on a 256 KiB thread. `max_depth` is still the only depth limit:
+/// raise it with [`layout_with_max_depth`](crate::layout_with_max_depth), and
+/// raise parsing separately with [`ParseOptions::with_max_depth`].
 pub const DEFAULT_MAX_NESTING_DEPTH: usize = 32;
 
 /// Options for [`parse_with_options`].
@@ -101,8 +95,8 @@ impl ParseOptions {
     /// or a superscript costs two levels, so 9,999 of those are inside 20,000
     /// and 10,000 are not.
     ///
-    /// Layout of the tree is separate and still uses the calling thread's
-    /// stack. See [`DEFAULT_MAX_NESTING_DEPTH`].
+    /// Layout uses its own heap stack and its own limit. See
+    /// [`DEFAULT_MAX_NESTING_DEPTH`].
     #[must_use]
     pub fn with_max_depth(mut self, max_depth: usize) -> Self {
         self.max_depth = max_depth;
@@ -839,7 +833,7 @@ fn apply_text_style(node: MathNode, style: TextStyle) -> MathNode {
         Superscript,
         Subscript,
         SubSup,
-        Fraction,
+        Fraction(FracStyle),
         Radical(bool),
         Accent(AccentKind),
         Delim(Delimiter, Delimiter),
@@ -878,7 +872,7 @@ fn apply_text_style(node: MathNode, style: TextStyle) -> MathNode {
             MathNode::Superscript(_, _) => Shape::Sup,
             MathNode::Subscript(_, _) => Shape::Sub,
             MathNode::SubSup(_, _, _) => Shape::SubSup,
-            MathNode::Fraction(_, _) => Shape::Frac,
+            MathNode::Fraction(_, _, _) => Shape::Frac,
             MathNode::Radical(_, _) => Shape::Radical,
             MathNode::Accent(_, _) => Shape::Accent,
             MathNode::Delimited(_, _, _) => Shape::Delim,
@@ -976,13 +970,13 @@ fn apply_text_style(node: MathNode, style: TextStyle) -> MathNode {
                 }
             }
             Shape::Frac => {
-                let kids = if let MathNode::Fraction(num, den) = &mut *node {
-                    vec![take_box(num), take_box(den)]
+                let (style, kids) = if let MathNode::Fraction(style, num, den) = &mut *node {
+                    (*style, vec![take_box(num), take_box(den)])
                 } else {
-                    Vec::new()
+                    (FracStyle::Frac, Vec::new())
                 };
                 Exploded::Kids {
-                    join: Join::Fraction,
+                    join: Join::Fraction(style),
                     kids,
                 }
             }
@@ -1063,10 +1057,10 @@ fn apply_text_style(node: MathNode, style: TextStyle) -> MathNode {
                         let base = take_styled(&mut vals);
                         MathNode::SubSup(Box::new(base), Box::new(sub), Box::new(sup))
                     }
-                    Join::Fraction => {
+                    Join::Fraction(style) => {
                         let den = take_styled(&mut vals);
                         let num = take_styled(&mut vals);
-                        MathNode::Fraction(Box::new(num), Box::new(den))
+                        MathNode::Fraction(style, Box::new(num), Box::new(den))
                     }
                     Join::Radical(true) => {
                         let body = take_styled(&mut vals);

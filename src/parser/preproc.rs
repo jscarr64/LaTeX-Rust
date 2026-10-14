@@ -1,15 +1,16 @@
 //! String-level LaTeX math sanitizer run before tokenization.
 //!
 //! Rewrites that preserve math meaning for a renderer: `{a \over b}` →
-//! `\frac`, `{n \choose k}` → `\binom`, `\tfrac`/`\dfrac` → `\frac`, plain-TeX
-//! font switches, `\mbox` → `\text`. Extensible `\left`/`\right`, skips, and
-//! accents are left intact.
+//! `\frac`, `{n \choose k}` → `\binom`, plain-TeX font switches, `\mbox` →
+//! `\text`. `\tfrac`, `\dfrac`, and `\cfrac` are left intact so the parser
+//! can record their style. Extensible `\left`/`\right`, skips, and accents
+//! are left intact.
 
 /// Normalize raw math input for the tokenizer.
 ///
 /// Rewrites that preserve math meaning: `{a \over b}` → `\frac`, `{n \choose k}`
-/// → `\binom`, `\tfrac`/`\dfrac` → `\frac`, plain-TeX font switches, `\mbox` →
-/// `\text`.
+/// → `\binom`, plain-TeX font switches, `\mbox` → `\text`. `\tfrac`, `\dfrac`,
+/// and `\cfrac` stay so their style reaches the parser.
 ///
 /// # Examples
 ///
@@ -29,11 +30,6 @@ pub fn preprocess(raw_input: &str) -> String {
     input = input.replace(r"{ (}", "(").replace(r"{ )}", ")");
     input = input.replace(r"{ ( }", "(").replace(r"{ ) }", ")");
     input = input.replace(r"{[}", "[").replace(r"{]}", "]");
-
-    input = input
-        .replace(r"\tfrac", r"\frac")
-        .replace(r"\dfrac", r"\frac")
-        .replace(r"\cfrac", r"\frac");
 
     input = convert_plain_tex_font_scopes(&input);
     input = convert_over_fractions(&input);
@@ -345,8 +341,10 @@ mod tests {
     }
 
     #[test]
-    fn tfrac_becomes_frac() {
-        assert_eq!(preprocess(r"\tfrac{a}{b}"), r"\frac{a}{b}");
+    fn styled_frac_stays() {
+        assert_eq!(preprocess(r"\tfrac{a}{b}"), r"\tfrac{a}{b}");
+        assert_eq!(preprocess(r"\dfrac{a}{b}"), r"\dfrac{a}{b}");
+        assert_eq!(preprocess(r"\cfrac{a}{b}"), r"\cfrac{a}{b}");
     }
 
     #[test]

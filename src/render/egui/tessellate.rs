@@ -1,13 +1,13 @@
 //! TrueType outline → triangle mesh in font units (y-up).
 //!
-//! `ttf-parser` delivers `f32` outline points; those bits become [`Dim`]
+//! The scaler delivers `f32` outline points; those bits become [`Dim`]
 //! immediately, then integer millifont-units for flatten / earcut (render path,
 //! not layout). Vertices are stored as [`Dim`] for emission.
 
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
-use ttf_parser::{GlyphId, OutlineBuilder};
+use skrifa::outline::OutlinePen;
 
 use crate::dim::Dim;
 use crate::error::{Error, FontError};
@@ -46,9 +46,8 @@ pub(super) fn tessellate(font: &MathFont, glyph_id: u16) -> Result<GlyphTris, Er
 }
 
 fn tessellate_uncached(font: &MathFont, glyph_id: u16) -> Result<GlyphTris, Error> {
-    let face = font.face();
     let mut b = ContourBuilder::new();
-    if face.outline_glyph(GlyphId(glyph_id), &mut b).is_none() {
+    if !font.draw_glyph(glyph_id, &mut b) {
         return Err(FontError::MissingGlyph { ch: '\u{FFFD}' }.into());
     }
     b.close_current();
@@ -166,7 +165,7 @@ impl ContourBuilder {
     }
 }
 
-impl OutlineBuilder for ContourBuilder {
+impl OutlinePen for ContourBuilder {
     fn move_to(&mut self, x: f32, y: f32) {
         self.close_current();
         let p = Self::pt(x, y);
@@ -777,11 +776,7 @@ mod tests {
 
     fn outline(font: &MathFont, glyph_id: u16) -> Vec<Vec<Ipt>> {
         let mut b = ContourBuilder::new();
-        if font
-            .face()
-            .outline_glyph(GlyphId(glyph_id), &mut b)
-            .is_none()
-        {
+        if !font.draw_glyph(glyph_id, &mut b) {
             return Vec::new();
         }
         b.close_current();
@@ -940,7 +935,7 @@ mod tests {
     fn every_glyph_in_the_embedded_font_tessellates() {
         let font = MathFont::stix_two_math().expect("STIX Two Math");
         let (mut ear, mut scan) = (0, 0);
-        for gid in 0..font.face().number_of_glyphs() {
+        for gid in 0..font.glyph_count() {
             let contours = outline(&font, gid);
             if contours.is_empty() {
                 continue;

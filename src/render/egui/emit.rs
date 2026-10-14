@@ -71,6 +71,13 @@ fn color32(c: Color) -> Color32 {
     Color32::from_rgba_unmultiplied(r, g, b, a)
 }
 
+struct EguiTask<'a> {
+    bx: &'a MathBox,
+    origin_x: Dim,
+    parent_baseline: Dim,
+    fill: Color,
+}
+
 #[allow(clippy::too_many_arguments)]
 fn emit(
     bx: &MathBox,
@@ -82,6 +89,48 @@ fn emit(
     fill: Color,
     cache: &mut HashMap<u16, GlyphTris>,
     out: &mut Vec<Shape>,
+) -> Result<(), Error> {
+    let mut stack = vec![EguiTask {
+        bx,
+        origin_x: origin_x.clone(),
+        parent_baseline: parent_baseline.clone(),
+        fill,
+    }];
+    while let Some(EguiTask {
+        bx,
+        origin_x,
+        parent_baseline,
+        fill,
+    }) = stack.pop()
+    {
+        emit_one(
+            bx,
+            font,
+            em_px,
+            fu_px,
+            &origin_x,
+            &parent_baseline,
+            fill,
+            cache,
+            out,
+            &mut stack,
+        )?;
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn emit_one<'a>(
+    bx: &'a MathBox,
+    font: &MathFont,
+    em_px: &Dim,
+    fu_px: &Dim,
+    origin_x: &Dim,
+    parent_baseline: &Dim,
+    fill: Color,
+    cache: &mut HashMap<u16, GlyphTris>,
+    out: &mut Vec<Shape>,
+    stack: &mut Vec<EguiTask<'a>>,
 ) -> Result<(), Error> {
     let baseline = parent_baseline - &(bx.shift.clone() * em_px);
     match &bx.content {
@@ -100,9 +149,18 @@ fn emit(
         }
         BoxContent::HList(kids) => {
             let mut x = origin_x.clone();
+            let mut placed = Vec::with_capacity(kids.len());
             for k in kids {
-                emit(k, font, em_px, fu_px, &x, &baseline, fill, cache, out)?;
+                placed.push((k, x.clone()));
                 x = &x + &(k.width.clone() * em_px);
+            }
+            for (k, x) in placed.into_iter().rev() {
+                stack.push(EguiTask {
+                    bx: k,
+                    origin_x: x,
+                    parent_baseline: baseline.clone(),
+                    fill,
+                });
             }
             Ok(())
         }
@@ -110,41 +168,53 @@ fn emit(
             if kids.is_empty() {
                 return Ok(());
             }
-            emit(
-                &kids[0], font, em_px, fu_px, origin_x, &baseline, fill, cache, out,
-            )?;
+            let mut placed = Vec::with_capacity(kids.len());
+            placed.push((&kids[0], baseline.clone()));
             let mut y_below = kids[0].depth.clone() * em_px;
             for k in kids.iter().skip(1) {
                 let child_base = &baseline + &y_below + &(k.height.clone() * em_px);
-                emit(
-                    k,
-                    font,
-                    em_px,
-                    fu_px,
-                    origin_x,
-                    &child_base,
-                    fill,
-                    cache,
-                    out,
-                )?;
+                placed.push((k, child_base));
                 y_below = &y_below + &((&k.height + &k.depth) * em_px);
+            }
+            for (k, child_base) in placed.into_iter().rev() {
+                stack.push(EguiTask {
+                    bx: k,
+                    origin_x: origin_x.clone(),
+                    parent_baseline: child_base,
+                    fill,
+                });
             }
             Ok(())
         }
         BoxContent::Overlap(kids) => {
-            for k in kids {
-                emit(k, font, em_px, fu_px, origin_x, &baseline, fill, cache, out)?;
+            for k in kids.iter().rev() {
+                stack.push(EguiTask {
+                    bx: k,
+                    origin_x: origin_x.clone(),
+                    parent_baseline: baseline.clone(),
+                    fill,
+                });
             }
             Ok(())
         }
-        BoxContent::Color(c, inner) => emit(
-            inner, font, em_px, fu_px, origin_x, &baseline, *c, cache, out,
-        ),
+        BoxContent::Color(c, inner) => {
+            stack.push(EguiTask {
+                bx: inner,
+                origin_x: origin_x.clone(),
+                parent_baseline: baseline,
+                fill: *c,
+            });
+            Ok(())
+        }
         BoxContent::BackColor(c, inner) => {
             push_fill_rect(bx, origin_x, &baseline, em_px, *c, out);
-            emit(
-                inner, font, em_px, fu_px, origin_x, &baseline, fill, cache, out,
-            )
+            stack.push(EguiTask {
+                bx: inner,
+                origin_x: origin_x.clone(),
+                parent_baseline: baseline,
+                fill,
+            });
+            Ok(())
         }
         BoxContent::Line {
             x1,
@@ -186,9 +256,13 @@ fn emit(
                     Stroke::new(px(&t), color32(border)),
                 )));
             }
-            emit(
-                inner, font, em_px, fu_px, origin_x, &baseline, fill, cache, out,
-            )
+            stack.push(EguiTask {
+                bx: inner,
+                origin_x: origin_x.clone(),
+                parent_baseline: baseline,
+                fill,
+            });
+            Ok(())
         }
     }
 }

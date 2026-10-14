@@ -55,17 +55,6 @@ fn paired_scripts_obey_open_type_vertical_constraints() {
 
     let params = MathParams::from_font(&font).expect("OpenType MATH constants");
 
-    let constants = font
-        .face()
-        .tables()
-        .math
-        .and_then(|math| math.constants)
-        .expect("embedded font MATH constants");
-
-    let units_per_em = font.units_per_em();
-
-    let fu = |value: i16| Dim::from_font_units(i64::from(value), units_per_em);
-
     let scale = params.scale(MathStyle::Text);
 
     let upper = layout_source("3", MathStyle::ScriptCramped, &font);
@@ -74,13 +63,13 @@ fn paired_scripts_obey_open_type_vertical_constraints() {
 
     let mut expected_upper = &params.superscript_shift_up * &scale;
 
-    let min_bottom = &fu(constants.superscript_bottom_min().value) * &scale;
+    let min_bottom = &params.superscript_bottom_min * &scale;
 
     expected_upper = expected_upper.max(&(&upper.depth + &min_bottom));
 
     let mut expected_lower = &params.subscript_shift_down * &scale;
 
-    let max_top = &fu(constants.subscript_top_max().value) * &scale;
+    let max_top = &params.subscript_top_max * &scale;
 
     expected_lower = expected_lower.max(&(&lower.height - &max_top).clamp_nonneg());
 
@@ -98,7 +87,7 @@ fn paired_scripts_obey_open_type_vertical_constraints() {
 
     let current_bottom = &expected_upper - &upper.depth;
 
-    let paired_bottom = &fu(constants.superscript_bottom_max_with_subscript().value) * &scale;
+    let paired_bottom = &params.superscript_bottom_max_with_subscript * &scale;
 
     if matches!(current_bottom.cmp(&paired_bottom), Some(Ordering::Less)) {
         let raise = &paired_bottom - &current_bottom;

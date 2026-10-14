@@ -52,6 +52,8 @@ pub enum ParseError {
     Malformed(String),
     /// `\left` without `\right`, or `\right` without `\left`.
     UnmatchedDelimiter,
+    /// `\\` or `\cr` outside a matrix, array, cases, or substack.
+    RowBreakOutside,
 }
 
 /// Font loader or metric lookup failure.
@@ -86,6 +88,7 @@ impl fmt::Display for ParseError {
             Self::Unknown(s) => write!(f, "unknown command: {s}"),
             Self::Malformed(s) => write!(f, "malformed: {s}"),
             Self::UnmatchedDelimiter => f.write_str("unmatched delimiter"),
+            Self::RowBreakOutside => f.write_str(r"row break \\ outside an environment"),
         }
     }
 }

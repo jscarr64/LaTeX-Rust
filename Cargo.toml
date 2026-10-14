@@ -2,7 +2,7 @@
 name = "latex-rust"
 version = "3.0.0"
 edition = "2021"
-rust-version = "1.76"
+rust-version = "1.82"
 authors = ["Jeffrey S Carr <jscarr1964@gmail.com>"]
 license = "MIT OR Apache-2.0"
 description = "Pure-Rust LaTeX math renderer. Parse to AST, TeX-faithful layout on exact rationals, emit SVG, PNG, or egui shapes. No JavaScript, no webview, no runtime."
@@ -49,7 +49,10 @@ proptest = "=1.5.0"
 tempfile = "=3.14.0"
 
 [dependencies]
-ttf-parser = "0.25"
+# 0.39 is the last skrifa whose read-fonts (0.36) builds on the 1.83 CI
+# toolchain. Later fontations need rustc 1.85 for the MATH table, so MATH
+# is parsed in src/font/math.rs. Do not enable the `libm` feature.
+skrifa = "=0.39.0"
 tiny-skia = { version = "0.11", optional = true }
 egui = { version = "0.28", optional = true }
 

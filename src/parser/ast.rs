@@ -359,41 +359,6 @@ impl EnvRow {
             labels: Vec::new(),
         }
     }
-
-    fn gold(&self) -> String {
-        match self {
-            Self::Hline => "(hline)".into(),
-            Self::Intertext(n) => format!("(intertext {})", n.gold()),
-            Self::Cells {
-                cells,
-                number,
-                labels,
-            } => {
-                let mut s = String::from("(");
-                for (i, c) in cells.iter().enumerate() {
-                    if i > 0 {
-                        s.push(' ');
-                    }
-                    s.push_str(&c.gold());
-                }
-                match number {
-                    EqNumber::Default => {}
-                    EqNumber::Suppress => s.push_str(" (nonumber)"),
-                    EqNumber::Tag { star: false, body } => {
-                        s.push_str(&format!(" (tag {})", body.gold()));
-                    }
-                    EqNumber::Tag { star: true, body } => {
-                        s.push_str(&format!(" (tagstar {})", body.gold()));
-                    }
-                }
-                for lab in labels {
-                    s.push_str(&format!(" (label {lab})"));
-                }
-                s.push(')');
-                s
-            }
-        }
-    }
 }
 
 /// Which integral glyph.
@@ -521,6 +486,35 @@ impl DelimSize {
     }
 }
 
+/// Which command built a [`MathNode::Fraction`].
+///
+/// `\frac` and `{a \over b}` are [`FracStyle::Frac`]. `\dfrac`, `\tfrac`, and
+/// `\cfrac` keep their own style, which layout uses and which [`MathNode::gold`]
+/// and [`MathNode::to_latex`] print back.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum FracStyle {
+    /// `\frac` and infix `\over`.
+    Frac,
+    /// `\dfrac`. Layout uses display style.
+    Dfrac,
+    /// `\tfrac`. Layout uses text style.
+    Tfrac,
+    /// `\cfrac`. Layout uses display style.
+    Cfrac,
+}
+
+impl FracStyle {
+    pub(crate) fn gold(self) -> &'static str {
+        match self {
+            Self::Frac => "frac",
+            Self::Dfrac => "dfrac",
+            Self::Tfrac => "tfrac",
+            Self::Cfrac => "cfrac",
+        }
+    }
+}
+
 /// Typed math-mode syntax tree.
 ///
 /// Produced by [`crate::parse()`]. [`MathNode::gold`] is the gold-stable debug form.
@@ -535,13 +529,15 @@ impl DelimSize {
 /// let n = parse("x^2").unwrap();
 /// assert!(n.gold().contains("sup"));
 /// ```
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum MathNode {
     /// Single character with a TeX atom class.
     Atom(char, AtomKind),
     /// `\frac` / `\dfrac` / `\tfrac` / `\cfrac` / `{a \over b}`.
-    Fraction(Box<MathNode>, Box<MathNode>),
+    ///
+    /// The style is the command. `\over` is [`FracStyle::Frac`].
+    Fraction(FracStyle, Box<MathNode>, Box<MathNode>),
     /// `\sqrt` / `\sqrt[n]`. Index `None` is a square root.
     Radical(Option<Box<MathNode>>, Box<MathNode>),
     /// `x^{}`
@@ -613,6 +609,12 @@ pub enum MathNode {
     Phantom(PhantomKind, Box<MathNode>),
 }
 
+impl Clone for MathNode {
+    fn clone(&self) -> Self {
+        clone_node(self)
+    }
+}
+
 impl Drop for MathNode {
     fn drop(&mut self) {
         // Box drop walks children on the native stack. A 10,000-deep `\left`
@@ -639,7 +641,7 @@ fn push_opt(out: &mut Vec<MathNode>, slot: &mut Option<Box<MathNode>>) {
 impl MathNode {
     fn drain_children(&mut self, out: &mut Vec<MathNode>) {
         match self {
-            Self::Fraction(a, b) | Self::Superscript(a, b) | Self::Subscript(a, b) => {
+            Self::Fraction(_, a, b) | Self::Superscript(a, b) | Self::Subscript(a, b) => {
                 push_box(out, a);
                 push_box(out, b);
             }
@@ -720,105 +722,504 @@ impl EqNumber {
     }
 }
 
+enum CloneTask<'a> {
+    Node(&'a MathNode),
+    Finish(Finish),
+}
+
+enum Finish {
+    Pair(PairKind),
+    Radical {
+        has_index: bool,
+    },
+    SubSup,
+    Delimited(Delimiter, Delimiter),
+    List(ListKind, usize),
+    Matrix {
+        style: MatrixStyle,
+        cols: Vec<ColSpec>,
+        rows: Vec<RowPlan>,
+    },
+    Tag {
+        star: bool,
+    },
+    Limits {
+        kind: LimitKind,
+        has_lo: bool,
+        has_hi: bool,
+    },
+    Limit {
+        has_lo: bool,
+    },
+    OverUnder {
+        has_over: bool,
+        has_under: bool,
+    },
+    Accent(AccentKind),
+    Wrap(WrapKind),
+    Intertext,
+}
+
+enum PairKind {
+    Fraction(FracStyle),
+    Superscript,
+    Subscript,
+    CancelTo,
+}
+
+enum ListKind {
+    Row,
+    Substack,
+}
+
+enum LimitKind {
+    Sum,
+    Product,
+    Integral(IntegralKind),
+}
+
+enum WrapKind {
+    Color(Color),
+    TextColor(Color),
+    ColorBox(Color),
+    FColorBox(Color, Color),
+    Phantom(PhantomKind),
+}
+
+enum RowPlan {
+    Hline,
+    Intertext,
+    Cells {
+        n: usize,
+        number: NumPlan,
+        labels: Vec<String>,
+    },
+}
+
+enum NumPlan {
+    Default,
+    Suppress,
+    Tag { star: bool },
+}
+
+fn clone_node(root: &MathNode) -> MathNode {
+    let mut tasks = vec![CloneTask::Node(root)];
+    let mut done = Vec::new();
+    while let Some(task) = tasks.pop() {
+        match task {
+            CloneTask::Node(node) => schedule_clone(node, &mut tasks, &mut done),
+            CloneTask::Finish(finish) => finish_clone(finish, &mut done),
+        }
+    }
+    done.pop().unwrap_or(MathNode::Hline)
+}
+
+fn pop_node(done: &mut Vec<MathNode>) -> MathNode {
+    done.pop().unwrap_or(MathNode::Hline)
+}
+
+fn schedule_clone<'a>(
+    node: &'a MathNode,
+    tasks: &mut Vec<CloneTask<'a>>,
+    done: &mut Vec<MathNode>,
+) {
+    match node {
+        MathNode::Atom(ch, kind) => done.push(MathNode::Atom(*ch, *kind)),
+        MathNode::SizedDelim(delim, size, kind) => {
+            done.push(MathNode::SizedDelim(delim.clone(), *size, *kind));
+        }
+        MathNode::Ref(key) => done.push(MathNode::Ref(key.clone())),
+        MathNode::Label(key) => done.push(MathNode::Label(key.clone())),
+        MathNode::NoNumber => done.push(MathNode::NoNumber),
+        MathNode::Hline => done.push(MathNode::Hline),
+        MathNode::Text(text, style) => done.push(MathNode::Text(text.clone(), *style)),
+        MathNode::Space(kind) => done.push(MathNode::Space(kind.clone())),
+        MathNode::Operator(name, limits) => {
+            done.push(MathNode::Operator(name.clone(), *limits));
+        }
+        MathNode::Symbol(name) => done.push(MathNode::Symbol(name.clone())),
+        MathNode::Strut(height, depth) => {
+            done.push(MathNode::Strut(height.clone(), depth.clone()));
+        }
+        MathNode::Fraction(style, a, b) => {
+            tasks.push(CloneTask::Finish(Finish::Pair(PairKind::Fraction(*style))));
+            tasks.push(CloneTask::Node(b));
+            tasks.push(CloneTask::Node(a));
+        }
+        MathNode::Superscript(a, b) => {
+            tasks.push(CloneTask::Finish(Finish::Pair(PairKind::Superscript)));
+            tasks.push(CloneTask::Node(b));
+            tasks.push(CloneTask::Node(a));
+        }
+        MathNode::Subscript(a, b) => {
+            tasks.push(CloneTask::Finish(Finish::Pair(PairKind::Subscript)));
+            tasks.push(CloneTask::Node(b));
+            tasks.push(CloneTask::Node(a));
+        }
+        MathNode::CancelTo(a, b) => {
+            tasks.push(CloneTask::Finish(Finish::Pair(PairKind::CancelTo)));
+            tasks.push(CloneTask::Node(b));
+            tasks.push(CloneTask::Node(a));
+        }
+        MathNode::SubSup(a, b, c) => {
+            tasks.push(CloneTask::Finish(Finish::SubSup));
+            tasks.push(CloneTask::Node(c));
+            tasks.push(CloneTask::Node(b));
+            tasks.push(CloneTask::Node(a));
+        }
+        MathNode::Radical(index, body) => {
+            tasks.push(CloneTask::Finish(Finish::Radical {
+                has_index: index.is_some(),
+            }));
+            tasks.push(CloneTask::Node(body));
+            if let Some(index) = index {
+                tasks.push(CloneTask::Node(index));
+            }
+        }
+        MathNode::Delimited(left, body, right) => {
+            tasks.push(CloneTask::Finish(Finish::Delimited(
+                left.clone(),
+                right.clone(),
+            )));
+            tasks.push(CloneTask::Node(body));
+        }
+        MathNode::Row(items) => {
+            tasks.push(CloneTask::Finish(Finish::List(ListKind::Row, items.len())));
+            for item in items.iter().rev() {
+                tasks.push(CloneTask::Node(item));
+            }
+        }
+        MathNode::Substack(items) => {
+            tasks.push(CloneTask::Finish(Finish::List(
+                ListKind::Substack,
+                items.len(),
+            )));
+            for item in items.iter().rev() {
+                tasks.push(CloneTask::Node(item));
+            }
+        }
+        MathNode::Matrix(style, cols, rows) => schedule_matrix(*style, cols, rows, tasks),
+        MathNode::Tag { star, body } => {
+            tasks.push(CloneTask::Finish(Finish::Tag { star: *star }));
+            tasks.push(CloneTask::Node(body));
+        }
+        MathNode::Sum(lower, upper) => {
+            schedule_limits(LimitKind::Sum, lower, upper, tasks);
+        }
+        MathNode::Product(lower, upper) => {
+            schedule_limits(LimitKind::Product, lower, upper, tasks);
+        }
+        MathNode::Integral(kind, lower, upper) => {
+            schedule_limits(LimitKind::Integral(*kind), lower, upper, tasks);
+        }
+        MathNode::Limit(lower) => {
+            tasks.push(CloneTask::Finish(Finish::Limit {
+                has_lo: lower.is_some(),
+            }));
+            if let Some(lower) = lower {
+                tasks.push(CloneTask::Node(lower));
+            }
+        }
+        MathNode::OverUnder(base, over, under) => {
+            tasks.push(CloneTask::Finish(Finish::OverUnder {
+                has_over: over.is_some(),
+                has_under: under.is_some(),
+            }));
+            if let Some(under) = under {
+                tasks.push(CloneTask::Node(under));
+            }
+            if let Some(over) = over {
+                tasks.push(CloneTask::Node(over));
+            }
+            tasks.push(CloneTask::Node(base));
+        }
+        MathNode::Accent(body, kind) => {
+            tasks.push(CloneTask::Finish(Finish::Accent(*kind)));
+            tasks.push(CloneTask::Node(body));
+        }
+        MathNode::Color(color, body) => {
+            tasks.push(CloneTask::Finish(Finish::Wrap(WrapKind::Color(*color))));
+            tasks.push(CloneTask::Node(body));
+        }
+        MathNode::TextColor(color, body) => {
+            tasks.push(CloneTask::Finish(Finish::Wrap(WrapKind::TextColor(*color))));
+            tasks.push(CloneTask::Node(body));
+        }
+        MathNode::ColorBox(color, body) => {
+            tasks.push(CloneTask::Finish(Finish::Wrap(WrapKind::ColorBox(*color))));
+            tasks.push(CloneTask::Node(body));
+        }
+        MathNode::FColorBox(border, fill, body) => {
+            tasks.push(CloneTask::Finish(Finish::Wrap(WrapKind::FColorBox(
+                *border, *fill,
+            ))));
+            tasks.push(CloneTask::Node(body));
+        }
+        MathNode::Phantom(kind, body) => {
+            tasks.push(CloneTask::Finish(Finish::Wrap(WrapKind::Phantom(*kind))));
+            tasks.push(CloneTask::Node(body));
+        }
+        MathNode::Intertext(body) => {
+            tasks.push(CloneTask::Finish(Finish::Intertext));
+            tasks.push(CloneTask::Node(body));
+        }
+    }
+}
+
+fn schedule_limits<'a>(
+    kind: LimitKind,
+    lower: &'a Option<Box<MathNode>>,
+    upper: &'a Option<Box<MathNode>>,
+    tasks: &mut Vec<CloneTask<'a>>,
+) {
+    tasks.push(CloneTask::Finish(Finish::Limits {
+        kind,
+        has_lo: lower.is_some(),
+        has_hi: upper.is_some(),
+    }));
+    if let Some(upper) = upper {
+        tasks.push(CloneTask::Node(upper));
+    }
+    if let Some(lower) = lower {
+        tasks.push(CloneTask::Node(lower));
+    }
+}
+
+fn schedule_matrix<'a>(
+    style: MatrixStyle,
+    cols: &[ColSpec],
+    rows: &'a [EnvRow],
+    tasks: &mut Vec<CloneTask<'a>>,
+) {
+    let mut plan = Vec::with_capacity(rows.len());
+    let mut kids = Vec::new();
+    for row in rows {
+        match row {
+            EnvRow::Hline => plan.push(RowPlan::Hline),
+            EnvRow::Intertext(body) => {
+                plan.push(RowPlan::Intertext);
+                kids.push(body.as_ref());
+            }
+            EnvRow::Cells {
+                cells,
+                number,
+                labels,
+            } => {
+                let num = match number {
+                    EqNumber::Default => NumPlan::Default,
+                    EqNumber::Suppress => NumPlan::Suppress,
+                    EqNumber::Tag { star, .. } => NumPlan::Tag { star: *star },
+                };
+                plan.push(RowPlan::Cells {
+                    n: cells.len(),
+                    number: num,
+                    labels: labels.clone(),
+                });
+                for cell in cells {
+                    kids.push(cell);
+                }
+                if let EqNumber::Tag { body, .. } = number {
+                    kids.push(body);
+                }
+            }
+        }
+    }
+    tasks.push(CloneTask::Finish(Finish::Matrix {
+        style,
+        cols: cols.to_vec(),
+        rows: plan,
+    }));
+    for kid in kids.into_iter().rev() {
+        tasks.push(CloneTask::Node(kid));
+    }
+}
+
+fn finish_clone(finish: Finish, done: &mut Vec<MathNode>) {
+    match finish {
+        Finish::Pair(kind) => {
+            let b = Box::new(pop_node(done));
+            let a = Box::new(pop_node(done));
+            done.push(match kind {
+                PairKind::Fraction(style) => MathNode::Fraction(style, a, b),
+                PairKind::Superscript => MathNode::Superscript(a, b),
+                PairKind::Subscript => MathNode::Subscript(a, b),
+                PairKind::CancelTo => MathNode::CancelTo(a, b),
+            });
+        }
+        Finish::SubSup => {
+            let c = Box::new(pop_node(done));
+            let b = Box::new(pop_node(done));
+            let a = Box::new(pop_node(done));
+            done.push(MathNode::SubSup(a, b, c));
+        }
+        Finish::Radical { has_index } => {
+            let body = Box::new(pop_node(done));
+            let index = if has_index {
+                Some(Box::new(pop_node(done)))
+            } else {
+                None
+            };
+            done.push(MathNode::Radical(index, body));
+        }
+        Finish::Delimited(left, right) => {
+            let body = Box::new(pop_node(done));
+            done.push(MathNode::Delimited(left, body, right));
+        }
+        Finish::List(kind, n) => {
+            let start = done.len().saturating_sub(n);
+            let items = done.split_off(start);
+            done.push(match kind {
+                ListKind::Row => MathNode::Row(items),
+                ListKind::Substack => MathNode::Substack(items),
+            });
+        }
+        Finish::Tag { star } => {
+            let body = Box::new(pop_node(done));
+            done.push(MathNode::Tag { star, body });
+        }
+        Finish::Limits {
+            kind,
+            has_lo,
+            has_hi,
+        } => {
+            let upper = if has_hi {
+                Some(Box::new(pop_node(done)))
+            } else {
+                None
+            };
+            let lower = if has_lo {
+                Some(Box::new(pop_node(done)))
+            } else {
+                None
+            };
+            done.push(match kind {
+                LimitKind::Sum => MathNode::Sum(lower, upper),
+                LimitKind::Product => MathNode::Product(lower, upper),
+                LimitKind::Integral(integral) => MathNode::Integral(integral, lower, upper),
+            });
+        }
+        Finish::Limit { has_lo } => {
+            let lower = if has_lo {
+                Some(Box::new(pop_node(done)))
+            } else {
+                None
+            };
+            done.push(MathNode::Limit(lower));
+        }
+        Finish::OverUnder {
+            has_over,
+            has_under,
+        } => {
+            let under = if has_under {
+                Some(Box::new(pop_node(done)))
+            } else {
+                None
+            };
+            let over = if has_over {
+                Some(Box::new(pop_node(done)))
+            } else {
+                None
+            };
+            let base = Box::new(pop_node(done));
+            done.push(MathNode::OverUnder(base, over, under));
+        }
+        Finish::Accent(kind) => {
+            let body = Box::new(pop_node(done));
+            done.push(MathNode::Accent(body, kind));
+        }
+        Finish::Wrap(kind) => {
+            let body = Box::new(pop_node(done));
+            done.push(match kind {
+                WrapKind::Color(color) => MathNode::Color(color, body),
+                WrapKind::TextColor(color) => MathNode::TextColor(color, body),
+                WrapKind::ColorBox(color) => MathNode::ColorBox(color, body),
+                WrapKind::FColorBox(border, fill) => MathNode::FColorBox(border, fill, body),
+                WrapKind::Phantom(phantom) => MathNode::Phantom(phantom, body),
+            });
+        }
+        Finish::Intertext => {
+            let body = Box::new(pop_node(done));
+            done.push(MathNode::Intertext(body));
+        }
+        Finish::Matrix { style, cols, rows } => {
+            let n = matrix_child_count(&rows);
+            let start = done.len().saturating_sub(n);
+            let kids = done.split_off(start);
+            let mut kids = kids.into_iter();
+            let mut built = Vec::with_capacity(rows.len());
+            for row in rows {
+                built.push(match row {
+                    RowPlan::Hline => EnvRow::Hline,
+                    RowPlan::Intertext => {
+                        EnvRow::Intertext(Box::new(kids.next().unwrap_or(MathNode::Hline)))
+                    }
+                    RowPlan::Cells { n, number, labels } => {
+                        let mut cells = Vec::with_capacity(n);
+                        for _ in 0..n {
+                            cells.push(kids.next().unwrap_or(MathNode::Hline));
+                        }
+                        let number = match number {
+                            NumPlan::Default => EqNumber::Default,
+                            NumPlan::Suppress => EqNumber::Suppress,
+                            NumPlan::Tag { star } => EqNumber::Tag {
+                                star,
+                                body: Box::new(kids.next().unwrap_or(MathNode::Hline)),
+                            },
+                        };
+                        EnvRow::Cells {
+                            cells,
+                            number,
+                            labels,
+                        }
+                    }
+                });
+            }
+            done.push(MathNode::Matrix(style, cols, built));
+        }
+    }
+}
+
+fn matrix_child_count(rows: &[RowPlan]) -> usize {
+    let mut n = 0usize;
+    for row in rows {
+        match row {
+            RowPlan::Hline => {}
+            RowPlan::Intertext => n = n.saturating_add(1),
+            RowPlan::Cells {
+                n: cells, number, ..
+            } => {
+                n = n.saturating_add(*cells);
+                if matches!(number, NumPlan::Tag { .. }) {
+                    n = n.saturating_add(1);
+                }
+            }
+        }
+    }
+    n
+}
+
 impl MathNode {
     /// Gold-stable S-expression. One space between items; no trailing space.
+    ///
+    /// The walk is an explicit heap stack, so a tree `parse` accepted cannot
+    /// overflow the caller's stack here.
     #[must_use]
     pub fn gold(&self) -> String {
-        match self {
-            Self::Atom(c, k) => format!("(atom {} {})", k.gold(), quote_atom(*c)),
-            Self::Fraction(n, d) => format!("(frac {} {})", n.gold(), d.gold()),
-            Self::Radical(None, r) => format!("(sqrt {})", r.gold()),
-            Self::Radical(Some(i), r) => format!("(sqrtn {} {})", i.gold(), r.gold()),
-            Self::Superscript(b, e) => format!("(sup {} {})", b.gold(), e.gold()),
-            Self::Subscript(b, s) => format!("(sub {} {})", b.gold(), s.gold()),
-            Self::SubSup(b, s, e) => format!("(subsup {} {} {})", b.gold(), s.gold(), e.gold()),
-            Self::Delimited(l, b, r) => {
-                format!("(delim {} {} {})", l.gold(), b.gold(), r.gold())
-            }
-            Self::SizedDelim(d, sz, k) => {
-                format!("(big {} {} {})", sz.gold(), k.gold(), quote_delim(d))
-            }
-            Self::Row(items) => {
-                if items.is_empty() {
-                    "(row)".into()
-                } else {
-                    let mut s = String::from("(row");
-                    for it in items {
-                        s.push(' ');
-                        s.push_str(&it.gold());
-                    }
-                    s.push(')');
-                    s
-                }
-            }
-            Self::Matrix(style, spec, rows) => {
-                let mut s = format!("(matrix {}", style.gold());
-                if !spec.is_empty() {
-                    s.push(' ');
-                    for c in spec {
-                        s.push(c.gold());
+        let mut stack = vec![GoldOp::Node(self)];
+        let mut out = String::new();
+        while let Some(op) = stack.pop() {
+            match op {
+                GoldOp::Text(text) => out.push_str(&text),
+                GoldOp::Node(node) => {
+                    let mut forward = Vec::new();
+                    gold_expand(node, &mut forward);
+                    for op in forward.into_iter().rev() {
+                        stack.push(op);
                     }
                 }
-                for row in rows {
-                    s.push(' ');
-                    s.push_str(&row.gold());
-                }
-                s.push(')');
-                s
             }
-            Self::Substack(lines) => {
-                let mut s = String::from("(substack");
-                for ln in lines {
-                    s.push(' ');
-                    s.push_str(&ln.gold());
-                }
-                s.push(')');
-                s
-            }
-            Self::Ref(k) => format!("(ref {k})"),
-            Self::Tag { star: false, body } => format!("(tag {})", body.gold()),
-            Self::Tag { star: true, body } => format!("(tagstar {})", body.gold()),
-            Self::Label(k) => format!("(label {k})"),
-            Self::NoNumber => "(nonumber)".into(),
-            Self::Hline => "(hline)".into(),
-            Self::Intertext(n) => format!("(intertext {})", n.gold()),
-            Self::Sum(lo, hi) => format!("(sum {} {})", opt(lo), opt(hi)),
-            Self::Integral(k, lo, hi) => {
-                format!("({} {} {})", k.gold(), opt(lo), opt(hi))
-            }
-            Self::Product(lo, hi) => format!("(prod {} {})", opt(lo), opt(hi)),
-            Self::Limit(lo) => format!("(lim {})", opt(lo)),
-            Self::OverUnder(b, over, under) => {
-                format!("(overunder {} {} {})", b.gold(), opt(over), opt(under))
-            }
-            Self::Accent(b, a) => format!("(accent {} {})", a.gold(), b.gold()),
-            Self::CancelTo(v, e) => format!("(cancelto {} {})", v.gold(), e.gold()),
-            Self::Text(t, st) => format!("(text {} {})", st.gold(), quote_text(t)),
-            Self::Space(SpaceKind::Thin) => "(space thin)".into(),
-            Self::Space(SpaceKind::Medium) => "(space medium)".into(),
-            Self::Space(SpaceKind::Thick) => "(space thick)".into(),
-            Self::Space(SpaceKind::NegThin) => "(space negthin)".into(),
-            Self::Space(SpaceKind::Quad) => "(space quad)".into(),
-            Self::Space(SpaceKind::Qquad) => "(space qquad)".into(),
-            Self::Space(SpaceKind::ControlSpace) => "(space control)".into(),
-            Self::Space(SpaceKind::Hspace(d)) => format!("(space hspace {})", dim_gold(d)),
-            Self::Operator(name, false) => format!("(op {name})"),
-            Self::Operator(name, true) => format!("(op {name} limits)"),
-            Self::Symbol(name) => format!("(symbol {name})"),
-            Self::Color(c, b) => format!("(color {} {})", c.css_hex(), b.gold()),
-            Self::TextColor(c, b) => format!("(textcolor {} {})", c.css_hex(), b.gold()),
-            Self::ColorBox(c, b) => format!("(colorbox {} {})", c.css_hex(), b.gold()),
-            Self::FColorBox(border, fill, b) => {
-                format!(
-                    "(fcolorbox {} {} {})",
-                    border.css_hex(),
-                    fill.css_hex(),
-                    b.gold()
-                )
-            }
-            Self::Strut(h, d) => format!("(strut {} {})", dim_gold(h), dim_gold(d)),
-            Self::Phantom(k, b) => format!("({} {})", k.gold(), b.gold()),
         }
+        out
     }
 
     /// LaTeX reprint of this tree.
@@ -833,24 +1234,336 @@ impl MathNode {
     /// braced. An alphabetic control word is followed by a space, so
     /// `\sin x` does not become `\sinx`. `\overline` is that full command.
     ///
-    /// Every [`MathNode::Fraction`] is `\frac`, including a fraction that
-    /// came from `\dfrac`, `\tfrac`, `\cfrac`, or `\over`. Those commands do
-    /// not store a display style, so the printer cannot put it back.
+    /// A [`MathNode::Fraction`] prints as the command in its [`FracStyle`].
+    /// `\over` is stored as [`FracStyle::Frac`], so it prints as `\frac`.
     ///
     /// A [`MathNode::Color`] is its own group. A color nested in a row
     /// therefore does not swallow the nodes that follow it.
     #[must_use]
     pub fn to_latex(&self) -> String {
-        let mut out = String::new();
-        write_node(&mut out, self);
-        out
+        let mut buf = LatexBuf::new();
+        let mut stack = vec![LatexOp::Node(self)];
+        while let Some(op) = stack.pop() {
+            match op {
+                LatexOp::Text(text) => buf.out.push_str(&text),
+                LatexOp::Node(node) => {
+                    let mut forward = LatexBuf::new();
+                    write_node(&mut forward, node);
+                    for op in forward.ops.into_iter().rev() {
+                        stack.push(op);
+                    }
+                }
+            }
+        }
+        buf.out
     }
 }
 
-fn opt(n: &Option<Box<MathNode>>) -> String {
-    match n {
-        None => "_".into(),
-        Some(x) => x.gold(),
+enum LatexOp<'a> {
+    Node(&'a MathNode),
+    Text(String),
+}
+
+struct LatexBuf<'a> {
+    ops: Vec<LatexOp<'a>>,
+    out: String,
+}
+
+impl<'a> LatexBuf<'a> {
+    fn new() -> Self {
+        Self {
+            ops: Vec::new(),
+            out: String::new(),
+        }
+    }
+
+    fn push_str(&mut self, text: &str) {
+        if let Some(LatexOp::Text(prev)) = self.ops.last_mut() {
+            prev.push_str(text);
+            return;
+        }
+        self.ops.push(LatexOp::Text(text.to_string()));
+    }
+
+    fn push(&mut self, c: char) {
+        if let Some(LatexOp::Text(prev)) = self.ops.last_mut() {
+            prev.push(c);
+            return;
+        }
+        self.ops.push(LatexOp::Text(c.to_string()));
+    }
+
+    fn node(&mut self, node: &'a MathNode) {
+        self.ops.push(LatexOp::Node(node));
+    }
+}
+
+enum GoldOp<'a> {
+    Node(&'a MathNode),
+    Text(String),
+}
+
+fn gold_text(buf: &mut Vec<GoldOp<'_>>, text: impl Into<String>) {
+    buf.push(GoldOp::Text(text.into()));
+}
+
+fn gold_node<'a>(buf: &mut Vec<GoldOp<'a>>, node: &'a MathNode) {
+    buf.push(GoldOp::Node(node));
+}
+
+fn gold_opt<'a>(buf: &mut Vec<GoldOp<'a>>, node: &'a Option<Box<MathNode>>) {
+    match node {
+        None => gold_text(buf, "_"),
+        Some(node) => gold_node(buf, node),
+    }
+}
+
+fn gold_expand<'a>(node: &'a MathNode, buf: &mut Vec<GoldOp<'a>>) {
+    match node {
+        MathNode::Atom(c, k) => gold_text(buf, format!("(atom {} {})", k.gold(), quote_atom(*c))),
+        MathNode::Fraction(style, n, d) => {
+            gold_text(buf, format!("({} ", style.gold()));
+            gold_node(buf, n);
+            gold_text(buf, " ");
+            gold_node(buf, d);
+            gold_text(buf, ")");
+        }
+        MathNode::Radical(None, r) => {
+            gold_text(buf, "(sqrt ");
+            gold_node(buf, r);
+            gold_text(buf, ")");
+        }
+        MathNode::Radical(Some(i), r) => {
+            gold_text(buf, "(sqrtn ");
+            gold_node(buf, i);
+            gold_text(buf, " ");
+            gold_node(buf, r);
+            gold_text(buf, ")");
+        }
+        MathNode::Superscript(b, e) => {
+            gold_text(buf, "(sup ");
+            gold_node(buf, b);
+            gold_text(buf, " ");
+            gold_node(buf, e);
+            gold_text(buf, ")");
+        }
+        MathNode::Subscript(b, s) => {
+            gold_text(buf, "(sub ");
+            gold_node(buf, b);
+            gold_text(buf, " ");
+            gold_node(buf, s);
+            gold_text(buf, ")");
+        }
+        MathNode::SubSup(b, s, e) => {
+            gold_text(buf, "(subsup ");
+            gold_node(buf, b);
+            gold_text(buf, " ");
+            gold_node(buf, s);
+            gold_text(buf, " ");
+            gold_node(buf, e);
+            gold_text(buf, ")");
+        }
+        MathNode::Delimited(l, b, r) => {
+            gold_text(buf, format!("(delim {} ", l.gold()));
+            gold_node(buf, b);
+            gold_text(buf, format!(" {})", r.gold()));
+        }
+        MathNode::SizedDelim(d, sz, k) => {
+            gold_text(
+                buf,
+                format!("(big {} {} {})", sz.gold(), k.gold(), quote_delim(d)),
+            );
+        }
+        MathNode::Row(items) => {
+            if items.is_empty() {
+                gold_text(buf, "(row)");
+            } else {
+                gold_text(buf, "(row");
+                for it in items {
+                    gold_text(buf, " ");
+                    gold_node(buf, it);
+                }
+                gold_text(buf, ")");
+            }
+        }
+        MathNode::Matrix(style, spec, rows) => {
+            let mut head = format!("(matrix {}", style.gold());
+            if !spec.is_empty() {
+                head.push(' ');
+                for c in spec {
+                    head.push(c.gold());
+                }
+            }
+            gold_text(buf, head);
+            for row in rows {
+                gold_text(buf, " ");
+                gold_row(buf, row);
+            }
+            gold_text(buf, ")");
+        }
+        MathNode::Substack(lines) => {
+            gold_text(buf, "(substack");
+            for ln in lines {
+                gold_text(buf, " ");
+                gold_node(buf, ln);
+            }
+            gold_text(buf, ")");
+        }
+        MathNode::Ref(k) => gold_text(buf, format!("(ref {k})")),
+        MathNode::Tag { star: false, body } => {
+            gold_text(buf, "(tag ");
+            gold_node(buf, body);
+            gold_text(buf, ")");
+        }
+        MathNode::Tag { star: true, body } => {
+            gold_text(buf, "(tagstar ");
+            gold_node(buf, body);
+            gold_text(buf, ")");
+        }
+        MathNode::Label(k) => gold_text(buf, format!("(label {k})")),
+        MathNode::NoNumber => gold_text(buf, "(nonumber)"),
+        MathNode::Hline => gold_text(buf, "(hline)"),
+        MathNode::Intertext(n) => {
+            gold_text(buf, "(intertext ");
+            gold_node(buf, n);
+            gold_text(buf, ")");
+        }
+        MathNode::Sum(lo, hi) => {
+            gold_text(buf, "(sum ");
+            gold_opt(buf, lo);
+            gold_text(buf, " ");
+            gold_opt(buf, hi);
+            gold_text(buf, ")");
+        }
+        MathNode::Integral(k, lo, hi) => {
+            gold_text(buf, format!("({} ", k.gold()));
+            gold_opt(buf, lo);
+            gold_text(buf, " ");
+            gold_opt(buf, hi);
+            gold_text(buf, ")");
+        }
+        MathNode::Product(lo, hi) => {
+            gold_text(buf, "(prod ");
+            gold_opt(buf, lo);
+            gold_text(buf, " ");
+            gold_opt(buf, hi);
+            gold_text(buf, ")");
+        }
+        MathNode::Limit(lo) => {
+            gold_text(buf, "(lim ");
+            gold_opt(buf, lo);
+            gold_text(buf, ")");
+        }
+        MathNode::OverUnder(b, over, under) => {
+            gold_text(buf, "(overunder ");
+            gold_node(buf, b);
+            gold_text(buf, " ");
+            gold_opt(buf, over);
+            gold_text(buf, " ");
+            gold_opt(buf, under);
+            gold_text(buf, ")");
+        }
+        MathNode::Accent(b, a) => {
+            gold_text(buf, format!("(accent {} ", a.gold()));
+            gold_node(buf, b);
+            gold_text(buf, ")");
+        }
+        MathNode::CancelTo(v, e) => {
+            gold_text(buf, "(cancelto ");
+            gold_node(buf, v);
+            gold_text(buf, " ");
+            gold_node(buf, e);
+            gold_text(buf, ")");
+        }
+        MathNode::Text(t, st) => {
+            gold_text(buf, format!("(text {} {})", st.gold(), quote_text(t)));
+        }
+        MathNode::Space(SpaceKind::Thin) => gold_text(buf, "(space thin)"),
+        MathNode::Space(SpaceKind::Medium) => gold_text(buf, "(space medium)"),
+        MathNode::Space(SpaceKind::Thick) => gold_text(buf, "(space thick)"),
+        MathNode::Space(SpaceKind::NegThin) => gold_text(buf, "(space negthin)"),
+        MathNode::Space(SpaceKind::Quad) => gold_text(buf, "(space quad)"),
+        MathNode::Space(SpaceKind::Qquad) => gold_text(buf, "(space qquad)"),
+        MathNode::Space(SpaceKind::ControlSpace) => gold_text(buf, "(space control)"),
+        MathNode::Space(SpaceKind::Hspace(d)) => {
+            gold_text(buf, format!("(space hspace {})", dim_gold(d)));
+        }
+        MathNode::Operator(name, false) => gold_text(buf, format!("(op {name})")),
+        MathNode::Operator(name, true) => gold_text(buf, format!("(op {name} limits)")),
+        MathNode::Symbol(name) => gold_text(buf, format!("(symbol {name})")),
+        MathNode::Color(c, b) => {
+            gold_text(buf, format!("(color {} ", c.css_hex()));
+            gold_node(buf, b);
+            gold_text(buf, ")");
+        }
+        MathNode::TextColor(c, b) => {
+            gold_text(buf, format!("(textcolor {} ", c.css_hex()));
+            gold_node(buf, b);
+            gold_text(buf, ")");
+        }
+        MathNode::ColorBox(c, b) => {
+            gold_text(buf, format!("(colorbox {} ", c.css_hex()));
+            gold_node(buf, b);
+            gold_text(buf, ")");
+        }
+        MathNode::FColorBox(border, fill, b) => {
+            gold_text(
+                buf,
+                format!("(fcolorbox {} {} ", border.css_hex(), fill.css_hex()),
+            );
+            gold_node(buf, b);
+            gold_text(buf, ")");
+        }
+        MathNode::Strut(h, d) => {
+            gold_text(buf, format!("(strut {} {})", dim_gold(h), dim_gold(d)));
+        }
+        MathNode::Phantom(k, b) => {
+            gold_text(buf, format!("({} ", k.gold()));
+            gold_node(buf, b);
+            gold_text(buf, ")");
+        }
+    }
+}
+
+fn gold_row<'a>(buf: &mut Vec<GoldOp<'a>>, row: &'a EnvRow) {
+    match row {
+        EnvRow::Hline => gold_text(buf, "(hline)"),
+        EnvRow::Intertext(n) => {
+            gold_text(buf, "(intertext ");
+            gold_node(buf, n);
+            gold_text(buf, ")");
+        }
+        EnvRow::Cells {
+            cells,
+            number,
+            labels,
+        } => {
+            gold_text(buf, "(");
+            for (i, cell) in cells.iter().enumerate() {
+                if i > 0 {
+                    gold_text(buf, " ");
+                }
+                gold_node(buf, cell);
+            }
+            match number {
+                EqNumber::Default => {}
+                EqNumber::Suppress => gold_text(buf, " (nonumber)"),
+                EqNumber::Tag { star: false, body } => {
+                    gold_text(buf, " (tag ");
+                    gold_node(buf, body);
+                    gold_text(buf, ")");
+                }
+                EqNumber::Tag { star: true, body } => {
+                    gold_text(buf, " (tagstar ");
+                    gold_node(buf, body);
+                    gold_text(buf, ")");
+                }
+            }
+            for lab in labels {
+                gold_text(buf, format!(" (label {lab})"));
+            }
+            gold_text(buf, ")");
+        }
     }
 }
 
@@ -903,11 +1616,11 @@ fn dim_gold(d: &Dim) -> String {
     d.to_dec_string()
 }
 
-fn write_node(out: &mut String, node: &MathNode) {
+fn write_node<'a>(out: &mut LatexBuf<'a>, node: &'a MathNode) {
     match node {
         MathNode::Atom(c, _) => write_atom(out, *c),
-        MathNode::Fraction(num, den) => {
-            write_cmd(out, "frac");
+        MathNode::Fraction(style, num, den) => {
+            write_cmd(out, style.gold());
             write_group(out, num);
             write_group(out, den);
         }
@@ -915,7 +1628,7 @@ fn write_node(out: &mut String, node: &MathNode) {
             write_cmd(out, "sqrt");
             if let Some(index) = index {
                 out.push('[');
-                write_node(out, index);
+                out.node(index);
                 out.push(']');
             }
             write_group(out, body);
@@ -926,7 +1639,7 @@ fn write_node(out: &mut String, node: &MathNode) {
         MathNode::Delimited(open, body, close) => {
             write_cmd(out, "left");
             write_delim(out, open);
-            write_node(out, body);
+            out.node(body);
             write_cmd(out, "right");
             write_delim(out, close);
         }
@@ -946,7 +1659,7 @@ fn write_node(out: &mut String, node: &MathNode) {
                 if i > 0 {
                     out.push_str("\\\\");
                 }
-                write_node(out, line);
+                out.node(line);
             }
             out.push('}');
         }
@@ -997,7 +1710,7 @@ fn write_node(out: &mut String, node: &MathNode) {
             out.push('{');
             write_cmd(out, "color");
             push_html(out, *color);
-            write_node(out, body);
+            out.node(body);
             out.push('}');
         }
         MathNode::TextColor(color, body) => write_paint(out, "textcolor", *color, None, body),
@@ -1013,11 +1726,11 @@ fn write_node(out: &mut String, node: &MathNode) {
     }
 }
 
-fn write_scripts(
-    out: &mut String,
-    base: &MathNode,
-    sub: Option<&MathNode>,
-    sup: Option<&MathNode>,
+fn write_scripts<'a>(
+    out: &mut LatexBuf<'a>,
+    base: &'a MathNode,
+    sub: Option<&'a MathNode>,
+    sup: Option<&'a MathNode>,
 ) {
     write_group(out, base);
     if let Some(sub) = sub {
@@ -1030,7 +1743,12 @@ fn write_scripts(
     }
 }
 
-fn write_op_scripts(out: &mut String, name: &str, sub: Option<&MathNode>, sup: Option<&MathNode>) {
+fn write_op_scripts<'a>(
+    out: &mut LatexBuf<'a>,
+    name: &str,
+    sub: Option<&'a MathNode>,
+    sup: Option<&'a MathNode>,
+) {
     write_cmd(out, name);
     if let Some(sub) = sub {
         out.push('_');
@@ -1042,15 +1760,15 @@ fn write_op_scripts(out: &mut String, name: &str, sub: Option<&MathNode>, sup: O
     }
 }
 
-fn write_group(out: &mut String, node: &MathNode) {
+fn write_group<'a>(out: &mut LatexBuf<'a>, node: &'a MathNode) {
     out.push('{');
-    write_node(out, node);
+    out.node(node);
     out.push('}');
 }
 
 /// Brace each child so a nested row stays nested, and so `<` `=` and a run of
 /// letters are not glued back into a relation or a bare operator.
-fn write_row(out: &mut String, items: &[MathNode]) {
+fn write_row<'a>(out: &mut LatexBuf<'a>, items: &'a [MathNode]) {
     if items.is_empty() {
         out.push_str("{}");
         return;
@@ -1060,7 +1778,12 @@ fn write_row(out: &mut String, items: &[MathNode]) {
     }
 }
 
-fn write_matrix(out: &mut String, style: MatrixStyle, spec: &[ColSpec], rows: &[EnvRow]) {
+fn write_matrix<'a>(
+    out: &mut LatexBuf<'a>,
+    style: MatrixStyle,
+    spec: &[ColSpec],
+    rows: &'a [EnvRow],
+) {
     write_cmd(out, "begin");
     out.push('{');
     out.push_str(style.gold());
@@ -1091,7 +1814,7 @@ fn write_matrix(out: &mut String, style: MatrixStyle, spec: &[ColSpec], rows: &[
                     if i > 0 {
                         out.push('&');
                     }
-                    write_node(out, cell);
+                    out.node(cell);
                     if i + 1 == cells.len() {
                         write_eq_meta(out, number, labels);
                     }
@@ -1108,7 +1831,7 @@ fn write_matrix(out: &mut String, style: MatrixStyle, spec: &[ColSpec], rows: &[
     out.push('}');
 }
 
-fn write_eq_meta(out: &mut String, number: &EqNumber, labels: &[String]) {
+fn write_eq_meta<'a>(out: &mut LatexBuf<'a>, number: &'a EqNumber, labels: &[String]) {
     for key in labels {
         write_braced_text(out, "label", key);
     }
@@ -1125,11 +1848,11 @@ fn write_eq_meta(out: &mut String, number: &EqNumber, labels: &[String]) {
     }
 }
 
-fn write_over_under(
-    out: &mut String,
-    base: &MathNode,
-    over: Option<&MathNode>,
-    under: Option<&MathNode>,
+fn write_over_under<'a>(
+    out: &mut LatexBuf<'a>,
+    base: &'a MathNode,
+    over: Option<&'a MathNode>,
+    under: Option<&'a MathNode>,
 ) {
     if let MathNode::Accent(body, kind @ (AccentKind::Overbrace | AccentKind::Underbrace)) = base {
         write_cmd(out, kind.gold());
@@ -1154,7 +1877,7 @@ fn write_over_under(
             write_cmd(out, cmd);
             if let Some(under) = under {
                 out.push('[');
-                write_node(out, under);
+                out.node(under);
                 out.push(']');
             }
             if let Some(over) = over {
@@ -1183,22 +1906,28 @@ fn write_over_under(
             write_group(out, under);
             write_group(out, base);
         }
-        (None, None) => write_node(out, base),
+        (None, None) => out.node(base),
     }
 }
 
-fn write_intertext(out: &mut String, body: &MathNode) {
+fn write_intertext<'a>(out: &mut LatexBuf<'a>, body: &'a MathNode) {
     write_cmd(out, "intertext");
     out.push('{');
     if let MathNode::Text(text, _) = body {
         push_escaped(out, text);
     } else {
-        write_node(out, body);
+        out.node(body);
     }
     out.push('}');
 }
 
-fn write_paint(out: &mut String, cmd: &str, first: Color, second: Option<Color>, body: &MathNode) {
+fn write_paint<'a>(
+    out: &mut LatexBuf<'a>,
+    cmd: &str,
+    first: Color,
+    second: Option<Color>,
+    body: &'a MathNode,
+) {
     write_cmd(out, cmd);
     push_html(out, first);
     if let Some(second) = second {
@@ -1207,7 +1936,7 @@ fn write_paint(out: &mut String, cmd: &str, first: Color, second: Option<Color>,
     write_group(out, body);
 }
 
-fn write_operator(out: &mut String, name: &str, limits: bool) {
+fn write_operator(out: &mut LatexBuf<'_>, name: &str, limits: bool) {
     match operator_limits(name) {
         Some(default) => {
             write_cmd(out, name);
@@ -1240,7 +1969,7 @@ fn operator_limits(name: &str) -> Option<bool> {
     })
 }
 
-fn write_space(out: &mut String, kind: &SpaceKind) {
+fn write_space(out: &mut LatexBuf<'_>, kind: &SpaceKind) {
     match kind {
         SpaceKind::Thin => out.push_str("\\,"),
         SpaceKind::Medium => out.push_str("\\:"),
@@ -1258,7 +1987,7 @@ fn write_space(out: &mut String, kind: &SpaceKind) {
     }
 }
 
-fn write_strut(out: &mut String, height: &Dim, depth: &Dim) {
+fn write_strut(out: &mut LatexBuf<'_>, height: &Dim, depth: &Dim) {
     if height.eq_dim(&Dim::ratio(7, 10)) && depth.eq_dim(&Dim::ratio(3, 10)) {
         write_cmd(out, "strut");
         return;
@@ -1269,7 +1998,7 @@ fn write_strut(out: &mut String, height: &Dim, depth: &Dim) {
     out.push_str("em}");
 }
 
-fn write_atom(out: &mut String, c: char) {
+fn write_atom(out: &mut LatexBuf<'_>, c: char) {
     match c {
         '{' | '}' | '%' | '\\' => {
             out.push('\\');
@@ -1283,7 +2012,7 @@ fn write_atom(out: &mut String, c: char) {
     }
 }
 
-fn write_delim(out: &mut String, delim: &Delimiter) {
+fn write_delim(out: &mut LatexBuf<'_>, delim: &Delimiter) {
     match delim {
         Delimiter::Empty => out.push('.'),
         Delimiter::Char(c) => write_atom(out, *c),
@@ -1344,7 +2073,7 @@ fn style_cmd(style: TextStyle) -> &'static str {
     }
 }
 
-fn write_cmd(out: &mut String, name: &str) {
+fn write_cmd(out: &mut LatexBuf<'_>, name: &str) {
     out.push('\\');
     out.push_str(name);
     if !name.is_empty() && name.chars().all(|c| c.is_ascii_alphabetic()) {
@@ -1352,14 +2081,14 @@ fn write_cmd(out: &mut String, name: &str) {
     }
 }
 
-fn write_braced_text(out: &mut String, cmd: &str, text: &str) {
+fn write_braced_text(out: &mut LatexBuf<'_>, cmd: &str, text: &str) {
     write_cmd(out, cmd);
     out.push('{');
     push_escaped(out, text);
     out.push('}');
 }
 
-fn push_escaped(out: &mut String, text: &str) {
+fn push_escaped(out: &mut LatexBuf<'_>, text: &str) {
     for c in text.chars() {
         match c {
             '\\' | '{' | '}' | '%' => {
@@ -1371,7 +2100,7 @@ fn push_escaped(out: &mut String, text: &str) {
     }
 }
 
-fn push_html(out: &mut String, color: Color) {
+fn push_html(out: &mut LatexBuf<'_>, color: Color) {
     out.push_str("[HTML]{");
     let hex = color.css_hex();
     match hex.strip_prefix('#') {

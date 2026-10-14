@@ -55,6 +55,10 @@ fn walk(name: &str, n: usize) -> Result<(), String> {
     let (ast, _) = parse_with_options(&input, &opts).map_err(|err| format!("parse {err}"))?;
     let gold = ast.gold();
     let printed = ast.to_latex();
+    let cloned = ast.clone();
+    if cloned.gold() != gold {
+        return Err("clone gold".into());
+    }
     match name {
         "braces" => {
             if gold != "(atom Ord \"x\")" {

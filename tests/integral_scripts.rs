@@ -19,30 +19,18 @@ struct ScriptConstants {
 }
 
 fn script_constants(font: &MathFont) -> ScriptConstants {
-    let face = ttf_parser::Face::parse(font.bytes(), 0).expect("parse embedded STIX face");
-
-    let constants = face
-        .tables()
-        .math
-        .and_then(|math| math.constants)
-        .expect("embedded STIX MATH constants");
-
-    let units_per_em = font.units_per_em();
-
-    let fu = |value: i16| Dim::from_font_units(i64::from(value), units_per_em);
+    let params = MathParams::from_font(font).expect("embedded STIX MATH constants");
 
     ScriptConstants {
-        subscript_top_max: fu(constants.subscript_top_max().value),
+        subscript_top_max: params.subscript_top_max,
 
-        subscript_baseline_drop_min: fu(constants.subscript_baseline_drop_min().value),
+        subscript_baseline_drop_min: params.subscript_baseline_drop_min,
 
-        superscript_bottom_min: fu(constants.superscript_bottom_min().value),
+        superscript_bottom_min: params.superscript_bottom_min,
 
-        superscript_bottom_max_with_subscript: fu(constants
-            .superscript_bottom_max_with_subscript()
-            .value),
+        superscript_bottom_max_with_subscript: params.superscript_bottom_max_with_subscript,
 
-        superscript_baseline_drop_max: fu(constants.superscript_baseline_drop_max().value),
+        superscript_baseline_drop_max: params.superscript_baseline_drop_max,
     }
 }
 
