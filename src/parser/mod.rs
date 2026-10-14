@@ -6,6 +6,7 @@
 mod ast;
 mod parse;
 mod preproc;
+mod text;
 mod token;
 
 pub use ast::{
