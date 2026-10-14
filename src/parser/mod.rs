@@ -4,6 +4,7 @@
 //! input is [`ParseError`](crate::error::ParseError), never a silent partial tree.
 
 mod ast;
+mod group_rules;
 mod parse;
 mod preproc;
 mod text;

@@ -7,6 +7,7 @@ use super::ast::{
     AccentKind, AtomKind, ColSpec, DelimSize, Delimiter, EnvRow, EqNumber, FracStyle, IntegralKind,
     MathNode, TextRun, TextStyle,
 };
+use super::group_rules;
 use super::preproc::preprocess;
 use super::text::lex_body;
 use super::token::{tokenize, Token};
@@ -248,7 +249,7 @@ pub fn parse_with_options(
     if sanitized.is_empty() {
         return Err(ParseError::Malformed("empty input".into()));
     }
-    let tokens = tokenize(&sanitized)?;
+    let tokens = group_rules::apply(tokenize(&sanitized)?);
     let tokens = strip_fences(&tokens)?;
     let mut p = Parser {
         tokens,
@@ -470,7 +471,7 @@ impl Parser {
 
     /// Parses inline math from a text body with `left` levels to spare.
     fn sub_parse(&self, src: &str, left: usize) -> Result<MathNode, ParseError> {
-        let tokens = tokenize(src)?;
+        let tokens = group_rules::apply(tokenize(src)?);
         let mut parser = Parser {
             tokens,
             pos: 0,
