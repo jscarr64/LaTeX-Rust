@@ -66,3 +66,25 @@ fn text_groups_survive_the_preprocessor() {
         round_trip(input);
     }
 }
+
+/// Styled text that is empty or not all letters must keep its text form.
+#[test]
+fn styled_text_keeps_its_body() {
+    for input in [
+        "{\\it\\text{}}",
+        "{\\it{\\text{}}}",
+        "\0{\\it\\mbox{}}",
+        "{\\it\\mbox{\u{2}}}",
+        "{\\its\\mbox{\u{2}P]}}",
+        "{\\it{i'\\text{}}}",
+        "T{\\it\\text{[\u{e}\u{e}}}",
+        "h{\\it{i'\\text{  }<}<<}",
+        "{\\itsM\0\\mbox{{\u{2}{t\u{1f}h}}]}}Is",
+        "h{\\it{rqi'\\text{     }\\ \\<<<<} \\<<<<}",
+        "{\\rm\\text{}}",
+        "{\\bf\\text{1 2}}",
+        "\\mathbb{\\text{x y}}",
+    ] {
+        round_trip(input);
+    }
+}
