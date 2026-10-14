@@ -1382,7 +1382,24 @@ impl MathNode {
     /// as `^{′}` instead of a `'` mark.
     #[must_use]
     pub fn to_latex_with(&self, options: &ParseOptions) -> String {
-        let mut buf = LatexBuf::new(options.prime_symbol);
+        let mut out = self.print_raw(options.prime_symbol);
+        // The parser strips `\(…\)` and `\[…\]` fences around the whole
+        // input and rejects an unclosed one, so a print that only starts
+        // with `\(` or `\[` is one group.
+        let fenced = ["\\(", "\\["]
+            .iter()
+            .any(|open| out.starts_with(open) && out.len() > open.len());
+        if fenced {
+            out.insert(0, '{');
+            out.push('}');
+        }
+        out
+    }
+
+    /// The print of `self` as it is written inside a larger print: no group
+    /// is added around a leading `\(` or `\[`.
+    fn print_raw(&self, literal_primes: bool) -> String {
+        let mut buf = LatexBuf::new(literal_primes);
         let mut stack = vec![LatexOp::Node(self)];
         while let Some(op) = stack.pop() {
             match op {
@@ -1395,16 +1412,6 @@ impl MathNode {
                     }
                 }
             }
-        }
-        // The parser strips `\(…\)` and `\[…\]` fences around the whole
-        // input and rejects an unclosed one, so a print that only starts
-        // with `\(` or `\[` is one group.
-        let fenced = ["\\(", "\\["]
-            .iter()
-            .any(|open| buf.out.starts_with(open) && buf.out.len() > open.len());
-        if fenced {
-            buf.out.insert(0, '{');
-            buf.out.push('}');
         }
         buf.out
     }
@@ -2268,7 +2275,7 @@ fn paren_need(node: &MathNode) -> Option<usize> {
     if !ends_with_paren(node) {
         return None;
     }
-    let printed = node.to_latex();
+    let printed = node.print_raw(false);
     let chars: Vec<char> = printed.trim_end().chars().collect();
     let mut parens = 0usize;
     let mut braces = 0usize;
@@ -2369,7 +2376,7 @@ fn write_option<'a>(out: &mut LatexBuf<'a>, node: &'a MathNode) {
         out.push('{');
         write_group(out, node);
         out.push('}');
-    } else if option_needs_group(&node.to_latex()) {
+    } else if option_needs_group(&node.print_raw(out.literal_primes)) {
         write_group(out, node);
     } else {
         out.node(node);
@@ -2791,7 +2798,7 @@ fn print_run<'a>(out: &mut LatexBuf<'a>, run: &'a TextRun) {
                 TextItem::Math(node) => {
                     // A `\)` in the body would close `\(` early. Such a body
                     // uses `$…$`, or one group when it also has a `$`.
-                    let body = node.to_latex();
+                    let body = node.print_raw(out.literal_primes);
                     let close = has_top_level(&body, &['\\', ')']);
                     if close && !has_top_level(&body, &['$']) {
                         out.push('$');
