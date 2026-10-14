@@ -40,9 +40,12 @@ fn expect_frac_gold(n: usize) -> String {
 fn expect_frac_latex(n: usize) -> String {
     let mut s = String::new();
     for _ in 0..n {
-        s.push_str("\\frac 1");
+        s.push_str("\\frac {1}{");
     }
     s.push('2');
+    for _ in 0..n {
+        s.push('}');
+    }
     s
 }
 
