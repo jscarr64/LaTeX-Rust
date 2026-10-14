@@ -2,8 +2,8 @@
 
 use std::collections::HashMap;
 
-use egui::epaint::{RectShape, Vertex};
-use egui::{Color32, Mesh, Pos2, Rect, Rounding, Shape, Stroke, TextureId, Vec2};
+use egui::{Color32, Mesh, Pos2, Rect, Shape, Stroke, TextureId, Vec2};
+use epaint::{CornerRadius, RectShape, StrokeKind, Vertex};
 
 use super::tessellate::{tessellate, GlyphTris};
 use super::EguiOptions;
@@ -250,10 +250,13 @@ fn emit_one<'a>(
             if !rw.is_zero() && !rh.is_zero() {
                 let r = Rect::from_min_size(Pos2::new(px(&x), px(&y)), Vec2::new(px(&rw), px(&rh)));
                 let border = stroke.unwrap_or(fill);
+                // The rect is already inset by half the stroke, which is where a
+                // centered stroke sat before `StrokeKind` existed.
                 out.push(Shape::Rect(RectShape::stroke(
                     r,
-                    Rounding::ZERO,
+                    CornerRadius::ZERO,
                     Stroke::new(px(&t), color32(border)),
+                    StrokeKind::Middle,
                 )));
             }
             stack.push(EguiTask {
@@ -285,7 +288,7 @@ fn push_fill_rect(
         Pos2::new(px(origin_x), px(&y)),
         Vec2::new(px(&w), px(&h_ink)),
     );
-    out.push(Shape::rect_filled(r, Rounding::ZERO, color32(fill)));
+    out.push(Shape::rect_filled(r, CornerRadius::ZERO, color32(fill)));
 }
 
 fn glyph_tris(

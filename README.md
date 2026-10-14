@@ -77,7 +77,8 @@ Layout math is exact rationals in this crate. It does not depend on a numeric
 library.
 
 MSRV is **1.99**. `rust-toolchain.toml` pins that channel, with clippy and
-rustfmt. Optional `egui` stays at 0.28.
+rustfmt. Optional `egui` and `epaint` are 0.36.2 and stay off unless the
+`egui` feature is on.
 
 ## Usage
 
@@ -172,8 +173,8 @@ The crate embeds **STIX Two Math** 2.13 (SIL OFL 1.1). Horizontal metrics and
 outlines come from `skrifa` in integer font units converted to `Dim`. The
 OpenType MATH table is read in this crate. Glyph outlines become SVG `<path>`
 elements (and PNG/egui meshes when those features are on). The optional
-`egui` 0.28 feature still pulls `ttf-parser` through `ab_glyph`. This
-crate does not call it. `egui` stays at 0.28.
+`egui` 0.36.2 feature uses `epaint` 0.36.2, which reads fonts with
+`skrifa`. `ttf-parser` is not in the tree.
 
 ## Notes
 

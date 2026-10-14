@@ -247,13 +247,30 @@ This release lists every finding and its fix. Nothing in this section is publish
   Migration: a toolchain older than 1.99 cannot build this crate. This
   is a breaking change.
 
-### Known issues
+- **Optional `egui` is 0.36.2, with `epaint` 0.36.2.** The feature stays
+  off by default, so a default build does not link either crate.
+  `epaint` 0.34 switched its font backend from `ab_glyph` / `ttf-parser`
+  to `skrifa`. 0.36.2 keeps that, so RUSTSEC-2026-0192 (`ttf-parser`
+  0.25.1, unmaintained, no patched release) is gone from the
+  `--all-features` tree. `cargo audit --deny warnings` has no ignores.
+  MSRV 1.99 is above `egui` 0.36's rustc 1.95.
 
-The optional `egui` feature still resolves `ttf-parser` 0.25 through
-`egui` 0.28, `epaint`, and `ab_glyph` (RUSTSEC-2026-0192). This crate's
-renderer does not call that parser. `egui` stays at 0.28, so
-`cargo audit --deny warnings` still fails on that advisory. There is no
-ignore, and there is no patched `ttf-parser`.
+  Glyph meshes are still tessellated in this crate from `skrifa`
+  outlines. `epaint` 0.35 shapes its own text with `harfrust` and types
+  text cursors as `CharIndex` and `ByteIndex`. This renderer does not
+  call that shaper, so those types are not on the emission path.
+  `clip_rect_margin` and the renamed `Panel` methods are not used.
+  Call sites pass `f32`, `Color32`, `Stroke`, and `CornerRadius`
+  directly, which is what remains after `impl Into<f32>` arguments were
+  removed. `Rounding` is `CornerRadius`. A frame stroke uses
+  `StrokeKind::Middle` because the rectangle is already inset by half
+  the stroke width.
+
+  Migration: enable `features = ["egui"]` and depend on `egui` 0.36.2.
+  `MathFont::face` is already gone. Downstream code that named `egui`
+  0.28 types (`Rounding`, `ab_glyph`) has to move to 0.36.2.
+
+### Known issues
 
 3.0.0 is not published.
 
