@@ -1194,10 +1194,10 @@ fn collapse_text(mut node: MathNode) -> MathNode {
         Vec::new()
     };
     let mut out: Vec<MathNode> = Vec::new();
-    for n in v {
-        match (out.last_mut(), &n) {
+    for mut n in v {
+        match (out.last_mut(), &mut n) {
             (Some(MathNode::Text(a, sa)), MathNode::Text(b, sb)) if sa == sb => {
-                a.append(b.clone());
+                a.append(std::mem::take(b));
             }
             _ => out.push(n),
         }
