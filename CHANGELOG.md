@@ -344,6 +344,13 @@ This release lists every finding and its fix. Nothing in this section is publish
 
 ### Changed
 
+- **Parser: a braced command argument costs no extra depth** (spec 5,
+  Q2). `\frac{a}{b}` used to cost two levels per argument (the argument and
+  its group), while `\frac ab` cost one. Both now cost one, so the printer can
+  always brace arguments without nesting deeper than the source.
+  `ParseOptions::with_max_depth` therefore accepts more braced inputs: at the
+  default limit, 31 nested `\frac{1}{…}` now parse (before, 15).
+
 - **Parser: the paren-script lookahead skips delimiters and options**
   (spec 5, Q1). When a `(` starts an atom, the parser looks for its matching
   `)` followed by `^`, `_` or `'` to read `(…)^x` as one scripted group. That

@@ -1428,10 +1428,14 @@ mod tests {
     }
 
     #[test]
-    fn frac_depth_costs_two_levels() {
+    fn frac_depth_costs_one_level_braced_or_bare() {
+        // A braced argument costs the same as a bare one (spec 5, Q2).
         let frac = |n: usize| "\\frac{1}{".repeat(n) + "2" + &"}".repeat(n);
+        let bare = |n: usize| "\\frac 1".repeat(n) + "2";
         let opts = ParseOptions::default();
-        assert!(parse_with_options(&frac(15), &opts).is_ok());
-        assert!(parse_with_options(&frac(16), &opts).is_err());
+        assert!(parse_with_options(&frac(31), &opts).is_ok());
+        assert!(parse_with_options(&frac(32), &opts).is_err());
+        assert!(parse_with_options(&bare(31), &opts).is_ok());
+        assert!(parse_with_options(&bare(32), &opts).is_err());
     }
 }

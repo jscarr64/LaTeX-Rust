@@ -52,6 +52,9 @@ enum Kind {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum GroupPhase {
     Open,
+    /// A group that is itself a command argument: the argument frame
+    /// already counts one level, so the group's list does not (spec 5, Q2).
+    ArgOpen,
     Wait,
 }
 
@@ -278,6 +281,10 @@ impl Kind {
         Self::Group(GroupPhase::Open)
     }
 
+    fn arg_group() -> Self {
+        Self::Group(GroupPhase::ArgOpen)
+    }
+
     fn arg() -> Self {
         Self::Arg(ArgPhase::Dispatch)
     }
@@ -443,13 +450,14 @@ fn step_group(
     ready: &mut Option<MathNode>,
 ) -> Result<Step, ParseError> {
     match *phase {
-        GroupPhase::Open => {
+        GroupPhase::Open | GroupPhase::ArgOpen => {
+            let counts = *phase == GroupPhase::Open;
             match parser.bump() {
                 Some(Token::BeginGroup) => {}
                 _ => return Err(ParseError::Malformed("expected '{'".into())),
             }
             *phase = GroupPhase::Wait;
-            Ok(Step::Call(Kind::list(Stop::group()), true))
+            Ok(Step::Call(Kind::list(Stop::group()), counts))
         }
         GroupPhase::Wait => match parser.bump() {
             Some(Token::EndGroup) => Ok(Step::Done(take_node(ready)?)),
@@ -475,7 +483,7 @@ fn step_arg(
             };
             *phase = ArgPhase::Wait;
             match look {
-                1 => Ok(Step::Call(Kind::group(), false)),
+                1 => Ok(Step::Call(Kind::arg_group(), false)),
                 2 => Ok(Step::Call(Kind::paren(), false)),
                 3 => Ok(Step::Call(Kind::nucleus(), false)),
                 _ => Err(ParseError::Malformed("missing argument".into())),
