@@ -35,6 +35,9 @@ Notes:
   `)` in an optional argument paired with an outer `(`); fixed in ee73242.
 - canon-primed-open and canon-option-paren* pass at c846b58: regressions of
   the brace economy.
+- canon-text-math-fence: fuzz crash in the 1800 s run on 155c728. The
+  `$…$` choice for text math looked at the fence-wrapped print (2267377)
+  while the body was written unwrapped; fixed in 3f5f2d6.
 
 | id | minimal input | root-cause class | fixing commit | regression seed |
 |---|---|---|---|---|
@@ -100,6 +103,7 @@ Notes:
 | canon-primed-open | `('^))^\ ` | printer canonical form | 77a271b | `roundtrip-canon-primed-open` |
 | canon-option-paren | `(^)\xleftarrow[)^x]]` | printer canonical form | ee73242 | `roundtrip-canon-option-paren` |
 | canon-option-paren-open | `(^)\xleftarrow[(]x))^\u{8}` | printer canonical form | ee73242 | `roundtrip-canon-option-paren-open` |
+| canon-text-math-fence | `\text{$\(\)$}` | printer canonical form | 3f5f2d6 | `roundtrip-canon-text-math-fence` |
 
 ## Count per class
 
@@ -107,7 +111,7 @@ Notes:
 |---|---|
 | preprocess rewrite | 8 |
 | text decode | 2 |
-| printer canonical form | 29 |
+| printer canonical form | 30 |
 | depth | 16 |
 | other | 7 |
-| **total** | **62** |
+| **total** | **63** |
