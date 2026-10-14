@@ -180,3 +180,39 @@ fn escaped_brace_hides_delimiter_groups() {
         round_trip(input);
     }
 }
+
+/// Group 9: text bodies decode `\)` to a bare `)`, and the reprint
+/// `(\text{)'}` then fooled the math-level `(` script lookahead, which
+/// counts `)` tokens inside brace groups. See documents/TEXT_MODE_SPEC.md.
+#[test]
+fn paren_lookahead_skips_text_bodies() {
+    for input in [
+        // fuzz finding and its minimization
+        "(???????\\text {\\text {\\ }\\)') t{Lambda}Bb) }\\ ",
+        "(\\text{{}\\)'{}}",
+        // depth 1-3; `\ ` at start, middle, end; with and without `\)`
+        "(\\text{\\ \\)'}",
+        "(\\text{a\\ \\)'b}",
+        "(\\text{\\)'\\ }",
+        "(\\text{\\ a}",
+        "(\\text{\\text{\\ }\\)'}",
+        "(\\text{\\text{\\ \\)'}}",
+        "(\\text{x\\text{\\ }y\\)'}\\ ",
+        "(\\text{\\text{\\ }}",
+        "(\\text{\\text{\\text{\\ }\\)'}}",
+        "(\\text{\\text{\\text{\\)'\\ }}}",
+        "(\\text{\\text{\\text{a\\ b}}\\)'}",
+        "(\\text{\\text{\\text{\\ }}}",
+        // escaped braces
+        "(\\text{\\{\\)'\\}}",
+        "(\\text{\\{\\ \\}\\)'}",
+        "(\\text{\\text{\\{\\ }\\)'\\}}",
+        // `)` after the text group
+        "(\\text{\\)'})'",
+        "(\\text{\\ })^2",
+        "(a)'",
+        "((a)')'",
+    ] {
+        round_trip(input);
+    }
+}
