@@ -29,9 +29,12 @@ pub fn preprocess(raw_input: &str) -> String {
     }
 
     let mut input = input;
-    input = input.replace(r"{ (}", "(").replace(r"{ )}", ")");
-    input = input.replace(r"{ ( }", "(").replace(r"{ ) }", ")");
-    input = input.replace(r"{[}", "[").replace(r"{]}", "]");
+    input = replace_unescaped(&input, "{ (}", "(");
+    input = replace_unescaped(&input, "{ )}", ")");
+    input = replace_unescaped(&input, "{ ( }", "(");
+    input = replace_unescaped(&input, "{ ) }", ")");
+    input = replace_unescaped(&input, "{[}", "[");
+    input = replace_unescaped(&input, "{]}", "]");
 
     input = convert_plain_tex_font_scopes(&input);
     input = convert_over_fractions(&input);
@@ -62,6 +65,23 @@ fn trim_math(input: &str) -> &str {
     } else {
         &input[start..start + kept.len()]
     }
+}
+
+/// Replaces non-overlapping occurrences of `pat` with `rep`, skipping matches
+/// that are preceded by an odd number of backslashes in the original input.
+fn replace_unescaped(input: &str, pat: &str, rep: &str) -> String {
+    let mut result = String::new();
+    let mut last_end = 0;
+
+    for (pos, _) in input.match_indices(pat) {
+        if !ends_with_odd_backslash(&input[..pos]) {
+            result.push_str(&input[last_end..pos]);
+            result.push_str(rep);
+            last_end = pos + pat.len();
+        }
+    }
+    result.push_str(&input[last_end..]);
+    result
 }
 
 fn ends_with_odd_backslash(s: &str) -> bool {
