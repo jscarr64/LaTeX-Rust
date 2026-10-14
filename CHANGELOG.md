@@ -300,6 +300,35 @@ This release lists every finding and its fix. Nothing in this section is publish
     `roundtrip-g9-1410dba0`. Migration: `({a)'}` and `(\mathrm{a)'})`,
     rejected before, now parse.
 
+- **A reprint could nest deeper than its source.** `to_latex` braced every
+  script base and argument, every fraction argument and every row item, and
+  printed an empty numerator as `{{}}`. A source near the 32-level limit
+  parsed, but its reprint was rejected with "input nests deeper than 32
+  levels". Fuzzing found 15 such inputs in three families: `{\over\over…}`
+  chains, `{\choose\choose…}` chains, and scripts over rows of relations
+  (`lo_{==_{…}<}`). The printer now spends a brace only where the parser
+  needs one (see "Brace economy" under Changed), and a test checks
+  `depth(print(parse(s))) <= depth(s)` for the 15 minimized inputs (seeds
+  `roundtrip-depth-*`) and for a generated grammar. Migration: none for
+  trees; `to_latex` output changes as described below.
+
+- **Reprints that did not parse back.** A whole-grammar property
+  (`print(parse(print(x))) == print(x)` and `parse(print(t)) == t`, over every
+  `MathNode` kind, with each parser option) and fuzzing found six more. Each
+  is a seed (`roundtrip-canon-*`) and a table row:
+  - a `]` in an optional argument ended it early: `\xrightarrow[\mathrm{]}]`
+    printed `\xrightarrow []]`. Such an argument is now grouped (`\sqrt[…]`
+    too);
+  - a lone `[` as a `\sqrt` body printed `\sqrt {[}`, and `{[}` is read as a
+    bare `[` that opens an index. It now keeps two groups;
+  - a print starting with `\(` (the symbol, as in `{\( }x`) was read as an
+    unclosed math fence. Such a print is now one group;
+  - a `\)` symbol inside text math (`\text{$\)$}`) closed the `\(` early. That
+    body now prints between `$…$`;
+  - two that the new printer briefly had before release: a primed base
+    before more primes (`{x_x'}'`), and `'` marks read back as `\prime` under
+    `prime_symbol` (see `to_latex_with` below).
+
 ### Changed
 
 - **Text mode is a real lexer (documents/TEXT_MODE_SPEC.md).** `\text`,
@@ -327,6 +356,9 @@ This release lists every finding and its fix. Nothing in this section is publish
     bound the text → inline math → text recursion.
   - `\its` and `\rmfoo` are whole control words: `{\its …}` is no longer
     read as `{\it s…}`.
+  - Because of that, two G4 inputs in `tests/fuzz_roundtrip.rs` that started
+    with `{\its` moved from the round-trip list to the rejections:
+    they now return `Err(Unknown("\\its"))` and `Err(Unknown("\\itsM"))`.
 
   Silent wrong results this fixes:
   - `\text{{ )}}` was the text `)`; it is ` )`.
@@ -354,6 +386,32 @@ This release lists every finding and its fix. Nothing in this section is publish
   `to_latex` of text: `\textbackslash{}`, `\textasciicircum{}` and
   `\textasciitilde{}` for those characters, `\(…\)` for inline math, and no
   more leading `\ `, `\[`, `\]` escapes (G3), since a text body is opaque.
+
+- **Brace economy in `to_latex`.** A reprint never nests deeper than any
+  source of the same tree. An argument that is one nucleus prints bare
+  (`\frac 12`, `x_a`, `\sqrt a`, `\hat x`, `x^\frac 12`), a row argument is
+  one group, an empty argument is `{}`, and row items print bare unless that
+  would change the tree (a nested row, a superscript character, a scripted
+  `)` that would close an open `(`). Two bare letters are split by a space so
+  `bare_operators` does not join them. `\binom` replaces
+  `\left(\frac…\right)` for that tree, superscript primes print as `'`
+  marks (`x'`, `x_a'`, `x^a''`), and a one-letter styled run prints as
+  `\mathit o`.
+
+  Trade-off: a fraction or other command inside an argument also prints
+  bare, `\frac 1\frac 12` for `\frac{1}{\frac{1}{2}}`, because this parser
+  (like MathJax) reads that form at one level less per fraction, and the
+  `{a \over b \over c}` rewrite already produced it. TeX and KaTeX do not
+  read it. Callers that pass `to_latex` output to TeX should not rely on
+  it.
+
+  Migration: compare trees, not strings. Examples of the new output:
+  `{x}^{2}` is `x^2`, `\frac {1}{2}` is `\frac 12`, `{x}^{′′}` is `x''`,
+  `{a}{b}` is `a b`, `\left (\frac {n}{k}\right )` is `\binom nk`.
+
+  API addition: `MathNode::to_latex_with(&ParseOptions)`. With
+  `prime_symbol` on, `'` reads back as `\prime`, so this keeps a literal `′`
+  superscript as `^{′}`. `to_latex()` is `to_latex_with(&ParseOptions::new())`.
 
 - **MSRV is 1.99.** `rust-version` is `"1.99"`. `rust-toolchain.toml`
   pins channel `1.99` with `clippy` and `rustfmt`. The CI test job, the
