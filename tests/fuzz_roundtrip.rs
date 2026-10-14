@@ -37,3 +37,16 @@ fn text_specials_are_escaped() {
         round_trip(input);
     }
 }
+
+/// `\` before a newline or tab is a control space, as in TeX.
+#[test]
+fn control_whitespace_in_text_is_a_space() {
+    for input in [
+        "\\text{\\\n}",
+        "\\text{\\\t}",
+        "\\text{a\\\nb}",
+        "\\text{\\\r}",
+    ] {
+        round_trip(input);
+    }
+}
