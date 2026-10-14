@@ -245,6 +245,9 @@ const FINDINGS: &[(&str, &str, u8)] = &[
     ("roundtrip-canon-fence-open", r"{\( }x", 0),
     // A `\)` symbol inside text math closed the `\(` early.
     ("roundtrip-canon-text-math-close", r"\text{t $ \) $ u}", 0),
+    // A `\big(` delimiter paren was counted by the paren lookahead (fuzz r9,
+    // before Q1).
+    ("roundtrip-canon-big-paren", r"(^x(\big())x^))^x", 0),
     // The `\)` check saw the fence-wrapped body `{\(\)}`, but the printer
     // wrote it unwrapped inside `\(…\)` (fuzz).
     ("roundtrip-canon-text-math-fence", r"\text{$\(\)$}", 0),

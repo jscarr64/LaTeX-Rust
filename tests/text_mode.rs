@@ -62,6 +62,7 @@ const SEEDS: &[&str] = &[
     "roundtrip-g8-7b95ab68",
     "roundtrip-g8-f2ab310f",
     "roundtrip-g9-1410dba0",
+    "roundtrip-canon-big-paren",
     "roundtrip-canon-fence-open",
     "roundtrip-canon-option-bracket",
     "roundtrip-canon-option-paren",
@@ -94,7 +95,7 @@ const SEEDS: &[&str] = &[
 
 /// Every crash seed either round-trips (property b and c) or is rejected
 /// with a typed error. The seed list is the corpus's named files: the 36
-/// text-mode seeds, the 15 depth seeds, the 12 canonical-print seeds and
+/// text-mode seeds, the 15 depth seeds, the 13 canonical-print seeds and
 /// `roundtrip-dim-dot`.
 #[test]
 fn crash_seeds_round_trip_or_reject() {
