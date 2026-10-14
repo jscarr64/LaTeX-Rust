@@ -7,6 +7,22 @@ This release lists every finding and its fix. Nothing in this section is publish
 
 ### Fixed
 
+- **A long prime run could not be reprinted.** Each extra `'` nested the
+  superscript one row deeper, and `to_latex` braced every level, so `{[` with
+  34 primes parsed but its reprint failed with "input nests deeper than 32
+  levels". A prime run is now one flat row (`f'''` is three sibling primes,
+  with or without `prime_symbol`), and `to_latex` prints a run of two or more
+  primes unbraced inside one superscript group: `{f}^{′′′}`, or
+  `{f}^{\prime \prime \prime }` for `\prime`. Both reparse to the same tree
+  under either option, and the reprint costs a fixed two levels over the
+  source instead of one more level per prime.
+
+  Spec change: `gold()` of three or more primes changes from nested
+  `(row (row …) …)` to one `(row …)`. The lexicon gold
+  `prime-three-stays-nested` is now `prime-three-flat` and forbids the nested
+  shape. Callers that walked the nested rows should iterate the row.
+  `to_latex` of `f'''` changes from `{f}^{{{′}{′}}{′}}` to `{f}^{′′′}`.
+
 - **Infix `\over` and `\choose` matched a prefix.** `convert_over_fractions`
   searched for the bytes `\over`, and `convert_choose` searched for `\choose`,
   with no control-word boundary. A `{` in front of `\overline`, `\overset`,
