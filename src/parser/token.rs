@@ -102,7 +102,7 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, ParseError> {
         match c {
             '%' => skip_line(&mut chars),
             ' ' => out.push(Token::Space),
-            '\t' | '\n' | '\r' => {}
+            '\t' | '\n' | '\r' | '\u{b}' | '\u{c}' => {}
             '{' => out.push(Token::BeginGroup),
             '}' => out.push(Token::EndGroup),
             '^' => out.push(Token::Superscript),
