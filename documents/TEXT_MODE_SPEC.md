@@ -195,7 +195,11 @@ R5. `\(…\)` and `$…$` inside text open a math sub-parse, stored as a child
 `Malformed("unmatched \\) in text")`. **`\)` is never a literal `)`.**
 
 R6. A nested text command gives a child `TextRun` with its own style. The
-nesting depth counts toward `max_depth`.
+nesting depth counts toward `max_depth`. Text that holds inline math that
+holds text again is also capped at 32 text levels (`TEXT_LEVELS`), even when
+`max_depth` is raised: `Malformed("text nests deeper than 32 levels")`. This
+bounds the text → math → text recursion, whose sub-parses are not on the
+heap-stack depth model.
 
 R7. A bare `{…}` group in text has no meaning. Its items are spliced into the
 parent and leave no node behind.
@@ -250,7 +254,9 @@ print_run: Str s       -> each c: if c in  \ { } $ % & # _ ^ ~  then
            NoBreakSpace -> "~"
            Symbol n     -> "\" n "{}"            -- the empty group ends the word, so no R3 swallow
            Nested(st,r) -> "\" cmd(st) "{" print_run(r) "}"
-           Math m       -> "\(" print(m) "\)"
+           Math m       -> "\(" print(m) "\)"   -- "$" print(m) "$" when print(m) has a
+                                               top-level "\)", "\({" print(m) "}\)" when
+                                               it also has a "$"
 ```
 
 Properties: `parse(print(t)) == t` for every `t` that `parse` returns.
@@ -260,6 +266,9 @@ code never looks inside a text arg (R1 and 3.2). It also contains no `{ )}`
 style byte sequence that matters, because no string rewrites run (3.1).
 
 ## 3. Rebuild plan
+
+Section 4 lists where the build differs from this plan. Those choices are
+the spec.
 
 3.1 **Delete** from `preprocess`: P2-P7 (move `{(}`-style delimiter
 unwrapping into the math parser, where a `BeginGroup` holding one delimiter
@@ -285,9 +294,20 @@ balanced `BeginGroup…EndGroup`, and returns false on an unbalanced
 `EndGroup`. With 3.2 in place, text is one opaque token anyway.
 
 3.4 **Printer.** Replace `push_escaped` for text with `print_run` (2.5).
-Remove the `\mathrm{\text{…}}` double wrap (ast.rs:1708-1716) by making
-`TextStyle` carry its own command. Keep `push_escaped` for `\operatorname`
-names (ast.rs:1957, 1991), but restrict it to the chars that are legal there.
+A `MathNode::Text` prints by its style:
+
+- `TextStyle::Text`: `\text{` print_run `}`.
+- a math font (`Rm`, `Bf`, `It`, `Sf`, `Tt`, `Bb`, `Cal`, `Frak`, `Scr`,
+  `Boldsymbol`, `Pmb`) whose run is only ASCII letters: `\mathX{` run `}`, or
+  `\mathX c` for one letter (one token, one level less).
+- a math font whose run is anything else: the double wrap
+  `\mathX{\text{` print_run `}}`. A math font argument is math, so spaces,
+  digits and punctuation in the run would be re-read as math atoms; the
+  inner `\text` keeps the run opaque. The double wrap stays (the original
+  plan to remove it by giving `TextStyle` its own text command is dropped).
+
+Keep `push_escaped` for `\operatorname` names, but restrict it to the chars
+that are legal there.
 
 3.5 **collapse_text** merges `TextRun`s by concatenating items and
 re-normalizing (the Str/Space invariants).
@@ -326,3 +346,38 @@ in tests/fuzz_roundtrip.rs (G1-G9, including
 `paren_lookahead_skips_text_bodies`) stay. Expected outputs change only where
 2.3 now rejects input that used to be silently mangled (`\\` in text, unknown
 control words in text). Those cases move to an `is_err` table.
+
+## 4. As built: decisions that are now the spec
+
+These were open or different in sections 2 and 3. The code and tests follow
+them.
+
+4.1 **Top-level `\textrm`, `\textbf`, `\textit`, `\textsf`, `\texttt` stay
+math fonts.** In math, they parse as before, to `MathNode::Text(run, Rm|Bf|…)`
+by the math font table. Only inside a text body are they nested text runs
+(`TextItem::Nested`). This keeps every existing gold and caller of the math
+font styles unchanged.
+
+4.2 **The `\mathX{\text{…}}` double wrap is kept** for a styled run that is
+not only ASCII letters (3.4). Removing it would need a text command per
+math font, and `\mathbb` / `\mathcal` / `\mathfrak` have none.
+
+4.3 **A 32-level text cap** (`TEXT_LEVELS`) bounds text → inline math → text
+recursion on top of `max_depth` (R6).
+
+4.4 **`ends_with_odd_backslash` stays.** `preprocess` keeps `trim_math`, and
+`trim_math` needs `ends_with_odd_backslash` to keep the space of a trailing
+control space `\ `. 3.1 said both would go; only the string rewrites did.
+
+4.5 **`\its` is one control word.** Font scopes are a token rule
+(`group_rules::font_scopes`), so `{\its …}` is the unknown command `\its`,
+not `{\it s…}`. The old string rewrite matched the prefix. Two G4 fuzz inputs
+that relied on it moved to the rejection table
+(`Err(Unknown("\\its"))`, `Err(Unknown("\\itsM"))`).
+
+4.6 **Packaging.** This file is in the `include` list of `Cargo.toml`, so the
+README link resolves in the published crate.
+
+4.7 **Text math print.** A `\)` at the top level of an inline-math body would
+end `\(…\)` early, so such a body prints as `$…$` (or `\({…}\)` if it also has
+a `$`), per 2.5. Seed `roundtrip-canon-text-math-close`.

@@ -27,6 +27,7 @@ include = [
     "NOTICE",
     "documents/CAPABILITIES.md",
     "documents/SYMBOLS.md",
+    "documents/TEXT_MODE_SPEC.md",
 ]
 
 [lib]
