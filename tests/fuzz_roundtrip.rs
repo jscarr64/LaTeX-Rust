@@ -66,17 +66,27 @@ fn styled_text_keeps_its_body() {
         "{\\it{\\text{}}}",
         "\0{\\it\\mbox{}}",
         "{\\it\\mbox{\u{2}}}",
-        "{\\its\\mbox{\u{2}P]}}",
         "{\\it{i'\\text{}}}",
         "T{\\it\\text{[\u{e}\u{e}}}",
         "h{\\it{i'\\text{  }<}<<}",
-        "{\\itsM\0\\mbox{{\u{2}{t\u{1f}h}}]}}Is",
         "h{\\it{rqi'\\text{     }\\ \\<<<<} \\<<<<}",
         "{\\rm\\text{}}",
         "{\\bf\\text{1 2}}",
         "\\mathbb{\\text{x y}}",
     ] {
         round_trip(input);
+    }
+    // `\its` is one control word, not `\it` + `s`. The old string rewrite
+    // matched the prefix; the token rule (spec 3.1) does not.
+    for (input, word) in [
+        ("{\\its\\mbox{\u{2}P]}}", "\\its"),
+        ("{\\itsM\0\\mbox{{\u{2}{t\u{1f}h}}]}}Is", "\\itsM"),
+    ] {
+        assert_eq!(
+            parse(input),
+            Err(latex_rust::ParseError::Unknown(word.into())),
+            "{input:?}"
+        );
     }
 }
 
