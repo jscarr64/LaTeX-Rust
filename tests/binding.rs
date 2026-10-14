@@ -117,7 +117,7 @@ fn prime_then_superscript_nests() {
     expect_gold(
         &mut problems,
         r"f'''",
-        r#"(sup (atom Ord "f") (row (row (atom Ord "′") (atom Ord "′")) (atom Ord "′")))"#,
+        r#"(sup (atom Ord "f") (row (atom Ord "′") (atom Ord "′") (atom Ord "′")))"#,
     );
     finish(problems);
 }

@@ -97,7 +97,7 @@ kind = "ast"
 input = "{\\underline{x}}"
 expect = "(accent underline (atom Ord \"x\"))"
 
-# Primes. f'^2 is the square of primed f. f' and f'' stay as they are.
+# Primes. f'^2 is the square of primed f. A run of primes is one flat row.
 
 [[gold]]
 name = "prime-one"
@@ -115,7 +115,7 @@ expect = "(sup (atom Ord \"f\") (row (atom Ord \"′\") (atom Ord \"′\")))"
 name = "prime-three"
 kind = "ast"
 input = "f'''"
-expect = "(sup (atom Ord \"f\") (row (row (atom Ord \"′\") (atom Ord \"′\")) (atom Ord \"′\")))"
+expect = "(sup (atom Ord \"f\") (row (atom Ord \"′\") (atom Ord \"′\") (atom Ord \"′\")))"
 
 [[gold]]
 name = "prime-symbol"

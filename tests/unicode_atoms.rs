@@ -65,17 +65,16 @@ fn unicode_minus_is_bin() -> Result<(), ParseError> {
 }
 
 #[test]
-fn prime_flag_matches_prime_command_and_keeps_the_nest() -> Result<(), ParseError> {
+fn prime_flag_matches_prime_command_and_runs_are_flat() -> Result<(), ParseError> {
     let on = flag("prime");
     assert_eq!(gold_with("f'", &on)?, gold(r"f^{\prime}")?);
     assert_eq!(gold_with("f''", &on)?, gold(r"f^{\prime\prime}")?);
-    let nested = r#"(sup (atom Ord "f") (row (row (symbol prime) (symbol prime)) (symbol prime)))"#;
     let flat = r#"(sup (atom Ord "f") (row (symbol prime) (symbol prime) (symbol prime)))"#;
-    assert_eq!(gold_with("f'''", &on)?, nested);
-    assert_ne!(gold_with("f'''", &on)?, flat);
+    assert_eq!(gold_with("f'''", &on)?, flat);
+    assert_eq!(gold(r"f^{\prime\prime\prime}")?, flat);
     assert_eq!(
         gold("f'''")?,
-        r#"(sup (atom Ord "f") (row (row (atom Ord "′") (atom Ord "′")) (atom Ord "′")))"#
+        r#"(sup (atom Ord "f") (row (atom Ord "′") (atom Ord "′") (atom Ord "′")))"#
     );
     Ok(())
 }

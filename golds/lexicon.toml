@@ -213,9 +213,9 @@ pair = "f^{\\prime\\prime}"
 expect = "(sup (atom Ord \"f\") (row (symbol prime) (symbol prime)))"
 
 [[gold]]
-name = "prime-three-stays-nested"
+name = "prime-three-flat"
 flags = "prime_symbol"
 input = "f'''"
-pair = ""
-expect = "(sup (atom Ord \"f\") (row (row (symbol prime) (symbol prime)) (symbol prime)))"
-forbid = "(sup (atom Ord \"f\") (row (symbol prime) (symbol prime) (symbol prime)))"
+pair = "f^{\\prime\\prime\\prime}"
+expect = "(sup (atom Ord \"f\") (row (symbol prime) (symbol prime) (symbol prime)))"
+forbid = "(sup (atom Ord \"f\") (row (row (symbol prime) (symbol prime)) (symbol prime)))"

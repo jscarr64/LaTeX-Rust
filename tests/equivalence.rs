@@ -156,8 +156,9 @@ fn optional_pairs_match_when_the_flag_is_on() -> Result<(), ParseError> {
             pair.left
         );
     }
-    let nested = gold_with("f'''", &prime())?;
+    let run = gold_with("f'''", &prime())?;
     let flat = r#"(sup (atom Ord "f") (row (symbol prime) (symbol prime) (symbol prime)))"#;
-    assert_ne!(nested, flat);
+    assert_eq!(run, flat);
+    assert_eq!(gold_with(r"f^{\prime\prime\prime}", &prime())?, flat);
     Ok(())
 }
