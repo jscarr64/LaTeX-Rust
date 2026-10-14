@@ -2139,7 +2139,7 @@ fn write_row_items<'a>(out: &mut LatexBuf<'a>, items: &'a [MathNode]) {
             MathNode::Superscript(base, _)
             | MathNode::Subscript(base, _)
             | MathNode::SubSup(base, ..)
-                if matches!(base.as_ref(), MathNode::Atom('(', _)) =>
+                if matches!(peel_primes(base), MathNode::Atom('(', _)) =>
             {
                 open_parens += 1;
             }
@@ -2155,15 +2155,20 @@ fn write_row_items<'a>(out: &mut LatexBuf<'a>, items: &'a [MathNode]) {
 /// Prime superscripts are peeled first: `)'` prints its `)` right before a
 /// `'` mark, which starts the paren lookahead just like `^`.
 fn closes_open(node: &MathNode, open: usize) -> bool {
-    let mut node = node;
-    while let MathNode::Superscript(base, sup) = node {
+    matches!(paren_need(peel_primes(node)), Some(k) if k >= 1 && k <= open)
+}
+
+/// The innermost base under prime superscripts (`x'` and `x''` give `x`).
+fn peel_primes(node: &MathNode) -> &MathNode {
+    let mut current = node;
+    while let MathNode::Superscript(base, sup) = current {
         if is_primes(sup) {
-            node = base;
+            current = base;
         } else {
             break;
         }
     }
-    matches!(paren_need(node), Some(k) if k >= 1 && k <= open)
+    current
 }
 
 /// True when `node` prints as exactly one nucleus, so an argument needs no
