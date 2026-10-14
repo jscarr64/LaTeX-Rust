@@ -381,3 +381,139 @@ README link resolves in the published crate.
 4.7 **Text math print.** A `\)` at the top level of an inline-math body would
 end `\(…\)` early, so such a body prints as `$…$` (or `\({…}\)` if it also has
 a `$`), per 2.5. Seed `roundtrip-canon-text-math-close`.
+
+## 5. Printer grouping spec (proposed, not implemented)
+
+Status: proposal for review (Oct 14). Nothing below is built yet. It replaces
+the case-by-case brace rules in `src/parser/ast.rs` (`bare_arg`,
+`closes_open`, `paren_need`, `option_needs_group`, the fence wrap, the
+text-math `$` choice) with one decision. The acceptance gate is the
+canonical-print property (`tests/canonical_print_props.rs`) and the depth
+property (`tests/depth_economy.rs`), with every seed in
+`documents/FUZZ_LEDGER.md` kept as a regression.
+
+### 5.1 Why the patches keep coming
+
+Of the 64 ledger rows, 30 are "printer canonical form". At least 10 of
+those came after the brace economy (133dd49), and every one is the same
+mistake: the printer decides "bare is safe" by looking at **the child
+node**, but the parser decides what a token means from **the token stream
+around it**. There are three places where that context leaks out of a
+node, and the printer models none of them in general:
+
+1. **The paren lookahead is non-local.** `script_follows_parens`
+   (parse.rs:408-446) starts at any `(` that begins an atom. It scans raw
+   tokens forward, skips only `{…}` groups, counts `(`/`)` across command
+   arguments, `[…]` options and sibling nodes, and asks whether the
+   matching `)` is followed by `^`, `_`, `'` or a superscript character.
+   So a bare `(` or `)` anywhere later at brace level 0 changes how an
+   earlier `(` parses. This one rule explains primed-close, primed-open,
+   option-paren, `\left((\right)` and the `(` base cases.
+2. **Some groups are not groups.** `unwrap_delimiters`
+   (group_rules.rs:18-36) turns `{[}`, `{]}`, `{ (}` and `{ )}` into bare
+   tokens. `font_scopes` and `convert_infix` (group_rules.rs:143) rewrite
+   `{\rm …}` and `{… \over …}`. A `{…}` the printer adds is only a group if
+   none of these rewrites applies to it.
+3. **Whole-input and text-math rewrites.** `strip_fences`
+   (parse.rs:681) removes a `\(…\)` or `\[…\]` around the whole input and
+   rejects an unclosed one. Text math ends at the first `$` at depth 0
+   (text.rs:205) or at `\)` (text.rs:228).
+
+Hypothesis: the printer keeps producing non-canonical output because
+grouping is decided per node kind, but the hazards are properties of the
+**token sequence**. The fix is to decide grouping on tokens, using the
+parser's own rules, in one place.
+
+### 5.2 The rule
+
+Print each child bare first, as a token list `T` (the tokenizer's tokens,
+not a string). Group it as `{T}` when any of these holds; otherwise keep it
+bare.
+
+- **G1 (reader).** In the child's context `C` (5.3), the parser's reader
+  for `C` would not consume exactly `T` and return the child. This is
+  decided by the table in 5.3, which is a static summary of the reader.
+- **G2 (paren balance).** `T` has an unbalanced `(` or `)` at brace level
+  0, and the child is not a row item handled by 5.4. A child whose parens
+  are balanced at level 0 cannot pair with any paren outside it. (A
+  balanced `(…)` inside `T` is already the child's own business. Whether it
+  becomes a paren script is decided when that child was printed.)
+- **G3 (fake group).** If the group would be `{[}`, `{]}`, `{ (}` or
+  `{ )}`, use two groups (`{{[}}`) or print `(`/`)` without the space
+  (`{(}` is a real group: group_rules.rs:21-23 only match the spaced
+  form).
+
+A group adds one level of depth (drive.rs:321 `push` with `counts`; the
+group's list costs 1). G1-G3 group only when the bare form would reparse
+differently, so the print is never deeper than a source that parses to
+the same tree. That is the depth invariant.
+
+### 5.3 Contexts (G1)
+
+Each row says what the reader does and so when a bare `T` is wrong.
+
+| context | reader (file:line) | bare `T` reparses differently when |
+|---|---|---|
+| **command argument** (`\frac`/`\binom` args, accents, `\not`, `\sqrt` body, `\color`-family bodies, `\phantom`, `\cancelto`, over/under args) | `step_arg` drive.rs:462-486. `{` gives a group, `(` gives a **paren group** (`Kind::paren`), anything else gives one nucleus (drive.rs:540-590) | `T` is not exactly one nucleus: more than one token-level item, starts with `(` (it would read `(…)`), starts with `'`, `^`, `_` or a superscript char ("script has no base", drive.rs:550, 593), or is a nucleus followed by its own scripts |
+| **argument right after a `[…]`-taking command** (`\sqrt`, `\xrightarrow`, `\xleftarrow`) | the command peeks for `[` (drive.rs:1340, 1597) | as above, plus `T` starts with `[` |
+| **optional argument `[…]`** | `Kind::list(Stop::index())`, stops at `]` at group level (parse.rs:399, drive.rs:1050-1060) | `T` has `]` at brace level 0. G2 applies too, because parens inside `[…]` are visible to the lookahead (5.1.1) |
+| **script (sub or sup)** | the script reads one argument via the same `step_arg` path (drive.rs:755-800) | same as a command argument |
+| **script base** | the base is the previous nucleus (drive.rs:494-540). A `(` base starts a lookahead (drive.rs:494-497) | `T` is not one nucleus. `T` ends in `)` that matches a `(` inside `T` (that would become a paren-script base instead of the tree's base). `T` itself ends in a prime superscript (`x'` then `^`: the marks join, drive.rs:765-768, push_prime drive.rs:854) |
+| **prime marks** | `'` is script signal 3 (drive.rs:767). A run stays one flat row (drive.rs:854) | a ′ superscript prints as `'` only when the base is not already primed in a way the reader would merge, and only when not `prime_symbol` (`'` reads back as `\prime`). Otherwise `^{′…}` |
+| **row item** | the list reader takes nuclei in turn. Adjacent ASCII letters join into an operator word with `bare_operators` (drive.rs:603) | the item is a nested Row (it would flatten). It is a bare `'`, `^`, `_` or superscript char (no base). Two letters touch under `bare_operators` (use a space, not a group). Paren rule 5.4 |
+| **`\over` / `\choose`** | `convert_infix` group_rules.rs:143 rewrites `{a \over b}` before parsing | the printer never emits `\over`. Fractions print as `\frac`. A Row containing a bare `\over` token cannot arise from a tree, so no rule |
+| **whole print** | `strip_fences` parse.rs:681 | the print starts with `\(` or `\[` and is longer than that token: group the whole print. Applies **only** to the outermost print, never to a nested body (the 3f5f2d6 bug) |
+| **text math** `\(…\)` / `$…$` inside `\text` | text.rs:95, 205 (first `$` at depth 0 ends `$…$`), text.rs:228 (`\)` closes) | body has `\)` at brace level 0: use `$…$`. It also has `$` at level 0: group the body. Decided on the body exactly as written (unwrapped) |
+| **dimensions** (`\rule`, `\hspace`) | `collect_group_text` parse.rs:587, `parse_tex_dim` parse.rs:1232 | not a grouping question: always `{…}`. The printer must emit the grammar `[+-]?digits[.digits]` + unit, which d5f097d now enforces on input. A NaN `Dim` must be unrepresentable from a parse |
+| **`\left` / `\right` / `\big` delimiters** | `parse_delimiter`. A `(` after them is a delimiter, not a lookahead start | delimiters are never grouped. Their `(`/`)` do not count for G2 or 5.4 (the scan in parse.rs:408 does count them. See open question 5.6.1) |
+
+### 5.4 Row items and the paren lookahead
+
+For a row, the printer runs the same scan as `script_follows_parens` over
+the **emitted token stream**, not over nodes:
+
+1. Emit items bare into a token buffer, tracking brace level.
+2. For every `(` at brace level 0 that begins an atom, find its match by
+   the parse.rs:408 rules (skip `{…}`, count every other `(`/`)`), and
+   check whether the matching `)` is followed by a script signal.
+3. Compare with the tree. A paren-script exists exactly where the tree has
+   `Superscript/Subscript/SubSup(Delimited-paren-group …)` from
+   `Kind::paren`. Where the scan would see a paren-script that the tree
+   lacks, group the **smallest item that contains the matching `)`**.
+   Where the tree has one that the scan misses, the item was printed wrong
+   and that is a bug.
+4. Repeat until stable. Grouping only hides tokens, so this terminates.
+
+This replaces `open_parens`, `closes_open`, `paren_need`, `scripted_paren`,
+`peel_primes`, `ends_with_paren` and the paren half of
+`option_needs_group`. The scan uses the parser's own rules, so a later
+change to the lookahead changes the printer with it.
+
+### 5.5 Implementation sketch
+
+- Print to tokens: `Vec<Token>` through the existing tokenizer types, and
+  render to a string at the end.
+- One function, `needs_group(ctx: Ctx, t: &[Token]) -> Group` with
+  `Group::{Bare, One, Two}`, implementing G1-G3 from the 5.3 table. Plus
+  one row pass for 5.4.
+- Keep `to_latex_with(&ParseOptions)`, because `prime_symbol` and
+  `bare_operators` change the reader.
+- Tests: every seed in `fuzz/corpus/parse/roundtrip-*` and every
+  `FINDINGS` row stay. Add a unit test per 5.3 row, citing the line. The
+  canonical-print and depth properties at 50,000 are the gate.
+
+### 5.6 Open questions for review
+
+1. `script_follows_parens` counts `(` after `\left`/`\big` (parse.rs:408
+   skips only braces), but the delimiter reader consumes them. The printer
+   currently treats them as invisible (`after_delimiter_command`). Should
+   the lookahead skip delimiter tokens instead? That would be a parser
+   change, but it would make 5.4 simpler and local.
+2. Should the lookahead also skip `[…]` options? Then G2 would not apply
+   in options, and option-paren could not happen. This is also a parser
+   change.
+3. Bare command arguments (`\frac 12`, `x^\frac12`) stay as the documented
+   trade-off (TeX and KaTeX reject them). Option: group every command
+   argument that is itself a command with arguments, at the cost of depth
+   +1 per level. The depth property allows that only when the source had
+   the same group.
