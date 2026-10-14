@@ -344,6 +344,18 @@ This release lists every finding and its fix. Nothing in this section is publish
 
 ### Changed
 
+- **Parser: the paren-script lookahead skips delimiters and options**
+  (spec 5, Q1). When a `(` starts an atom, the parser looks for its matching
+  `)` followed by `^`, `_` or `'` to read `(…)^x` as one scripted group. That
+  scan now skips the delimiter after `\left`, `\right`, `\middle` and the
+  `\big` family, and the `[…]` option of `\sqrt`, `\xrightarrow`,
+  `\xleftarrow`, `\color`, `\textcolor`, `\colorbox` and `\fcolorbox`. Those
+  parens belong to their command. Effect: `(\big( a)^2` is now one scripted
+  group (before, the `\big(` hid the match), and `(\big)^2` and
+  `(\sqrt[)^2]{x}` now parse (before, they were errors). Migration: inputs
+  where a `(` paired with a delimiter or an option paren now parse
+  differently. That pairing was never intended.
+
 - **Text mode is a real lexer (documents/TEXT_MODE_SPEC.md).** `\text`,
   `\mbox` and `\intertext` bodies are kept whole by the tokenizer
   (`Token::TextArg`) and lexed by a text-mode grammar. No math pass and no

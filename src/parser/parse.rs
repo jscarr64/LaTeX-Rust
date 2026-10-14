@@ -404,7 +404,10 @@ impl Parser {
     /// True when the `(` at `pos` has a match and the next token is `^`, `_`, or `'`.
     ///
     /// Parens inside a brace group belong to that group: the scan skips
-    /// balanced groups and stops at an unbalanced `}` (spec 3.3).
+    /// balanced groups and stops at an unbalanced `}` (spec 3.3). It also
+    /// skips the delimiter after `\left`, `\right`, `\middle` and the `\big`
+    /// family, and the `[…]` option of a command that takes one, since those
+    /// parens belong to the command (spec 5, Q1).
     fn script_follows_parens(&self) -> bool {
         let mut i = self.pos;
         let mut depth = 0i32;
@@ -420,6 +423,18 @@ impl Parser {
                 }
                 _ if braces > 0 => {}
                 Token::Space => {}
+                Token::Command(name) if is_delimiter_command(name) => {
+                    i = self.skip_spaces_from(i + 1);
+                }
+                Token::Command(name) if takes_option(name) => {
+                    let next = self.skip_spaces_from(i + 1);
+                    if matches!(self.tokens.get(next), Some(Token::Char('['))) {
+                        match self.option_end(next) {
+                            Some(end) => i = end,
+                            None => return false,
+                        }
+                    }
+                }
                 Token::Char('(') => depth += 1,
                 Token::Char(')') => {
                     depth -= 1;
@@ -443,6 +458,31 @@ impl Parser {
             i += 1;
         }
         false
+    }
+
+    /// The first index at or after `i` that is not a space.
+    fn skip_spaces_from(&self, mut i: usize) -> usize {
+        while matches!(self.tokens.get(i), Some(Token::Space)) {
+            i += 1;
+        }
+        i
+    }
+
+    /// The index of the `]` closing the option whose `[` is at `open`,
+    /// skipping brace groups; `None` when it is unclosed.
+    fn option_end(&self, open: usize) -> Option<usize> {
+        let mut braces = 0usize;
+        let mut i = open + 1;
+        while let Some(tok) = self.tokens.get(i) {
+            match tok {
+                Token::BeginGroup => braces += 1,
+                Token::EndGroup => braces = braces.checked_sub(1)?,
+                Token::Char(']') if braces == 0 => return Some(i),
+                _ => {}
+            }
+            i += 1;
+        }
+        None
     }
 
     /// Lexes the [`Token::TextArg`] after a text command (spec 3.2).
@@ -676,6 +716,40 @@ impl Parser {
         }
         Err(ParseError::Unknown(format!("\\{name}")))
     }
+}
+
+/// A command whose next token is a delimiter (`\left(`, `\big)`).
+fn is_delimiter_command(name: &str) -> bool {
+    matches!(
+        name,
+        "left"
+            | "right"
+            | "middle"
+            | "big"
+            | "Big"
+            | "bigg"
+            | "Bigg"
+            | "bigl"
+            | "bigr"
+            | "Bigl"
+            | "Bigr"
+            | "biggl"
+            | "biggr"
+            | "Biggl"
+            | "Biggr"
+            | "bigm"
+            | "Bigm"
+            | "biggm"
+            | "Biggm"
+    )
+}
+
+/// A command that reads a `[…]` option.
+fn takes_option(name: &str) -> bool {
+    matches!(
+        name,
+        "sqrt" | "xrightarrow" | "xleftarrow" | "color" | "textcolor" | "colorbox" | "fcolorbox"
+    )
 }
 
 fn strip_fences(tokens: &[Token]) -> Result<Vec<Token>, ParseError> {
