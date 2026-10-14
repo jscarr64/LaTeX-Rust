@@ -401,88 +401,10 @@ impl Parser {
         }
     }
 
-    /// True when the `(` at `pos` has a match and the next token is `^`, `_`, or `'`.
-    ///
-    /// Parens inside a brace group belong to that group: the scan skips
-    /// balanced groups and stops at an unbalanced `}` (spec 3.3). It also
-    /// skips the delimiter after `\left`, `\right`, `\middle` and the `\big`
-    /// family, and the `[…]` option of a command that takes one, since those
-    /// parens belong to the command (spec 5, Q1).
+    /// True when the `(` at `pos` starts a scripted paren group; see
+    /// [`paren_script_match`].
     fn script_follows_parens(&self) -> bool {
-        let mut i = self.pos;
-        let mut depth = 0i32;
-        let mut braces = 0usize;
-        while let Some(tok) = self.tokens.get(i) {
-            match tok {
-                Token::BeginGroup => braces += 1,
-                Token::EndGroup => {
-                    if braces == 0 {
-                        return false;
-                    }
-                    braces -= 1;
-                }
-                _ if braces > 0 => {}
-                Token::Space => {}
-                Token::Command(name) if is_delimiter_command(name) => {
-                    i = self.skip_spaces_from(i + 1);
-                }
-                Token::Command(name) if takes_option(name) => {
-                    let next = self.skip_spaces_from(i + 1);
-                    if matches!(self.tokens.get(next), Some(Token::Char('['))) {
-                        match self.option_end(next) {
-                            Some(end) => i = end,
-                            None => return false,
-                        }
-                    }
-                }
-                Token::Char('(') => depth += 1,
-                Token::Char(')') => {
-                    depth -= 1;
-                    if depth == 0 {
-                        i += 1;
-                        while matches!(self.tokens.get(i), Some(Token::Space)) {
-                            i += 1;
-                        }
-                        return match self.tokens.get(i) {
-                            Some(Token::Superscript | Token::Subscript | Token::Char('\'')) => true,
-                            Some(Token::Char(c)) if lexicon::is_superscript_char(*c) => true,
-                            _ => false,
-                        };
-                    }
-                    if depth < 0 {
-                        return false;
-                    }
-                }
-                _ => {}
-            }
-            i += 1;
-        }
-        false
-    }
-
-    /// The first index at or after `i` that is not a space.
-    fn skip_spaces_from(&self, mut i: usize) -> usize {
-        while matches!(self.tokens.get(i), Some(Token::Space)) {
-            i += 1;
-        }
-        i
-    }
-
-    /// The index of the `]` closing the option whose `[` is at `open`,
-    /// skipping brace groups; `None` when it is unclosed.
-    fn option_end(&self, open: usize) -> Option<usize> {
-        let mut braces = 0usize;
-        let mut i = open + 1;
-        while let Some(tok) = self.tokens.get(i) {
-            match tok {
-                Token::BeginGroup => braces += 1,
-                Token::EndGroup => braces = braces.checked_sub(1)?,
-                Token::Char(']') if braces == 0 => return Some(i),
-                _ => {}
-            }
-            i += 1;
-        }
-        None
+        paren_script_match(&self.tokens, self.pos).is_some()
     }
 
     /// Lexes the [`Token::TextArg`] after a text command (spec 3.2).
@@ -716,6 +638,90 @@ impl Parser {
         }
         Err(ParseError::Unknown(format!("\\{name}")))
     }
+}
+
+/// The index of the `)` matching the `(` at `pos`, when a script signal
+/// (`^`, `_`, `'` or a superscript character) follows it, so the parser reads
+/// `(…)` as one scripted group. The printer runs the same scan on its own
+/// output (spec 5.4).
+///
+/// Parens inside a brace group belong to that group: the scan skips
+/// balanced groups and stops at an unbalanced `}` (spec 3.3). It also
+/// skips the delimiter after `\left`, `\right`, `\middle` and the `\big`
+/// family, and the `[…]` option of a command that takes one, since those
+/// parens belong to the command (spec 5, Q1).
+pub(crate) fn paren_script_match(tokens: &[Token], pos: usize) -> Option<usize> {
+    let mut i = pos;
+    let mut depth = 0i32;
+    let mut braces = 0usize;
+    while let Some(tok) = tokens.get(i) {
+        match tok {
+            Token::BeginGroup => braces += 1,
+            Token::EndGroup => {
+                if braces == 0 {
+                    return None;
+                }
+                braces -= 1;
+            }
+            _ if braces > 0 => {}
+            Token::Space => {}
+            Token::Command(name) if is_delimiter_command(name) => {
+                i = skip_spaces_from(tokens, i + 1);
+            }
+            Token::Command(name) if takes_option(name) => {
+                let next = skip_spaces_from(tokens, i + 1);
+                if matches!(tokens.get(next), Some(Token::Char('['))) {
+                    i = option_end(tokens, next)?;
+                }
+            }
+            Token::Char('(') => depth += 1,
+            Token::Char(')') => {
+                depth -= 1;
+                if depth == 0 {
+                    let close = i;
+                    let next = skip_spaces_from(tokens, i + 1);
+                    return match tokens.get(next) {
+                        Some(Token::Superscript | Token::Subscript | Token::Char('\'')) => {
+                            Some(close)
+                        }
+                        Some(Token::Char(c)) if lexicon::is_superscript_char(*c) => Some(close),
+                        _ => None,
+                    };
+                }
+                if depth < 0 {
+                    return None;
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    None
+}
+
+/// The first index at or after `i` that is not a space.
+fn skip_spaces_from(tokens: &[Token], mut i: usize) -> usize {
+    while matches!(tokens.get(i), Some(Token::Space)) {
+        i += 1;
+    }
+    i
+}
+
+/// The index of the `]` closing the option whose `[` is at `open`,
+/// skipping brace groups; `None` when it is unclosed.
+fn option_end(tokens: &[Token], open: usize) -> Option<usize> {
+    let mut braces = 0usize;
+    let mut i = open + 1;
+    while let Some(tok) = tokens.get(i) {
+        match tok {
+            Token::BeginGroup => braces += 1,
+            Token::EndGroup => braces = braces.checked_sub(1)?,
+            Token::Char(']') if braces == 0 => return Some(i),
+            _ => {}
+        }
+        i += 1;
+    }
+    None
 }
 
 /// A command whose next token is a delimiter (`\left(`, `\big)`).

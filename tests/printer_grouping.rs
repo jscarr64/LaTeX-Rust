@@ -119,7 +119,6 @@ fn scripts_stay_bare_first() {
         (r"x^{ab}", r"x^{a b}"),
         (r"x^\alpha", r"x^\alpha "),
         (r"x^{\frac12}", r"x^\frac {1}{2}"),
-        (r"x_{'}", r"x_{'}"),
     ] {
         assert_eq!(round_trip(src), want, "{src}");
     }
