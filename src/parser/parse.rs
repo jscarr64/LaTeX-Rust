@@ -542,7 +542,12 @@ impl Parser {
                 Some(Token::Char(c)) => s.push(c),
                 Some(Token::Command(n)) => {
                     if n.len() == 1 {
-                        s.push(n.chars().next().unwrap_or('\\'));
+                        let c = n.chars().next().unwrap_or('\\');
+                        if c.is_whitespace() {
+                            s.push(' ');
+                        } else {
+                            s.push(c);
+                        }
                     } else {
                         s.push('\\');
                         s.push_str(&n);
