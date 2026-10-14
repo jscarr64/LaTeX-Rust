@@ -131,6 +131,19 @@ fn convert_infix(input: &str, kind: InfixKind) -> String {
                     i += len;
                     continue;
                 }
+            } else {
+                // Check if the character after backslash is not ASCII alphabetic
+                let next_char = input[i + 1..].chars().next();
+                if let Some(ch) = next_char {
+                    if !ch.is_ascii_alphabetic() {
+                        if let Some(last_layer) = layers.last_mut() {
+                            last_layer.out.push('\\');
+                            last_layer.out.push(ch);
+                        }
+                        i += 1 + ch.len_utf8();
+                        continue;
+                    }
+                }
             }
         }
         let Some(ch) = input[i..].chars().next() else {
