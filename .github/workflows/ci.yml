@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.83.0
+      - uses: dtolnay/rust-toolchain@1.99.0
         with:
           components: rustfmt, clippy
       - name: fmt
@@ -25,12 +25,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # The lockfile is resolved with the same toolchain as the test job.
-      # cargo-audit 0.22 needs a newer rustc to read the current advisory DB.
-      - uses: dtolnay/rust-toolchain@1.83.0
+      # The lockfile and the audit use the same toolchain as the test job.
+      # cargo-audit 0.22.2 reads the current advisory DB on rustc 1.99.
+      - uses: dtolnay/rust-toolchain@1.99.0
       - name: lockfile
         run: cargo generate-lockfile
-      - uses: dtolnay/rust-toolchain@1.88.0
       - name: cargo-audit
         run: |
           cargo install cargo-audit --version 0.22.2 --locked

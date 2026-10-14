@@ -2,7 +2,7 @@
 name = "latex-rust"
 version = "3.0.0"
 edition = "2021"
-rust-version = "1.82"
+rust-version = "1.99"
 authors = ["Jeffrey S Carr <jscarr1964@gmail.com>"]
 license = "MIT OR Apache-2.0"
 description = "Pure-Rust LaTeX math renderer. Parse to AST, TeX-faithful layout on exact rationals, emit SVG, PNG, or egui shapes. No JavaScript, no webview, no runtime."

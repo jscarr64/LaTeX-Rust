@@ -166,9 +166,8 @@ This release lists every finding and its fix. Nothing in this section is publish
 - `.github/workflows/ci.yml` runs fmt, clippy (`--all-targets
   --all-features -D warnings`), `cargo test`, `cargo test --release`,
   and a 60-second parse fuzz. A separate job resolves the lockfile with
-  rustc 1.83 and runs `cargo audit --deny warnings` with cargo-audit
-  0.22.2 (that binary needs rustc 1.88 to read the current advisory
-  database). `.github/workflows/fuzz-nightly.yml` runs the release
+  rustc 1.99 and runs `cargo audit --deny warnings` with cargo-audit
+  0.22.2 on that same toolchain. `.github/workflows/fuzz-nightly.yml` runs the release
   tests, then parse for 16 minutes and preprocess for 2.
 
 ### Fixed
@@ -199,9 +198,9 @@ This release lists every finding and its fix. Nothing in this section is publish
 - **RUSTSEC-2026-0192, direct dependency.** `ttf-parser` has no patched
   release. This crate no longer depends on it. Outlines and `hmtx` /
   `cmap` / `GSUB` come from `skrifa` 0.39. The MATH table is read here,
-  because `read-fonts` 0.36 (the last release the 1.83 toolchain can
-  build) does not expose MATH. MSRV is 1.82. `MathFont::face` and the
-  `ttf_parser` re-export are gone. `MathParams` carries the
+  because `read-fonts` 0.36 does not expose MATH. `skrifa` stays at
+  0.39. `MathFont::face` and the `ttf_parser` re-export are gone.
+  `MathParams` carries the
   script-placement and stack constants layout already used. PNG and
   egui golds are unchanged.
 
@@ -220,13 +219,23 @@ This release lists every finding and its fix. Nothing in this section is publish
   printed, laid out, and rendered to SVG on a 256 KiB thread, in debug
   and release.
 
+### Changed
+
+- **MSRV is 1.99.** `rust-version` is `"1.99"`. `rust-toolchain.toml`
+  pins channel `1.99` with `clippy` and `rustfmt`. The CI test job, the
+  lockfile step, the audit job, and the release-test step of the nightly
+  fuzz workflow use rustc 1.99. The fuzz compile stays on nightly.
+
+  Migration: a toolchain older than 1.99 cannot build this crate. This
+  is a breaking change.
+
 ### Known issues
 
 The optional `egui` feature still resolves `ttf-parser` 0.25 through
 `egui` 0.28, `epaint`, and `ab_glyph` (RUSTSEC-2026-0192). This crate's
-renderer does not call that parser. `epaint` 0.34 is the release that
-switched the dependency to `skrifa`, and it requires rustc 1.92. The
-1.83 toolchain cannot take it. There is no patched `ttf-parser`.
+renderer does not call that parser. `egui` stays at 0.28, so
+`cargo audit --deny warnings` still fails on that advisory. There is no
+ignore, and there is no patched `ttf-parser`.
 
 3.0.0 is not published.
 

@@ -76,8 +76,8 @@ assert!(svg.contains("<svg"));
 Layout math is exact rationals in this crate. It does not depend on a numeric
 library.
 
-MSRV is **1.82** (`skrifa` 0.39). Optional `egui` 0.28 allows 1.76; the font
-crate is the higher bar.
+MSRV is **1.99**. `rust-toolchain.toml` pins that channel, with clippy and
+rustfmt. Optional `egui` stays at 0.28.
 
 ## Usage
 
@@ -173,8 +173,7 @@ outlines come from `skrifa` in integer font units converted to `Dim`. The
 OpenType MATH table is read in this crate. Glyph outlines become SVG `<path>`
 elements (and PNG/egui meshes when those features are on). The optional
 `egui` 0.28 feature still pulls `ttf-parser` through `ab_glyph`. This
-crate does not call it. The `epaint` release that uses `skrifa` needs
-rustc 1.92.
+crate does not call it. `egui` stays at 0.28.
 
 ## Notes
 
