@@ -401,11 +401,23 @@ impl Parser {
     }
 
     /// True when the `(` at `pos` has a match and the next token is `^`, `_`, or `'`.
+    ///
+    /// Parens inside a brace group belong to that group: the scan skips
+    /// balanced groups and stops at an unbalanced `}` (spec 3.3).
     fn script_follows_parens(&self) -> bool {
         let mut i = self.pos;
         let mut depth = 0i32;
+        let mut braces = 0usize;
         while let Some(tok) = self.tokens.get(i) {
             match tok {
+                Token::BeginGroup => braces += 1,
+                Token::EndGroup => {
+                    if braces == 0 {
+                        return false;
+                    }
+                    braces -= 1;
+                }
+                _ if braces > 0 => {}
                 Token::Space => {}
                 Token::Char('(') => depth += 1,
                 Token::Char(')') => {
