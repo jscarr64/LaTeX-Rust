@@ -2,6 +2,7 @@
 
 use crate::color::Color;
 use crate::dim::Dim;
+use crate::parser::parse::lexicon::is_superscript_char;
 
 /// TeX math atom class (Appendix G).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1350,13 +1351,22 @@ impl MathNode {
     /// source that built the tree, so compare trees, then compare a reprint
     /// to a reprint. It is not a byte-preserving formatter.
     ///
-    /// Every script base and script argument, every accent body, every
-    /// fraction argument, and every `\overset` / `\underset` argument is
-    /// braced. An alphabetic control word is followed by a space, so
-    /// `\sin x` does not become `\sinx`. `\overline` is that full command.
+    /// Braces are spent only where the parser needs them, so a reprint never
+    /// nests deeper than any source of the same tree. An argument that is a
+    /// single nucleus prints bare (`\frac 12`, `x_a`, `\frac 1\frac 12`), a
+    /// row argument is one group, an empty one is `{}`, and row items print
+    /// bare unless one would change meaning (a nested row, a superscript
+    /// character, a scripted `)` that would close an open `(`). Superscript
+    /// primes print as `'` marks. An alphabetic control word is followed by
+    /// a space, so `\sin x` does not become `\sinx`, and two bare letters
+    /// are split by a space. `\overline` is that full command.
+    ///
+    /// A bare command argument such as `\frac 1\frac 12` is read by this
+    /// parser and by MathJax, not by TeX or KaTeX.
     ///
     /// A [`MathNode::Fraction`] prints as the command in its [`FracStyle`].
-    /// `\over` is stored as [`FracStyle::Frac`], so it prints as `\frac`.
+    /// `\over` is stored as [`FracStyle::Frac`], so it prints as `\frac`;
+    /// `\choose` and `\binom` print as `\binom`.
     ///
     /// A [`MathNode::Color`] is its own group. A color nested in a row
     /// therefore does not swallow the nodes that follow it.
@@ -1780,8 +1790,8 @@ fn write_node<'a>(out: &mut LatexBuf<'a>, node: &'a MathNode) {
         MathNode::Atom(c, _) => write_atom(out, *c),
         MathNode::Fraction(style, num, den) => {
             write_cmd(out, style.gold());
-            write_group(out, num);
-            write_group(out, den);
+            write_arg(out, num);
+            write_arg(out, den);
         }
         MathNode::Radical(index, body) => {
             write_cmd(out, "sqrt");
@@ -1790,17 +1800,29 @@ fn write_node<'a>(out: &mut LatexBuf<'a>, node: &'a MathNode) {
                 out.node(index);
                 out.push(']');
             }
-            write_group(out, body);
+            write_arg_after_option(out, body);
         }
         MathNode::Superscript(base, sup) => write_scripts(out, base, None, Some(sup)),
         MathNode::Subscript(base, sub) => write_scripts(out, base, Some(sub), None),
         MathNode::SubSup(base, sub, sup) => write_scripts(out, base, Some(sub), Some(sup)),
         MathNode::Delimited(open, body, close) => {
-            write_cmd(out, "left");
-            write_delim(out, open);
-            out.node(body);
-            write_cmd(out, "right");
-            write_delim(out, close);
+            // `\binom` parses to this tree and costs one level less.
+            if let (
+                Delimiter::Char('('),
+                Delimiter::Char(')'),
+                MathNode::Fraction(FracStyle::Frac, n, d),
+            ) = (open, close, body.as_ref())
+            {
+                write_cmd(out, "binom");
+                write_arg(out, n);
+                write_arg(out, d);
+            } else {
+                write_cmd(out, "left");
+                write_delim(out, open);
+                out.node(body);
+                write_cmd(out, "right");
+                write_delim(out, close);
+            }
         }
         MathNode::SizedDelim(delim, size, kind) => {
             out.push('\\');
@@ -1849,12 +1871,25 @@ fn write_node<'a>(out: &mut LatexBuf<'a>, node: &'a MathNode) {
         }
         MathNode::Accent(body, kind) => {
             write_cmd(out, kind.gold());
-            write_group(out, body);
+            write_arg(out, body);
         }
         MathNode::CancelTo(value, expr) => {
             write_cmd(out, "cancelto");
-            write_group(out, value);
-            write_group(out, expr);
+            write_arg(out, value);
+            write_arg(out, expr);
+        }
+        MathNode::Text(text, style)
+            if *style != TextStyle::Text
+                && text.as_str().is_some_and(|t| {
+                    t.len() == 1 && t.chars().all(|c| c.is_ascii_alphabetic())
+                }) =>
+        {
+            // One letter is one token: `\mathit o` costs a level less than
+            // `\mathit{o}`, the same as the `{\it -o}` it may come from.
+            write_cmd(out, style_cmd(*style));
+            if let Some(t) = text.as_str() {
+                out.push_str(t);
+            }
         }
         MathNode::Text(text, style) => {
             if *style == TextStyle::Text
@@ -1894,7 +1929,7 @@ fn write_node<'a>(out: &mut LatexBuf<'a>, node: &'a MathNode) {
         MathNode::Strut(height, depth) => write_strut(out, height, depth),
         MathNode::Phantom(kind, body) => {
             write_cmd(out, kind.gold());
-            write_group(out, body);
+            write_arg(out, body);
         }
     }
 }
@@ -1919,28 +1954,94 @@ fn prime_run(node: &MathNode) -> Option<&[MathNode]> {
     }
 }
 
+/// True for a superscript that prints as `'` marks: one `′` atom or a run.
+fn is_primes(sup: &MathNode) -> bool {
+    matches!(sup, MathNode::Atom('′', AtomKind::Ord))
+        || prime_run(sup).is_some_and(|items| {
+            items
+                .iter()
+                .all(|item| matches!(item, MathNode::Atom('′', AtomKind::Ord)))
+        })
+}
+
 fn write_scripts<'a>(
     out: &mut LatexBuf<'a>,
     base: &'a MathNode,
     sub: Option<&'a MathNode>,
     sup: Option<&'a MathNode>,
 ) {
-    write_group(out, base);
+    match base {
+        MathNode::Row(items) if items.is_empty() => out.push_str("{}"),
+        // `x'^a` parses as `(x')^a` and `x_b'^a` as `(x_b')^a`, so a primed base needs no braces when
+        // only a superscript follows.
+        MathNode::Superscript(_, prime) | MathNode::SubSup(_, _, prime)
+            if sub.is_none() && is_primes(prime) =>
+        {
+            out.node(base)
+        }
+        // A lone bracket is a nucleus here, though not as an argument.
+        MathNode::Atom('(' | ')' | '[', _) => out.node(base),
+        _ if bare_arg(base) && !scripted_paren(base) => out.node(base),
+        _ => write_group(out, base),
+    }
     if let Some(sub) = sub {
         out.push('_');
-        write_group(out, sub);
+        // A bare `(` base opens a paren a `)` at the end of the subscript
+        // could close.
+        let open = usize::from(matches!(base, MathNode::Atom('(', _)));
+        if sup.is_some() && bare_arg(sub) && (scripted_paren(sub) || closes_open(sub, open)) {
+            write_group(out, sub);
+        } else {
+            write_arg(out, sub);
+        }
     }
-    if let Some(sup) = sup {
-        out.push('^');
-        match prime_run(sup) {
-            Some(items) => {
-                out.push('{');
-                for item in items {
-                    out.node(item);
-                }
-                out.push('}');
+    let Some(sup) = sup else {
+        return;
+    };
+    if matches!(sup, MathNode::Atom('′', AtomKind::Ord)) {
+        out.push('\'');
+        return;
+    }
+    match prime_run(sup) {
+        Some(items)
+            if items
+                .iter()
+                .all(|item| matches!(item, MathNode::Atom('′', AtomKind::Ord))) =>
+        {
+            for _ in items {
+                out.push('\'');
             }
-            None => write_group(out, sup),
+        }
+        Some(items) => {
+            out.push_str("^{");
+            for item in items {
+                out.node(item);
+            }
+            out.push('}');
+        }
+        None => {
+            // Primes after a superscript join it: `x^a''` is the row of the
+            // old superscript and the primes. Print them as marks after the
+            // argument.
+            let (core, marks) = match sup {
+                MathNode::Row(items) => match items.split_first() {
+                    Some((rest, tail))
+                        if !tail.is_empty()
+                            && tail
+                                .iter()
+                                .all(|item| matches!(item, MathNode::Atom('′', AtomKind::Ord))) =>
+                    {
+                        (rest, tail.len())
+                    }
+                    _ => (sup, 0),
+                },
+                _ => (sup, 0),
+            };
+            out.push('^');
+            write_arg(out, core);
+            for _ in 0..marks {
+                out.push('\'');
+            }
         }
     }
 }
@@ -1954,11 +2055,11 @@ fn write_op_scripts<'a>(
     write_cmd(out, name);
     if let Some(sub) = sub {
         out.push('_');
-        write_group(out, sub);
+        write_arg(out, sub);
     }
     if let Some(sup) = sup {
         out.push('^');
-        write_group(out, sup);
+        write_arg(out, sup);
     }
 }
 
@@ -1968,15 +2069,260 @@ fn write_group<'a>(out: &mut LatexBuf<'a>, node: &'a MathNode) {
     out.push('}');
 }
 
-/// Brace each child so a nested row stays nested, and so `<` `=` and a run of
-/// letters are not glued back into a relation or a bare operator.
 fn write_row<'a>(out: &mut LatexBuf<'a>, items: &'a [MathNode]) {
     if items.is_empty() {
         out.push_str("{}");
         return;
     }
+    write_row_items(out, items);
+}
+
+/// Row items print bare unless the parser would read them back differently:
+/// a nested row stays a group, a prime would attach to its neighbour, and a
+/// scripted `)` after an open `(` would turn into a scripted paren group.
+/// Two bare letters are split by a space so they do not form an operator word.
+fn write_row_items<'a>(out: &mut LatexBuf<'a>, items: &'a [MathNode]) {
+    let mut open_parens = 0usize;
+    let mut prev_letter = false;
     for item in items {
-        write_group(out, item);
+        let braced = match item {
+            MathNode::Row(_) => true,
+            MathNode::Atom(c, _) => *c == '\'' || is_superscript_char(*c),
+            MathNode::Superscript(base, _) | MathNode::Subscript(base, _) => {
+                closes_open(base, open_parens)
+            }
+            MathNode::SubSup(base, sub, _) => {
+                closes_open(base, open_parens) || closes_open(sub, open_parens)
+            }
+            _ => false,
+        };
+        let letter = !braced && matches!(item, MathNode::Atom(c, _) if c.is_ascii_alphabetic());
+        if letter && prev_letter {
+            out.push(' ');
+        }
+        prev_letter = letter;
+        if braced {
+            match item {
+                MathNode::Row(inner) if inner.is_empty() => out.push_str("{}"),
+                _ => write_group(out, item),
+            }
+            continue;
+        }
+        match item {
+            MathNode::Atom('(', _) => open_parens += 1,
+            MathNode::Superscript(base, _)
+            | MathNode::Subscript(base, _)
+            | MathNode::SubSup(base, ..)
+                if matches!(base.as_ref(), MathNode::Atom('(', _)) =>
+            {
+                open_parens += 1;
+            }
+            MathNode::Atom(')', _) => open_parens = open_parens.saturating_sub(1),
+            _ => {}
+        }
+        out.node(item);
+    }
+}
+
+/// True when the final `)` of `node` would close one of the `open` bare `(`
+/// before it in the row, so a script after it reads as a scripted paren group.
+fn closes_open(node: &MathNode, open: usize) -> bool {
+    matches!(paren_need(node), Some(k) if k >= 1 && k <= open)
+}
+
+/// True when `node` prints as exactly one nucleus, so an argument needs no
+/// braces around it.
+fn bare_arg(node: &MathNode) -> bool {
+    let mut node = node;
+    loop {
+        return match node {
+            MathNode::Atom(c, _) => {
+                !c.is_whitespace()
+                    && !is_superscript_char(*c)
+                    && !matches!(
+                        *c,
+                        '(' | ')' | '[' | '\'' | '^' | '_' | '&' | '#' | '~' | '$'
+                    )
+            }
+            MathNode::Row(_)
+            | MathNode::Superscript(..)
+            | MathNode::Subscript(..)
+            | MathNode::SubSup(..)
+            | MathNode::Color(..)
+            | MathNode::Ref(_)
+            | MathNode::Tag { .. }
+            | MathNode::Label(_)
+            | MathNode::NoNumber
+            | MathNode::Hline
+            | MathNode::Intertext(_) => false,
+            MathNode::Operator(name, limits) => match operator_limits(name) {
+                Some(default) => default == *limits,
+                None => !*limits,
+            },
+            MathNode::Sum(lo, hi) | MathNode::Product(lo, hi) | MathNode::Integral(_, lo, hi) => {
+                lo.is_none() && hi.is_none()
+            }
+            MathNode::Limit(lo) => lo.is_none(),
+            MathNode::OverUnder(base, None, None) => {
+                node = base;
+                continue;
+            }
+            MathNode::OverUnder(base, ..) => !matches!(
+                base.as_ref(),
+                MathNode::Accent(_, AccentKind::Overbrace | AccentKind::Underbrace)
+            ),
+            _ => true,
+        };
+    }
+}
+
+/// True when a bare print of `node` ends in a `)` token. A script right
+/// after it could make an earlier `(` read as a scripted paren group.
+fn ends_with_paren(node: &MathNode) -> bool {
+    let mut node = node;
+    loop {
+        let last = match node {
+            MathNode::Delimited(Delimiter::Char('('), body, Delimiter::Char(')'))
+                if matches!(body.as_ref(), MathNode::Fraction(FracStyle::Frac, ..)) =>
+            {
+                // Printed as `\binom`, which ends in its second argument.
+                match body.as_ref() {
+                    MathNode::Fraction(_, _, d) => d.as_ref(),
+                    _ => return true,
+                }
+            }
+            MathNode::Delimited(_, _, Delimiter::Char(')')) => return true,
+            MathNode::SizedDelim(Delimiter::Char(')'), ..) | MathNode::Atom(')', _) => return true,
+            MathNode::Fraction(_, _, last)
+            | MathNode::Radical(_, last)
+            | MathNode::Accent(last, _)
+            | MathNode::CancelTo(_, last)
+            | MathNode::Phantom(_, last)
+            | MathNode::TextColor(_, last)
+            | MathNode::ColorBox(_, last)
+            | MathNode::FColorBox(_, _, last) => last.as_ref(),
+            _ => return false,
+        };
+        if !bare_arg(last) {
+            return false;
+        }
+        node = last;
+    }
+}
+
+/// True when `node`, printed bare and followed by a script, ends in a `)`
+/// that closes a `(` inside its own print where the parser starts a paren
+/// lookahead.
+fn scripted_paren(node: &MathNode) -> bool {
+    paren_need(node) == Some(0)
+}
+
+/// How a bare print of `node` ending in `)` pairs that `)` when a script
+/// follows. `None`: no hazard (no final `)`, or it closes a `(` consumed by
+/// `\left` or a `\big` command). `Some(0)`: it closes a lookahead `(`
+/// inside the print. `Some(k)`: it closes the `k`-th unmatched `(` before
+/// the print. The scan walks backwards, skipping brace groups and escaped
+/// characters.
+fn paren_need(node: &MathNode) -> Option<usize> {
+    if !ends_with_paren(node) {
+        return None;
+    }
+    let printed = node.to_latex();
+    let chars: Vec<char> = printed.trim_end().chars().collect();
+    let mut parens = 0usize;
+    let mut braces = 0usize;
+    let mut i = chars.len();
+    while i > 0 {
+        i -= 1;
+        let escaped = i > 0 && chars.get(i - 1) == Some(&'\\');
+        match chars.get(i) {
+            Some('}') if !escaped => braces += 1,
+            Some('{') if !escaped => braces = braces.saturating_sub(1),
+            Some(')') if !escaped && braces == 0 => parens += 1,
+            Some('(') if !escaped && braces == 0 => {
+                parens = parens.saturating_sub(1);
+                if parens == 0 {
+                    if after_delimiter_command(chars.get(..i).unwrap_or(&[])) {
+                        return None;
+                    }
+                    return Some(0);
+                }
+            }
+            _ => {}
+        }
+    }
+    (parens > 0).then_some(parens)
+}
+
+/// True when `before` ends with `\left`, `\right` or a `\big`-family
+/// command, optionally followed by spaces.
+fn after_delimiter_command(before: &[char]) -> bool {
+    let mut end = before.len();
+    while end > 0 && before.get(end - 1) == Some(&' ') {
+        end -= 1;
+    }
+    let mut start = end;
+    while start > 0
+        && before
+            .get(start - 1)
+            .is_some_and(|c| c.is_ascii_alphabetic())
+    {
+        start -= 1;
+    }
+    if start == 0 || before.get(start - 1) != Some(&'\\') {
+        return false;
+    }
+    let name: String = before.get(start..end).unwrap_or(&[]).iter().collect();
+    matches!(
+        name.as_str(),
+        "left"
+            | "right"
+            | "middle"
+            | "big"
+            | "Big"
+            | "bigg"
+            | "Bigg"
+            | "bigl"
+            | "Bigl"
+            | "biggl"
+            | "Biggl"
+            | "bigr"
+            | "Bigr"
+            | "biggr"
+            | "Biggr"
+            | "bigm"
+            | "Bigm"
+            | "biggm"
+            | "Biggm"
+    )
+}
+
+/// An argument right after a command that takes `[…]`: a lone `[` keeps two
+/// groups, since `{[}` is read as a bare `[` and would open the option.
+fn write_arg_after_option<'a>(out: &mut LatexBuf<'a>, node: &'a MathNode) {
+    if matches!(node, MathNode::Atom('[', _)) {
+        out.push('{');
+        write_group(out, node);
+        out.push('}');
+    } else {
+        write_arg(out, node);
+    }
+}
+
+/// A command or script argument with the fewest braces that parse back to
+/// the same node: an empty row is `{}`, a row is one group, a color is its
+/// own group, and a single nucleus is bare.
+fn write_arg<'a>(out: &mut LatexBuf<'a>, node: &'a MathNode) {
+    match node {
+        MathNode::Row(items) if items.is_empty() => out.push_str("{}"),
+        MathNode::Row(items) => {
+            out.push('{');
+            write_row_items(out, items);
+            out.push('}');
+        }
+        MathNode::Color(..) => out.node(node),
+        _ if bare_arg(node) => out.node(node),
+        _ => write_group(out, node),
     }
 }
 
@@ -2058,14 +2404,14 @@ fn write_over_under<'a>(
 ) {
     if let MathNode::Accent(body, kind @ (AccentKind::Overbrace | AccentKind::Underbrace)) = base {
         write_cmd(out, kind.gold());
-        write_group(out, body);
+        write_arg(out, body);
         if let Some(under) = under {
             out.push('_');
-            write_group(out, under);
+            write_arg(out, under);
         }
         if let Some(over) = over {
             out.push('^');
-            write_group(out, over);
+            write_arg(out, over);
         }
         return;
     }
@@ -2083,7 +2429,7 @@ fn write_over_under<'a>(
                 out.push(']');
             }
             if let Some(over) = over {
-                write_group(out, over);
+                write_arg_after_option(out, over);
             }
             return;
         }
@@ -2091,22 +2437,20 @@ fn write_over_under<'a>(
     match (over, under) {
         (Some(over), Some(under)) => {
             write_cmd(out, "overset");
-            write_group(out, over);
-            out.push('{');
+            write_arg(out, over);
             write_cmd(out, "underset");
-            write_group(out, under);
-            write_group(out, base);
-            out.push('}');
+            write_arg(out, under);
+            write_arg(out, base);
         }
         (Some(over), None) => {
             write_cmd(out, "overset");
-            write_group(out, over);
-            write_group(out, base);
+            write_arg(out, over);
+            write_arg(out, base);
         }
         (None, Some(under)) => {
             write_cmd(out, "underset");
-            write_group(out, under);
-            write_group(out, base);
+            write_arg(out, under);
+            write_arg(out, base);
         }
         (None, None) => out.node(base),
     }
@@ -2135,7 +2479,7 @@ fn write_paint<'a>(
     if let Some(second) = second {
         push_html(out, second);
     }
-    write_group(out, body);
+    write_arg(out, body);
 }
 
 fn write_operator(out: &mut LatexBuf<'_>, name: &str, limits: bool) {

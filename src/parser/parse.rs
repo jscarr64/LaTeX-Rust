@@ -14,7 +14,7 @@ use super::token::{tokenize, Token};
 use crate::color::{parse_color_spec, Color, ColorTable};
 
 mod drive;
-mod lexicon;
+pub(crate) mod lexicon;
 use crate::dim::Dim;
 use crate::error::{Error, ParseError};
 use crate::symbols::{lookup, SymbolKind as CatalogKind};

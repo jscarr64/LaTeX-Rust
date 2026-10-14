@@ -7,7 +7,7 @@
 
 use crate::parser::ast::{MathNode, TextRun, TextStyle};
 
-pub(super) fn is_superscript_char(c: char) -> bool {
+pub(crate) fn is_superscript_char(c: char) -> bool {
     superscript_base(c).is_some()
 }
 
