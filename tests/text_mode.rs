@@ -115,10 +115,7 @@ fn crash_seed_verdicts() {
         Err(malformed("unexpected token # in text"))
     );
     // G7: `\over` is not a text command (R3).
-    assert_eq!(
-        parse(")\\text{\\over\0{\\{ }}"),
-        Err(unknown("\\over"))
-    );
+    assert_eq!(parse(")\\text{\\over\0{\\{ }}"), Err(unknown("\\over")));
 }
 
 /// Section 2.3, one row each.

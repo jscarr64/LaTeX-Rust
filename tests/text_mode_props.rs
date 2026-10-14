@@ -162,10 +162,9 @@ fn canon_items(items: &[Item], out: &mut Vec<Canon>) {
             Item::Tilde => out.push(Canon::Other("~".into())),
             Item::Sym(_, print) => out.push(Canon::Other((*print).into())),
             Item::Group(v) => canon_items(v, out),
-            Item::Nested(_, cmd, v) => out.push(Canon::Other(format!(
-                "\\{cmd} {{{}}}",
-                canon_run(v)
-            ))),
+            Item::Nested(_, cmd, v) => {
+                out.push(Canon::Other(format!("\\{cmd} {{{}}}", canon_run(v))))
+            }
             Item::Math(m, _) => {
                 let printed = parse(m).map(|n| n.to_latex()).unwrap_or_default();
                 out.push(Canon::Other(format!("\\({printed}\\)")));
@@ -298,21 +297,24 @@ fn prop_e_injected_errors_are_typed() {
             ("\\)", "M:unmatched math shift in text"),
         ][..],
     );
-    let result = runner().run(&(body(), any::<prop::sample::Index>(), bad), |(items, at, (inj, want))| {
-        let at = at.index(items.len() + 1);
-        let mut s = String::from("\\text{");
-        source(&items[..at], &mut s);
-        s.push_str(inj);
-        source(&items[at..], &mut s);
-        s.push('}');
-        let want = match want.split_once(':') {
-            Some(("U", n)) => ParseError::Unknown(n.into()),
-            Some((_, m)) => ParseError::Malformed(m.into()),
-            None => unreachable!(),
-        };
-        prop_assert_eq!(parse(&s), Err(want), "{:?}", s);
-        Ok(())
-    });
+    let result = runner().run(
+        &(body(), any::<prop::sample::Index>(), bad),
+        |(items, at, (inj, want))| {
+            let at = at.index(items.len() + 1);
+            let mut s = String::from("\\text{");
+            source(&items[..at], &mut s);
+            s.push_str(inj);
+            source(&items[at..], &mut s);
+            s.push('}');
+            let want = match want.split_once(':') {
+                Some(("U", n)) => ParseError::Unknown(n.into()),
+                Some((_, m)) => ParseError::Malformed(m.into()),
+                None => unreachable!(),
+            };
+            prop_assert_eq!(parse(&s), Err(want), "{:?}", s);
+            Ok(())
+        },
+    );
     if let Err(e) = result {
         panic!("{e}");
     }

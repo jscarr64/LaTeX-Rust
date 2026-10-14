@@ -53,10 +53,7 @@ fn control_whitespace_in_text_is_a_space() {
 /// preprocessor unbraces.
 #[test]
 fn text_groups_survive_the_preprocessor() {
-    for input in [
-        "\\text{\\ (}",
-        "\\text{\\ ( }",
-    ] {
+    for input in ["\\text{\\ (}", "\\text{\\ ( }"] {
         round_trip(input);
     }
 }
@@ -121,11 +118,7 @@ fn vertical_tab_and_form_feed_are_whitespace() {
 /// counted an escaped `\{` as a group, so printed text was rewritten.
 #[test]
 fn escaped_backslash_and_brace_hide_infix_commands() {
-    for input in [
-        "\\text{\\{a\\}}",
-        "{a \\over b}",
-        "{\\{a\\} \\choose b}",
-    ] {
+    for input in ["\\text{\\{a\\}}", "{a \\over b}", "{\\{a\\} \\choose b}"] {
         round_trip(input);
     }
     // `\over` and `\choose` in text are not valid TeX and `\text{\over}` was
