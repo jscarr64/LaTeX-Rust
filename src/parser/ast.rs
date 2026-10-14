@@ -1354,18 +1354,17 @@ impl MathNode {
     /// source that built the tree, so compare trees, then compare a reprint
     /// to a reprint. It is not a byte-preserving formatter.
     ///
-    /// Braces are spent only where the parser needs them, so a reprint never
-    /// nests deeper than any source of the same tree. An argument that is a
-    /// single nucleus prints bare (`\frac 12`, `x_a`, `\frac 1\frac 12`), a
-    /// row argument is one group, an empty one is `{}`, and row items print
-    /// bare unless one would change meaning (a nested row, a superscript
-    /// character, a scripted `)` that would close an open `(`). Superscript
+    /// Braces follow one rule based on the parser's grouping rules
+    /// (documents/TEXT_MODE_SPEC.md section 5), and a reprint never nests
+    /// deeper than any source of the same tree. Command arguments always
+    /// print braced (`\frac {1}{2}`). A script argument that is a single
+    /// nucleus prints bare (`x_a`), a row is one group, and an empty
+    /// argument is `{}`. Row items print bare unless one would change
+    /// meaning: a nested row, a superscript character, or a `)` that the
+    /// parser's paren lookahead would pair with an earlier `(`. Superscript
     /// primes print as `'` marks. An alphabetic control word is followed by
     /// a space, so `\sin x` does not become `\sinx`, and two bare letters
     /// are split by a space. `\overline` is that full command.
-    ///
-    /// A bare command argument such as `\frac 1\frac 12` is read by this
-    /// parser and by MathJax, not by TeX or KaTeX.
     ///
     /// A [`MathNode::Fraction`] prints as the command in its [`FracStyle`].
     /// `\over` is stored as [`FracStyle::Frac`], so it prints as `\frac`;

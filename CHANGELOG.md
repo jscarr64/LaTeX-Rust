@@ -419,27 +419,27 @@ This release lists every finding and its fix. Nothing in this section is publish
   `\textasciitilde{}` for those characters, `\(…\)` for inline math, and no
   more leading `\ `, `\[`, `\]` escapes (G3), since a text body is opaque.
 
-- **Brace economy in `to_latex`.** A reprint never nests deeper than any
-  source of the same tree. An argument that is one nucleus prints bare
-  (`\frac 12`, `x_a`, `\sqrt a`, `\hat x`, `x^\frac 12`), a row argument is
-  one group, an empty argument is `{}`, and row items print bare unless that
-  would change the tree (a nested row, a superscript character, a scripted
-  `)` that would close an open `(`). Two bare letters are split by a space so
-  `bare_operators` does not join them. `\binom` replaces
-  `\left(\frac…\right)` for that tree, superscript primes print as `'`
-  marks (`x'`, `x_a'`, `x^a''`), and a one-letter styled run prints as
-  `\mathit o`.
+- **Grouping in `to_latex` (documents/TEXT_MODE_SPEC.md section 5).** A
+  reprint never nests deeper than any source of the same tree, and braces
+  come from one rule based on the parser's own grouping rules, not from
+  per-node patches. Command arguments always print braced (`\frac {1}{2}`,
+  `\sqrt {x}`, `\hat {x}`, `\mathbf {x}`). Script arguments print bare
+  when they are one nucleus (`x^2`, `x_a`, `x^\alpha`), and otherwise as
+  one group. An empty argument is `{}`. Row items print bare unless that
+  would change the tree: a nested row, a superscript character, or an item
+  whose `)` the parser's paren lookahead would pair with an earlier `(`.
+  Two bare letters are split by a space, so `bare_operators` does not join
+  them. `\binom` replaces `\left(\frac…\right)` for that tree, and
+  superscript primes print as `'` marks (`x'`, `x_a'`, `x^a''`).
 
-  Trade-off: a fraction or other command inside an argument also prints
-  bare, `\frac 1\frac 12` for `\frac{1}{\frac{1}{2}}`, because this parser
-  (like MathJax) reads that form at one level less per fraction, and the
-  `{a \over b \over c}` rewrite already produced it. TeX and KaTeX do not
-  read it. Callers that pass `to_latex` output to TeX should not rely on
-  it.
+  The parser still reads bare command arguments (`\frac12`, which TeX and
+  KaTeX also accept, and `\frac 1\frac 12`, which TeX does not read as one
+  argument). The printer no longer produces the second form.
 
   Migration: compare trees, not strings. Examples of the new output:
-  `{x}^{2}` is `x^2`, `\frac {1}{2}` is `\frac 12`, `{x}^{′′}` is `x''`,
-  `{a}{b}` is `a b`, `\left (\frac {n}{k}\right )` is `\binom nk`.
+  `{x}^{2}` is `x^2`, `{x}^{′′}` is `x''`, `{a}{b}` is `a b`,
+  `\left (\frac {n}{k}\right )` is `\binom {n}{k}`. `\frac {1}{2}` is
+  unchanged from 2.x.
 
   API addition: `MathNode::to_latex_with(&ParseOptions)`. With
   `prime_symbol` on, `'` reads back as `\prime`, so this keeps a literal `′`

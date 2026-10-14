@@ -298,8 +298,9 @@ A `MathNode::Text` prints by its style:
 
 - `TextStyle::Text`: `\text{` print_run `}`.
 - a math font (`Rm`, `Bf`, `It`, `Sf`, `Tt`, `Bb`, `Cal`, `Frak`, `Scr`,
-  `Boldsymbol`, `Pmb`) whose run is only ASCII letters: `\mathX{` run `}`, or
-  `\mathX c` for one letter (one token, one level less).
+  `Boldsymbol`, `Pmb`) whose run is only ASCII letters: `\mathX{` run `}`.
+  (An earlier build printed `\mathX c` for one letter; spec 5, Q2 braces
+  every command argument, and a braced argument now costs no extra depth.)
 - a math font whose run is anything else: the double wrap
   `\mathX{\text{` print_run `}}`. A math font argument is math, so spaces,
   digits and punctuation in the run would be re-read as math atoms; the
@@ -382,9 +383,10 @@ README link resolves in the published crate.
 end `\(…\)` early, so such a body prints as `$…$` (or `\({…}\)` if it also has
 a `$`), per 2.5. Seed `roundtrip-canon-text-math-close`.
 
-## 5. Printer grouping spec (proposed, not implemented)
+## 5. Printer grouping spec
 
-Status: proposal for review (Oct 14). Nothing below is built yet. It replaces
+Status: approved by Paul on Oct 14 with Q1 and Q2 (5.6), and built (see
+5.7). It replaces
 the case-by-case brace rules in `src/parser/ast.rs` (`bare_arg`,
 `closes_open`, `paren_need`, `option_needs_group`, the fence wrap, the
 text-math `$` choice) with one decision. The acceptance gate is the
@@ -502,18 +504,51 @@ change to the lookahead changes the printer with it.
   `FINDINGS` row stay. Add a unit test per 5.3 row, citing the line. The
   canonical-print and depth properties at 50,000 are the gate.
 
-### 5.6 Open questions for review
+### 5.6 Decisions (were open questions)
 
-1. `script_follows_parens` counts `(` after `\left`/`\big` (parse.rs:408
-   skips only braces), but the delimiter reader consumes them. The printer
-   currently treats them as invisible (`after_delimiter_command`). Should
-   the lookahead skip delimiter tokens instead? That would be a parser
-   change, but it would make 5.4 simpler and local.
-2. Should the lookahead also skip `[…]` options? Then G2 would not apply
-   in options, and option-paren could not happen. This is also a parser
-   change.
-3. Bare command arguments (`\frac 12`, `x^\frac12`) stay as the documented
-   trade-off (TeX and KaTeX reject them). Option: group every command
-   argument that is itself a command with arguments, at the cost of depth
-   +1 per level. The depth property allows that only when the source had
-   the same group.
+1. **Q1, approved: the lookahead skips delimiter tokens.** `paren_script_match`
+   (parse.rs, used by `script_follows_parens`) skips the token after
+   `\left`, `\right`, `\middle` and the `\big` family. This is a parser
+   change, and it has a CHANGELOG entry.
+2. **Q1, approved: the lookahead skips `[…]` options** of `\sqrt`,
+   `\xrightarrow`, `\xleftarrow`, `\color`, `\textcolor`, `\colorbox` and
+   `\fcolorbox`. So G2 no longer applies inside options; only a top-level
+   `]` groups an option.
+3. **Q2, approved: bare command arguments still parse, but print braced.**
+   Correction to the earlier text of this item: TeX and KaTeX do accept
+   single-token arguments such as `\frac12`. What TeX does not read as
+   intended is an argument that is itself a command with arguments
+   (`\frac 1\frac 12`): it is not one token. The parser keeps reading all of
+   these (MathJax does too). The printer now always braces a command
+   argument (`\frac {1}{2}`). Script arguments stay bare-first (G1:
+   `x^a`, `x^\alpha`, `x^\frac {1}{2}`).
+
+### 5.7 As built
+
+- **Depth model (parser, Q2).** A `{…}` group that is itself a command or
+  script argument costs no extra level (drive.rs `GroupPhase::ArgOpen`).
+  `\frac{a}{b}` and `\frac ab` cost the same, so always bracing never
+  nests deeper than the source. The depth property holds at 50,000 cases.
+- **G1** is `bare_arg` (the static summary of the nucleus reader). It is
+  used for script arguments and script bases. Command arguments skip G1,
+  because they are always braced (`write_arg`).
+- **G2** is satisfied structurally. With Q1 and Q2, a bare level-0 paren
+  can only come from a bare `(`/`)` atom or a script base, and the row
+  pass handles both. `bare_arg` keeps `(`, `)` and `[` out of script
+  arguments.
+- **G3** is applied where a fake group would change the tree: a lone `[`
+  right after an option-taking command (`\sqrt {{[}}`), and a lone `]` in
+  an option (`[{{]}}]`). Elsewhere `{[}` reading as a bare `[` gives the
+  same tree, so one group is kept, which keeps depth equal to the source.
+- **Row paren pass** (`paren_groups`, ast.rs). It tokenizes the row as
+  printed (tokenize + group_rules, as the parser does) and runs the
+  parser's own `paren_script_match` from each bare `(` that starts an item.
+  It groups the item that owns the match, then repeats. Paren-script
+  groups always print braced (`{(a)}^2`), so any match is a hazard.
+- **Deleted helpers:** `open_parens`, `closes_open`, `peel_primes`,
+  `ends_with_paren`, `scripted_paren`, `paren_need`,
+  `after_delimiter_command`, and the paren half of `option_needs_group`
+  (now `has_top_level_close_bracket`).
+- **Unchanged:** a command name is still followed by one space
+  (`\frac {1}{2}`); the primed-base and prime-mark rules; the whole-print
+  fence group; the text-math `$` rule.
