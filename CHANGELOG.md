@@ -292,8 +292,68 @@ This release lists every finding and its fix. Nothing in this section is publish
     printed as `\text {\{ )}`, the rewrite turned `{ )}` into `)`, and the
     reprint lost its closing brace. Migration: none for valid input; an
     escaped `\{` before ` )`, ` (`, `[`, or `]` stays a literal brace.
+  - G9: the `(` lookahead that decides whether `(...)` takes a script
+    counted a `)` inside a brace group. `\)` in text decoded to a bare `)`,
+    so `(\text{\)'})` reprinted as `(\text {)'}`, which the lookahead read
+    as `(…)'` and then rejected. The lookahead now skips brace groups, and
+    `\)` in text is an error (see "Text mode is a real lexer" below). Seed
+    `roundtrip-g9-1410dba0`. Migration: `({a)'}` and `(\mathrm{a)'})`,
+    rejected before, now parse.
 
 ### Changed
+
+- **Text mode is a real lexer (documents/TEXT_MODE_SPEC.md).** `\text`,
+  `\mbox` and `\intertext` bodies are kept whole by the tokenizer
+  (`Token::TextArg`) and lexed by a text-mode grammar. No math pass and no
+  string rewrite reads them any more. `preprocess` now only trims; its
+  `{ (}`, `{[}`, `{\rm …}`, `\over`, `\choose` and `\mbox` rewrites are token
+  rules or command aliases, so they cannot match inside text or escapes.
+  Spec changes, each with its typed error:
+  - `\\` in text is `Err(Malformed("line break in text"))`. Write
+    `\textbackslash` for a backslash.
+  - `\text{$x$}` and `\text{\(x\)}` are accepted: inline math in text is a
+    math sub-tree. A stray `\(`, `\)` or `$` in text is
+    `Err(Malformed("unmatched math shift in text"))`.
+  - Unknown control words and symbols in text (`\foo`, `\rm`, `\over`, `\,`,
+    `\^`, `\[`) are `Err(Unknown("\\name"))`. Accepted: `\text`, `\mbox`,
+    `\textrm`, `\textbf`, `\textit`, `\textsf`, `\texttt` (nested runs),
+    `\ldots`, `\dots`, `\quad`, `\qquad`, `\textbackslash`,
+    `\textasciicircum`, `\textasciitilde`, and the escapes
+    `\{ \} \$ \% \& \# \_`.
+  - Bare `^ _ & #` in text are `Err(Malformed("unexpected token X in text"))`.
+    `~` is a no-break space.
+  - Text nesting counts toward `max_depth`, and is also capped at 32 levels
+    (`"text nests deeper than 32 levels"`) when `max_depth` is raised, to
+    bound the text → inline math → text recursion.
+  - `\its` and `\rmfoo` are whole control words: `{\its …}` is no longer
+    read as `{\it s…}`.
+
+  Silent wrong results this fixes:
+  - `\text{{ )}}` was the text `)`; it is ` )`.
+  - `\text{{\rm a}}` was the text `\mathrm{a}`; it is an error.
+  - `\text{{a \over b}}` was the text `\frac{a}{b}`; it is an error.
+  - `\text{\mbox{x}}` was the text `\text{x}`; it is a nested run.
+  - `\text{a⇥b}` (tab, newline) was `ab`; it is `a b`.
+  - `\text{a\foo b}` was the text `a\foob`; it is an error.
+  - `\text{a\\b}` was the text `a\b`; it is an error.
+  - `\text{{a}}` and `\text{\{a\}}` were the same text; braces are now
+    grouping and `\{ \}` are the characters.
+  - `\text{a\ b}` and `\text{a b}` were the same; the control space is kept.
+
+  AST change: `MathNode::Text(String, TextStyle)` is now
+  `MathNode::Text(TextRun, TextStyle)`. A `TextRun` is a list of `TextItem`s
+  (`Str`, `Space`, `ControlSpace`, `NoBreakSpace`, `Symbol`, `Nested`,
+  `Math`). `TextRun::plain(s)` builds one from a string,
+  `TextRun::to_plain_string()` flattens it, and `as_str()` returns the text
+  of a single-`Str` run. `Token` has a new variant `TextArg(String)`.
+  Migration: match `MathNode::Text(run, style)` and call
+  `run.to_plain_string()` where a `String` was used. `gold()` of a run that is
+  only characters and spaces is unchanged; other runs print as
+  `(text <style> (run …))`.
+
+  `to_latex` of text: `\textbackslash{}`, `\textasciicircum{}` and
+  `\textasciitilde{}` for those characters, `\(…\)` for inline math, and no
+  more leading `\ `, `\[`, `\]` escapes (G3), since a text body is opaque.
 
 - **MSRV is 1.99.** `rust-version` is `"1.99"`. `rust-toolchain.toml`
   pins channel `1.99` with `clippy` and `rustfmt`. The CI test job, the
