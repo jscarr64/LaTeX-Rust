@@ -47,7 +47,7 @@ fn control_space_with_other_whitespace_around_it() {
         r#"(row (space control) (atom Ord "x") (space control))"#
     );
     let printed = ast.to_latex();
-    assert_eq!(printed, r"{\ }{x}{\ }");
+    assert_eq!(printed, r"\ x\ ");
     let again = parse(&printed).unwrap_or_else(|err| panic!("{err}"));
     assert_eq!(again, ast);
     assert_eq!(again.to_latex(), printed);

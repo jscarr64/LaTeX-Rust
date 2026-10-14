@@ -43,7 +43,7 @@ fn styled_fractions_round_trip() {
         assert_eq!(again.to_latex(), printed, "{src}");
     }
     let over = parse(r"{1 \over 2}").unwrap_or_else(|err| panic!("{err}"));
-    assert_eq!(over.to_latex(), r"\frac {1}{2}");
+    assert_eq!(over.to_latex(), r"\frac 12");
     assert!(parse(r"\dfrac{1}{2}")
         .unwrap_or_else(|err| panic!("{err}"))
         .to_latex()

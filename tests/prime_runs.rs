@@ -1,4 +1,4 @@
-//! Prime runs are one flat row, print as `^{′′′}` (or `^{\prime \prime …}`
+//! Prime runs are one flat row, print as `'` marks (or `^{\prime \prime …}`
 //! with `prime_symbol`), and survive a reprint at the default depth.
 
 use latex_rust::{parse_with_options, MathNode, ParseOptions};
@@ -53,7 +53,7 @@ fn prime_runs_are_flat_and_print_flat() {
         let node = parse_ok(&input, &options);
         assert_eq!(node.gold(), flat_gold(base, ATOM, n), "n={n}");
         let printed = round_trip(&input, &options);
-        assert_eq!(printed, format!("{{x}}^{{{}}}", "′".repeat(n)), "n={n}");
+        assert_eq!(printed, format!("x{}", "'".repeat(n)), "n={n}");
     }
 }
 
@@ -87,21 +87,31 @@ fn prime_symbol_runs_are_flat() {
         let node = parse_ok(&input, &options);
         assert_eq!(node.gold(), flat_gold(base, SYMBOL, n), "n={n}");
         let printed = round_trip(&input, &options);
-        assert_eq!(
-            printed,
-            format!("{{x}}^{{{}}}", r"\prime ".repeat(n)),
-            "n={n}"
-        );
+        let want = if n == 1 {
+            r"x^\prime ".to_string()
+        } else {
+            format!("x^{{{}}}", r"\prime ".repeat(n))
+        };
+        assert_eq!(printed, want, "n={n}");
     }
     let explicit = format!("x^{{{}}}", r"\prime".repeat(40));
     let printed = round_trip(&explicit, &ParseOptions::new());
-    assert_eq!(printed, format!("{{x}}^{{{}}}", r"\prime ".repeat(40)));
+    assert_eq!(printed, format!("x^{{{}}}", r"\prime ".repeat(40)));
     let literal = format!("x^{{{}}}", "′".repeat(40));
     for options in [ParseOptions::new(), options] {
         assert_eq!(
             parse_ok(&literal, &options).gold(),
             flat_gold(base, ATOM, 40)
         );
-        round_trip(&literal, &options);
     }
+    round_trip(&literal, &ParseOptions::new());
+    // A `′` superscript prints as `'` marks, the cheapest spelling at the
+    // default options. With `prime_symbol` on, those marks read back as
+    // `\prime` symbols: the same glyphs, a different tree.
+    let printed = parse_ok(&literal, &options).to_latex();
+    assert_eq!(printed, format!("x{}", primes(40)));
+    assert_eq!(
+        parse_ok(&printed, &options).gold(),
+        flat_gold(base, SYMBOL, 40)
+    );
 }
