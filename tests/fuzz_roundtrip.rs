@@ -122,3 +122,28 @@ fn vertical_tab_and_form_feed_are_whitespace() {
         round_trip(input);
     }
 }
+
+/// Group 7: the `\over` / `\choose` preprocessor read `\\over` as `\over` and
+/// counted an escaped `\{` as a group, so printed text was rewritten.
+#[test]
+fn escaped_backslash_and_brace_hide_infix_commands() {
+    for input in [
+        "\\text{a\\\\over b}",
+        "\\text{a\\\\choose b}",
+        "\\text{\\{a\\}}",
+        "{a \\over b}",
+        "{\\{a\\} \\choose b}",
+    ] {
+        round_trip(input);
+    }
+    // `\over` and `\choose` in text are not valid TeX and `\text{\over}` was
+    // already rejected. With an escaped `\{` no longer counted as a group,
+    // these fuzz inputs are rejected the same way.
+    for input in [
+        "\0mb\\mbox{I\\choose'III\\{itc}h",
+        ")\\text{\\over\0{\\{ }}",
+        "\u{1}\\text{A\\over{{\0{\\{\\)}}}}",
+    ] {
+        assert!(parse(input).is_err(), "{input:?} should be rejected");
+    }
+}
