@@ -26,6 +26,9 @@ Notes:
   `canon-primed-subsup` and `canon-prime-symbol` were regressions in the
   uncommitted brace-economy work, caught by the property before they were
   committed; `canon-prime-symbol` fails only with `prime_symbol` on.
+- canon-primed-close*: two fuzz crashes in the final 1800 s run on 2267377
+  (a primed `)` after an unclosed `(`); both pass at c846b58, so they are
+  regressions of the brace economy, fixed in 68ecd89.
 
 | id | minimal input | root-cause class | fixing commit | regression seed |
 |---|---|---|---|---|
@@ -86,6 +89,8 @@ Notes:
 | canon-prime-symbol | `\textcolor{blue}{{x}^ ′}` | printer canonical form | f97bd29 | `roundtrip-canon-prime-symbol` |
 | canon-fence-open | `{\( }x` | printer canonical form | 2267377 | `roundtrip-canon-fence-open` |
 | canon-text-math-close | `\text{t $ \) $ u}` | printer canonical form | 2267377 | `roundtrip-canon-text-math-close` |
+| canon-primed-close | `(^))'^)` | printer canonical form | 68ecd89 | `roundtrip-canon-primed-close` |
+| canon-primed-close-accent | `(\not()'^x` | printer canonical form | 68ecd89 | `roundtrip-canon-primed-close-accent` |
 
 ## Count per class
 
@@ -93,7 +98,7 @@ Notes:
 |---|---|
 | preprocess rewrite | 8 |
 | text decode | 2 |
-| printer canonical form | 24 |
+| printer canonical form | 26 |
 | depth | 16 |
 | other | 7 |
-| **total** | **57** |
+| **total** | **59** |
