@@ -16,13 +16,17 @@ fn parse_ok(input: &str, options: &ParseOptions) -> MathNode {
 /// Parse, print, parse again, and require the same tree and a stable print.
 fn round_trip(input: &str, options: &ParseOptions) -> String {
     let node = parse_ok(input, options);
-    let printed = node.to_latex();
+    let printed = node.to_latex_with(options);
     let again = match parse_with_options(&printed, options) {
         Ok((node, _)) => node,
         Err(err) => panic!("reprint {printed:?} of {input:?}: {err}"),
     };
     assert_eq!(again, node, "input {input:?} printed {printed:?}");
-    assert_eq!(again.to_latex(), printed, "reprint of {input:?} not stable");
+    assert_eq!(
+        again.to_latex_with(options),
+        printed,
+        "reprint of {input:?} not stable"
+    );
     printed
 }
 
@@ -104,14 +108,12 @@ fn prime_symbol_runs_are_flat() {
             flat_gold(base, ATOM, 40)
         );
     }
-    round_trip(&literal, &ParseOptions::new());
-    // A `′` superscript prints as `'` marks, the cheapest spelling at the
-    // default options. With `prime_symbol` on, those marks read back as
-    // `\prime` symbols: the same glyphs, a different tree.
-    let printed = parse_ok(&literal, &options).to_latex();
-    assert_eq!(printed, format!("x{}", primes(40)));
-    assert_eq!(
-        parse_ok(&printed, &options).gold(),
-        flat_gold(base, SYMBOL, 40)
-    );
+    for options in [ParseOptions::new(), options] {
+        round_trip(&literal, &options);
+    }
+    // With `prime_symbol` on, `'` reads back as `\prime`, so `to_latex_with`
+    // keeps the literal `′`; plain `to_latex` prints the marks.
+    let node = parse_ok(&literal, &options);
+    assert_eq!(node.to_latex_with(&options), literal);
+    assert_eq!(node.to_latex(), format!("x{}", primes(40)));
 }

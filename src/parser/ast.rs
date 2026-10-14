@@ -3,6 +3,7 @@
 use crate::color::Color;
 use crate::dim::Dim;
 use crate::parser::parse::lexicon::is_superscript_char;
+use crate::parser::parse::ParseOptions;
 
 /// TeX math atom class (Appendix G).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1372,13 +1373,22 @@ impl MathNode {
     /// therefore does not swallow the nodes that follow it.
     #[must_use]
     pub fn to_latex(&self) -> String {
-        let mut buf = LatexBuf::new();
+        self.to_latex_with(&ParseOptions::new())
+    }
+
+    /// [`to_latex`](Self::to_latex) for a tree that will be read back with
+    /// `options`. Only [`ParseOptions::prime_symbol`] changes the output:
+    /// with it on, `'` reads back as `\prime`, so a `′` superscript prints
+    /// as `^{′}` instead of a `'` mark.
+    #[must_use]
+    pub fn to_latex_with(&self, options: &ParseOptions) -> String {
+        let mut buf = LatexBuf::new(options.prime_symbol);
         let mut stack = vec![LatexOp::Node(self)];
         while let Some(op) = stack.pop() {
             match op {
                 LatexOp::Text(text) => buf.out.push_str(&text),
                 LatexOp::Node(node) => {
-                    let mut forward = LatexBuf::new();
+                    let mut forward = LatexBuf::new(buf.literal_primes);
                     write_node(&mut forward, node);
                     for op in forward.ops.into_iter().rev() {
                         stack.push(op);
@@ -1398,13 +1408,16 @@ enum LatexOp<'a> {
 struct LatexBuf<'a> {
     ops: Vec<LatexOp<'a>>,
     out: String,
+    /// A `′` superscript prints as `^{′}`, not as `'` marks.
+    literal_primes: bool,
 }
 
 impl<'a> LatexBuf<'a> {
-    fn new() -> Self {
+    fn new(literal_primes: bool) -> Self {
         Self {
             ops: Vec::new(),
             out: String::new(),
+            literal_primes,
         }
     }
 
@@ -1796,9 +1809,7 @@ fn write_node<'a>(out: &mut LatexBuf<'a>, node: &'a MathNode) {
         MathNode::Radical(index, body) => {
             write_cmd(out, "sqrt");
             if let Some(index) = index {
-                out.push('[');
-                out.node(index);
-                out.push(']');
+                write_option(out, index);
             }
             write_arg_after_option(out, body);
         }
@@ -1972,10 +1983,14 @@ fn write_scripts<'a>(
 ) {
     match base {
         MathNode::Row(items) if items.is_empty() => out.push_str("{}"),
-        // `x'^a` parses as `(x')^a` and `x_b'^a` as `(x_b')^a`, so a primed base needs no braces when
-        // only a superscript follows.
+        // `x'^a` parses as `(x')^a` and `x_b'^a` as `(x_b')^a`, so a primed
+        // base needs no braces when a `^` superscript follows. More marks
+        // would join the base's primes instead.
         MathNode::Superscript(_, prime) | MathNode::SubSup(_, _, prime)
-            if sub.is_none() && is_primes(prime) =>
+            if sub.is_none()
+                && !out.literal_primes
+                && is_primes(prime)
+                && !sup.is_some_and(is_primes) =>
         {
             out.node(base)
         }
@@ -1998,15 +2013,16 @@ fn write_scripts<'a>(
     let Some(sup) = sup else {
         return;
     };
-    if matches!(sup, MathNode::Atom('′', AtomKind::Ord)) {
+    if !out.literal_primes && matches!(sup, MathNode::Atom('′', AtomKind::Ord)) {
         out.push('\'');
         return;
     }
     match prime_run(sup) {
         Some(items)
-            if items
-                .iter()
-                .all(|item| matches!(item, MathNode::Atom('′', AtomKind::Ord))) =>
+            if !out.literal_primes
+                && items
+                    .iter()
+                    .all(|item| matches!(item, MathNode::Atom('′', AtomKind::Ord))) =>
         {
             for _ in items {
                 out.push('\'');
@@ -2024,7 +2040,7 @@ fn write_scripts<'a>(
             // old superscript and the primes. Print them as marks after the
             // argument.
             let (core, marks) = match sup {
-                MathNode::Row(items) => match items.split_first() {
+                MathNode::Row(items) if !out.literal_primes => match items.split_first() {
                     Some((rest, tail))
                         if !tail.is_empty()
                             && tail
@@ -2297,6 +2313,40 @@ fn after_delimiter_command(before: &[char]) -> bool {
     )
 }
 
+/// `[…]` around an optional argument. A `]` at brace level zero would end
+/// the option early, so such content is grouped; a lone `]` keeps two
+/// groups, since `{]}` is read as a bare `]`.
+fn write_option<'a>(out: &mut LatexBuf<'a>, node: &'a MathNode) {
+    out.push('[');
+    if matches!(node, MathNode::Atom(']', _)) {
+        out.push('{');
+        write_group(out, node);
+        out.push('}');
+    } else if closes_option(&node.to_latex()) {
+        write_group(out, node);
+    } else {
+        out.node(node);
+    }
+    out.push(']');
+}
+
+/// True when `printed` has an unescaped `]` outside every brace group.
+fn closes_option(printed: &str) -> bool {
+    let mut braces = 0usize;
+    let mut escaped = false;
+    for c in printed.chars() {
+        match c {
+            _ if escaped => escaped = false,
+            '\\' => escaped = true,
+            '{' => braces += 1,
+            '}' => braces = braces.saturating_sub(1),
+            ']' if braces == 0 => return true,
+            _ => {}
+        }
+    }
+    false
+}
+
 /// An argument right after a command that takes `[…]`: a lone `[` keeps two
 /// groups, since `{[}` is read as a bare `[` and would open the option.
 fn write_arg_after_option<'a>(out: &mut LatexBuf<'a>, node: &'a MathNode) {
@@ -2424,9 +2474,7 @@ fn write_over_under<'a>(
         if let Some(cmd) = cmd {
             write_cmd(out, cmd);
             if let Some(under) = under {
-                out.push('[');
-                out.node(under);
-                out.push(']');
+                write_option(out, under);
             }
             if let Some(over) = over {
                 write_arg_after_option(out, over);

@@ -4,7 +4,7 @@
 //! - `parse(print(t)) == t`;
 //! - `print(parse(print(t))) == print(t)` (the print is a fixed point).
 //!
-//! `print` is `to_latex()` for the options the case parses with.
+//! `print` is `to_latex_with(options)` for the options the case parses with.
 //!
 //! The grammar reaches every `MathNode` variant: atoms, symbols, every
 //! fraction form, radicals with an index, scripts and primes, `\left…\right`,
@@ -185,7 +185,7 @@ fn check(src: &str, options: &ParseOptions) -> Result<(), String> {
     let Ok((tree, _)) = parse_with_options(src, options) else {
         return Ok(());
     };
-    let printed = tree.to_latex();
+    let printed = tree.to_latex_with(options);
     let again = parse_with_options(&printed, options)
         .map_err(|e| format!("{src:?} printed {printed:?}: {e}"))?
         .0;
@@ -194,7 +194,7 @@ fn check(src: &str, options: &ParseOptions) -> Result<(), String> {
             "{src:?} printed {printed:?}, which parses to another tree"
         ));
     }
-    let second = again.to_latex();
+    let second = again.to_latex_with(options);
     if second != printed {
         return Err(format!("{src:?} printed {printed:?}, then {second:?}"));
     }
