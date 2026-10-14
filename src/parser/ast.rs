@@ -2124,7 +2124,7 @@ fn write_braced_text(out: &mut LatexBuf<'_>, cmd: &str, text: &str) {
 fn push_escaped(out: &mut LatexBuf<'_>, text: &str) {
     for c in text.chars() {
         match c {
-            '\\' | '{' | '}' | '%' => {
+            '\\' | '{' | '}' | '%' | '$' | '&' | '_' | '^' => {
                 out.push('\\');
                 out.push(c);
             }
