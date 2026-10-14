@@ -3,7 +3,8 @@
 > **3.0.0 is a breaking release.** MSRV is Rust 1.99, `ttf-parser` is gone
 > (RUSTSEC-2026-0192), `MathNode` and `ParseError` are `non_exhaustive`,
 > `Fraction` carries a `FracStyle`, prime runs are flat, and optional `egui`
-> is 0.36.2. See [CHANGELOG.md](CHANGELOG.md) for each change and its
+> is 0.36.2. Text with escaped braces and control spaces
+> (`\text{\{\ )}`) now round-trips. See [CHANGELOG.md](CHANGELOG.md) for each change and its
 > migration. 3.0.0 is not yet published; the current crates.io release is 2.1.1.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE-MIT)

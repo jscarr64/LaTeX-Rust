@@ -20,7 +20,10 @@ This release lists every finding and its fix. Nothing in this section is publish
   Spec change: `gold()` of three or more primes changes from nested
   `(row (row …) …)` to one `(row …)`. The lexicon gold
   `prime-three-stays-nested` is now `prime-three-flat` and forbids the nested
-  shape. Callers that walked the nested rows should iterate the row.
+  shape. The golds in `tests/binding.rs`, `golds/accumath.toml`, and
+  `golds/lexicon.toml` change to the flat row; this reverses the earlier
+  lexicon rule that `f'''` stays nested. Callers that walked the nested rows
+  should iterate the row.
   `to_latex` of `f'''` changes from `{f}^{{{′}{′}}{′}}` to `{f}^{′′′}`.
 
 - **Infix `\over` and `\choose` matched a prefix.** `convert_over_fractions`
@@ -253,10 +256,10 @@ This release lists every finding and its fix. Nothing in this section is publish
   `is_none_or` instead of `map_or(true, …)`. SHA-256 walks blocks with
   `as_chunks` instead of `chunks_exact`. No parse or layout change.
 
-- **Fuzz round-trip crashes: 32 crashes, 7 root causes (G1–G7).** The
+- **Fuzz round-trip crashes: 33 crashes, 8 root causes (G1–G8).** The
   `parse` fuzz target checks parse → `to_latex` → parse. Each root cause has
   a test in `tests/fuzz_roundtrip.rs` and minimized seeds in
-  `fuzz/corpus/parse/roundtrip-g1-*` through `roundtrip-g7-*` (31 seed files).
+  `fuzz/corpus/parse/roundtrip-g1-*` through `roundtrip-g8-*` (33 seed files).
 
   - G1: `to_latex` escapes `$`, `&`, `_`, and `^` in text, as it already did
     `\`, `{`, `}`, and `%`. Migration: none; the reprint changes, the tree
@@ -284,6 +287,11 @@ This release lists every finding and its fix. Nothing in this section is publish
     `\over` or `\choose` inside text (`\text{…\over…}`, `\mbox{…\choose…}`)
     is rejected with `Err`, as `\text{\over}` already was. Migration:
     `{a \over b}` in math is unchanged; move a fraction out of the text.
+  - G8: the `{ (}`, `{ )}`, `{ ( }`, `{ ) }`, `{[}`, and `{]}` preprocessor
+    rewrites skip a brace escaped as `\{`. `\text{\{\ )}` (text `{ )`)
+    printed as `\text {\{ )}`, the rewrite turned `{ )}` into `)`, and the
+    reprint lost its closing brace. Migration: none for valid input; an
+    escaped `\{` before ` )`, ` (`, `[`, or `]` stays a literal brace.
 
 ### Changed
 
