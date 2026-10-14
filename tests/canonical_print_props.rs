@@ -245,6 +245,10 @@ const FINDINGS: &[(&str, &str, u8)] = &[
     ("roundtrip-canon-fence-open", r"{\( }x", 0),
     // A `\)` symbol inside text math closed the `\(` early.
     ("roundtrip-canon-text-math-close", r"\text{t $ \) $ u}", 0),
+    // A primed `)` base closed an earlier `(`, so `(...)'` read back as a
+    // scripted paren group (fuzz).
+    ("roundtrip-canon-primed-close", "(^))'^)", 0),
+    ("roundtrip-canon-primed-close-accent", r"(\not()'^x", 0),
 ];
 
 #[test]
