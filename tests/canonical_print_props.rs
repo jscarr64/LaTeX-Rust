@@ -279,3 +279,31 @@ fn findings_are_seeds_and_print_canonically() {
         }
     }
 }
+
+/// Dimensions with no digit (`.`) or two points parsed to NaN, which printed
+/// as `NaNem` and did not read back (fuzz `roundtrip-dim-dot`). They are now
+/// a typed error.
+#[test]
+fn dimensions_without_a_number_are_rejected() {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/fuzz/corpus/parse/roundtrip-dim-dot"
+    );
+    let seed = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{path}: {e}"));
+    assert_eq!(seed, r"\rule{2}{.}");
+    for src in [
+        seed.as_str(),
+        r"\rule{.}{1}",
+        r"\hspace{.em}",
+        r"\hspace{1.2.3em}",
+        r"\rule{-.}{1}",
+    ] {
+        assert!(
+            parse_with_options(src, &options_from_bits(0)).is_err(),
+            "{src} should be rejected"
+        );
+    }
+    for src in [r"\rule{.5}{1.}", r"\hspace{-.25em}"] {
+        assert!(check(src, &options_from_bits(0)).is_ok(), "{src}");
+    }
+}
