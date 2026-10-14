@@ -7,7 +7,7 @@
 use super::{is_tex_accent, ArenaNode, Engine, Item, RowKind};
 use crate::error::Error;
 use crate::layout::{MathBox, MathStyle};
-use crate::parser::{EnvRow, MathNode, MatrixStyle, SpaceKind};
+use crate::parser::{EnvRow, MathNode, MatrixStyle, SpaceKind, TextItem, TextRun};
 
 #[derive(Clone, Copy)]
 enum Src<'a> {
@@ -450,12 +450,12 @@ impl Engine<'_> {
                 }
             }
             MathNode::Matrix(ms, _, rows) => self.plan_matrix(*ms, rows, style, &mut jobs)?,
+            MathNode::Text(run, _) => plan_text(run, style, &mut jobs),
             MathNode::Atom(_, _)
             | MathNode::Symbol(_)
             | MathNode::SizedDelim(_, _, _)
             | MathNode::Space(_)
             | MathNode::Strut(_, _)
-            | MathNode::Text(_, _)
             | MathNode::Operator(_, _)
             | MathNode::Ref(_)
             | MathNode::Label(_)
@@ -630,6 +630,27 @@ impl Engine<'_> {
             src: Src::Heap(index),
             style,
         });
+    }
+}
+
+/// Inline math inside a text run, in the order `text_items` takes the boxes.
+fn plan_text<'s>(run: &'s TextRun, style: MathStyle, jobs: &mut Vec<ChildJob<'s>>) {
+    let mut stack = vec![run.items().iter()];
+
+    while let Some(mut iter) = stack.pop() {
+        while let Some(item) = iter.next() {
+            match item {
+                TextItem::Math(m) => {
+                    jobs.push(tree(m, style));
+                }
+                TextItem::Nested(_, r) => {
+                    stack.push(iter);
+                    stack.push(r.items().iter());
+                    break;
+                }
+                _ => {}
+            }
+        }
     }
 }
 

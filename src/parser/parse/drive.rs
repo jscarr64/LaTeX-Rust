@@ -1270,9 +1270,9 @@ fn step_begin(
         }
         3 => {
             parser.bump();
-            let s = parser.collect_group_text()?;
+            let run = parser.text_run()?;
             st.rows.push(EnvRow::Intertext(Box::new(MathNode::Text(
-                s,
+                run,
                 TextStyle::Text,
             ))));
             Ok(Step::Again)
@@ -1536,9 +1536,9 @@ fn classify(parser: &mut super::Parser, name: &str) -> Result<Classified, ParseE
         "nonumber" | "notag" => Ok(Classified::Node(MathNode::NoNumber)),
         "hline" => Ok(Classified::Node(MathNode::Hline)),
         "intertext" => {
-            let s = parser.collect_group_text()?;
+            let run = parser.text_run()?;
             Ok(Classified::Node(MathNode::Intertext(Box::new(
-                MathNode::Text(s, TextStyle::Text),
+                MathNode::Text(run, TextStyle::Text),
             ))))
         }
         "substack" => Ok(Classified::Cmd(Cmd::Substack(Box::new(SubstackState {

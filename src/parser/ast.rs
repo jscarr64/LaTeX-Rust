@@ -709,7 +709,7 @@ pub enum MathNode {
     /// `\cancelto{value}{expr}`
     CancelTo(Box<MathNode>, Box<MathNode>),
     /// Styled character run (`\mathrm`, `\text`, …).
-    Text(String, TextStyle),
+    Text(TextRun, TextStyle),
     /// Explicit math skip.
     Space(SpaceKind),
     /// Named operator (`\sin`). The flag is `\limits` vs `\nolimits`.
@@ -1597,7 +1597,20 @@ fn gold_expand<'a>(node: &'a MathNode, buf: &mut Vec<GoldOp<'a>>) {
             gold_text(buf, ")");
         }
         MathNode::Text(t, st) => {
-            gold_text(buf, format!("(text {} {})", st.gold(), quote_text(t)));
+            let plain = t
+                .items()
+                .iter()
+                .all(|item| matches!(item, TextItem::Str(_) | TextItem::Space));
+            if plain {
+                gold_text(
+                    buf,
+                    format!("(text {} {})", st.gold(), quote_text(&t.to_plain_string())),
+                );
+            } else {
+                gold_text(buf, format!("(text {} ", st.gold()));
+                gold_run(buf, t);
+                gold_text(buf, ")");
+            }
         }
         MathNode::Space(SpaceKind::Thin) => gold_text(buf, "(space thin)"),
         MathNode::Space(SpaceKind::Medium) => gold_text(buf, "(space medium)"),
@@ -1702,6 +1715,31 @@ fn quote_atom(c: char) -> String {
         '\'' => "\"'\"".into(),
         _ => format!("\"{c}\""),
     }
+}
+
+/// `(run item…)` for a text run that is not plain characters and spaces.
+fn gold_run<'a>(buf: &mut Vec<GoldOp<'a>>, run: &'a TextRun) {
+    gold_text(buf, "(run");
+    for item in run.items() {
+        match item {
+            TextItem::Str(s) => gold_text(buf, format!(" {}", quote_text(s))),
+            TextItem::Space => gold_text(buf, " space"),
+            TextItem::ControlSpace => gold_text(buf, " ctrlspace"),
+            TextItem::NoBreakSpace => gold_text(buf, " nbsp"),
+            TextItem::Symbol(n) => gold_text(buf, format!(" (symbol {n})")),
+            TextItem::Nested(st, r) => {
+                gold_text(buf, format!(" (nested {} ", st.gold()));
+                gold_run(buf, r);
+                gold_text(buf, ")");
+            }
+            TextItem::Math(m) => {
+                gold_text(buf, " (math ");
+                gold_node(buf, m);
+                gold_text(buf, ")");
+            }
+        }
+    }
+    gold_text(buf, ")");
 }
 
 fn quote_text(t: &str) -> String {
@@ -1820,18 +1858,20 @@ fn write_node<'a>(out: &mut LatexBuf<'a>, node: &'a MathNode) {
         }
         MathNode::Text(text, style) => {
             if *style == TextStyle::Text
-                || !text.is_empty() && text.chars().all(|c| c.is_ascii_alphabetic())
+                || text
+                    .as_str()
+                    .is_some_and(|t| t.chars().all(|c| c.is_ascii_alphabetic()))
             {
                 write_cmd(out, style_cmd(*style));
                 out.push('{');
-                push_escaped(out, text);
+                push_escaped(out, &text.to_plain_string());
                 out.push('}');
             } else {
                 write_cmd(out, style_cmd(*style));
                 out.push('{');
                 write_cmd(out, "text");
                 out.push('{');
-                push_escaped(out, text);
+                push_escaped(out, &text.to_plain_string());
                 out.push('}');
                 out.push('}');
             }
@@ -2076,7 +2116,7 @@ fn write_intertext<'a>(out: &mut LatexBuf<'a>, body: &'a MathNode) {
     write_cmd(out, "intertext");
     out.push('{');
     if let MathNode::Text(text, _) = body {
-        push_escaped(out, text);
+        push_escaped(out, &text.to_plain_string());
     } else {
         out.node(body);
     }

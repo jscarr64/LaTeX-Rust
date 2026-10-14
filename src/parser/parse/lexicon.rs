@@ -5,7 +5,7 @@
 //! plus `h` and `xsin` stays letters. The rule is documented on
 //! [`ParseOptions::with_bare_operators`](super::ParseOptions::with_bare_operators).
 
-use crate::parser::ast::{MathNode, TextStyle};
+use crate::parser::ast::{MathNode, TextRun, TextStyle};
 
 pub(super) fn is_superscript_char(c: char) -> bool {
     superscript_base(c).is_some()
@@ -75,7 +75,7 @@ pub(super) fn unicode_symbol(c: char) -> Option<&'static str> {
 /// is the operator table or `\zeta`.
 pub(super) fn bare_identifier(word: &str, in_cases: bool) -> Option<MathNode> {
     if in_cases && word == "otherwise" {
-        return Some(MathNode::Text("otherwise".into(), TextStyle::Text));
+        return Some(MathNode::Text(TextRun::plain("otherwise"), TextStyle::Text));
     }
     if word == "zeta" {
         return Some(MathNode::Symbol("zeta".into()));

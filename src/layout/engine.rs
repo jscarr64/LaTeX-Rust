@@ -19,7 +19,7 @@ use crate::layout::{BoxContent, MathBox};
 use crate::parser::DEFAULT_MAX_NESTING_DEPTH;
 use crate::parser::{
     AccentKind, AtomKind, ColSpec, DelimSize, Delimiter, EnvRow, FracStyle, IntegralKind, MathNode,
-    MatrixStyle, PhantomKind, SpaceKind, TextStyle,
+    MatrixStyle, PhantomKind, SpaceKind, TextItem, TextRun, TextStyle,
 };
 use crate::style_map::styled_char;
 use crate::symbols::lookup;
@@ -396,7 +396,7 @@ impl Engine<'_> {
                     bx,
                 })
             }
-            MathNode::Text(s, ts) => self.text_run(s, *ts, style),
+            MathNode::Text(run, ts) => self.text_items(run, *ts, style),
             MathNode::Operator(name, limits) => self.operator(name, *limits, style),
             MathNode::Sum(lo, hi) => self.large_op('∑', lo.as_deref(), hi.as_deref(), style, true),
             MathNode::Product(lo, hi) => {
@@ -546,6 +546,59 @@ impl Engine<'_> {
                 kids.push(self.glyph(styled_char(c, ts), style)?);
             }
         }
+        Ok(Item {
+            bx: MathBox::hpack(kids),
+            class: Some(AtomKind::Ord),
+        })
+    }
+
+    /// Lays out a text run. Inline math boxes come from the planned children,
+    /// in document order (see `plan_text`).
+    fn text_items(&self, run: &TextRun, ts: TextStyle, style: MathStyle) -> Result<Item, Error> {
+        if ts == TextStyle::Pmb {
+            return self.pmb(&run.to_plain_string(), style);
+        }
+
+        let mut kids = Vec::new();
+        let mut stack = vec![(run.items().iter(), ts)];
+
+        while let Some((mut iter, cur_style)) = stack.pop() {
+            while let Some(item) = iter.next() {
+                match item {
+                    TextItem::Str(s) => {
+                        for c in s.chars() {
+                            kids.push(self.glyph(styled_char(c, cur_style), style)?);
+                        }
+                    }
+                    TextItem::Space | TextItem::ControlSpace | TextItem::NoBreakSpace => {
+                        kids.push(MathBox::kern(self.params.mu(style) * Dim::from_i64(4)));
+                    }
+                    TextItem::Symbol(s) => match *s {
+                        "ldots" => {
+                            kids.push(self.glyph(styled_char('\u{2026}', cur_style), style)?);
+                        }
+                        "quad" => {
+                            kids.push(MathBox::kern(self.params.mu(style) * Dim::from_i64(18)));
+                        }
+                        "qquad" => {
+                            kids.push(MathBox::kern(self.params.mu(style) * Dim::from_i64(36)));
+                        }
+                        _ => {
+                            kids.push(MathBox::kern(self.params.mu(style) * Dim::from_i64(4)));
+                        }
+                    },
+                    TextItem::Nested(st, r) => {
+                        stack.push((iter, cur_style));
+                        stack.push((r.items().iter(), *st));
+                        break;
+                    }
+                    TextItem::Math(_) => {
+                        kids.push(self.take_box()?);
+                    }
+                }
+            }
+        }
+
         Ok(Item {
             bx: MathBox::hpack(kids),
             class: Some(AtomKind::Ord),

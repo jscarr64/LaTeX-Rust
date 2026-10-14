@@ -310,7 +310,7 @@ fn node_plain(n: &MathNode) -> String {
     while let Some(n) = stack.pop() {
         match n {
             MathNode::Atom(c, _) => out.push(*c),
-            MathNode::Text(s, _) => out.push_str(s),
+            MathNode::Text(s, _) => out.push_str(&s.to_plain_string()),
             MathNode::Symbol(name) => out.push_str(name),
             MathNode::Row(v) => {
                 for child in v.iter().rev() {

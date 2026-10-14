@@ -5,9 +5,10 @@
 
 use super::ast::{
     AccentKind, AtomKind, ColSpec, DelimSize, Delimiter, EnvRow, EqNumber, FracStyle, IntegralKind,
-    MathNode, TextStyle,
+    MathNode, TextRun, TextStyle,
 };
 use super::preproc::preprocess;
+use super::text::lex_body;
 use super::token::{tokenize, Token};
 use crate::color::{parse_color_spec, Color, ColorTable};
 
@@ -261,6 +262,7 @@ pub fn parse_with_options(
         prime_symbol: options.prime_symbol,
         cases_depth: 0,
         plain_letters_until: 0,
+        text_left: TEXT_LEVELS,
     };
     let node = drive::parse_top(&mut p)?;
     p.skip_ws();
@@ -350,7 +352,13 @@ struct Parser {
     cases_depth: usize,
     /// Index past a rejected ASCII-letter run. Letters before it stay atoms.
     plain_letters_until: usize,
+    /// Text nesting levels still allowed (starts at [`TEXT_LEVELS`]).
+    text_left: usize,
 }
+
+/// Bounds the native recursion text → inline math → text. Text nesting also
+/// counts toward `max_depth`; this cap holds when `max_depth` is raised.
+const TEXT_LEVELS: usize = 32;
 
 impl Parser {
     fn skip_ws(&mut self) {
@@ -424,9 +432,60 @@ impl Parser {
         false
     }
 
+    /// Lexes the [`Token::TextArg`] after a text command (spec 3.2).
+    fn text_run(&mut self) -> Result<TextRun, ParseError> {
+        self.skip_ws();
+        let pos = self.pos;
+        let raw = match self.bump_raw() {
+            Some(Token::TextArg(raw)) => raw,
+            _ => {
+                self.pos = pos;
+                return Err(ParseError::Malformed("expected '{'".into()));
+            }
+        };
+        let levels = self
+            .max_depth
+            .saturating_sub(self.depth)
+            .min(self.text_left);
+        let too_deep = if self.max_depth.saturating_sub(self.depth) <= self.text_left {
+            ParseError::Malformed(format!("input nests deeper than {} levels", self.max_depth))
+        } else {
+            ParseError::Malformed(format!("text nests deeper than {TEXT_LEVELS} levels"))
+        };
+        let mut math = |src: &str, left: usize| self.sub_parse(src, left);
+        lex_body(&raw, levels, &too_deep, &mut math)
+    }
+
+    /// Parses inline math from a text body with `left` levels to spare.
+    fn sub_parse(&self, src: &str, left: usize) -> Result<MathNode, ParseError> {
+        let tokens = tokenize(src)?;
+        let mut parser = Parser {
+            tokens,
+            pos: 0,
+            colors: self.colors.clone(),
+            depth: self.max_depth.saturating_sub(left),
+            max_depth: self.max_depth,
+            ascii_relations: self.ascii_relations,
+            bare_operators: self.bare_operators,
+            unicode_symbols: self.unicode_symbols,
+            prime_symbol: self.prime_symbol,
+            cases_depth: 0,
+            plain_letters_until: 0,
+            text_left: left,
+        };
+        let result = drive::parse_top(&mut parser)?;
+        parser.skip_ws();
+        if parser.pos < parser.tokens.len() {
+            let tok = &parser.tokens[parser.pos];
+            return Err(ParseError::Malformed(format!(
+                "unexpected leftover token {tok}"
+            )));
+        }
+        Ok(result)
+    }
+
     fn parse_text(&mut self, style: TextStyle) -> Result<MathNode, ParseError> {
-        let s = self.collect_group_text()?;
-        Ok(MathNode::Text(s, style))
+        Ok(MathNode::Text(self.text_run()?, style))
     }
 
     fn parse_sized_delim(&mut self, name: &str) -> Result<MathNode, ParseError> {
@@ -888,14 +947,14 @@ fn apply_text_style(node: MathNode, style: TextStyle) -> MathNode {
                     MathNode::Atom(c, _) => *c,
                     _ => ' ',
                 };
-                Exploded::Leaf(MathNode::Text(ch.to_string(), style))
+                Exploded::Leaf(MathNode::Text(TextRun::plain(&ch.to_string()), style))
             }
             Shape::Keep => Exploded::Leaf(std::mem::replace(node, MathNode::Hline)),
             Shape::Text => {
                 let s = if let MathNode::Text(s, _) = &mut *node {
                     std::mem::take(s)
                 } else {
-                    String::new()
+                    TextRun::default()
                 };
                 Exploded::Leaf(MathNode::Text(s, style))
             }
@@ -907,7 +966,7 @@ fn apply_text_style(node: MathNode, style: TextStyle) -> MathNode {
                 };
                 let styled = if let Some(ch) = crate::symbols::glyph_char(&name) {
                     if crate::style_map::is_stylable(ch) {
-                        MathNode::Text(ch.to_string(), style)
+                        MathNode::Text(TextRun::plain(&ch.to_string()), style)
                     } else {
                         MathNode::Symbol(name)
                     }
@@ -1125,7 +1184,7 @@ fn collapse_text(mut node: MathNode) -> MathNode {
     for n in v {
         match (out.last_mut(), &n) {
             (Some(MathNode::Text(a, sa)), MathNode::Text(b, sb)) if sa == sb => {
-                a.push_str(b);
+                a.append(b.clone());
             }
             _ => out.push(n),
         }
