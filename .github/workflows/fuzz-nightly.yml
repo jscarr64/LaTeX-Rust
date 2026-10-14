@@ -20,3 +20,13 @@ jobs:
         run: cargo +nightly fuzz run parse -- -max_total_time=960
       - name: preprocess
         run: cargo +nightly fuzz run preprocess -- -max_total_time=120
+      - name: upload fuzz corpus and artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-nightly-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            fuzz/corpus
+            fuzz/artifacts
+          if-no-files-found: ignore
+          retention-days: 14
