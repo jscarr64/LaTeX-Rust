@@ -2105,16 +2105,24 @@ fn write_row_items<'a>(out: &mut LatexBuf<'a>, items: &'a [MathNode]) {
             _ => false,
         })
         .collect();
-    paren_groups(items, &mut braced, out.literal_primes);
+    // The pass prints every item once; those strings are reused below, so a
+    // nested row is printed once per level, not twice (that was 2^k).
+    let prints = paren_groups(items, &mut braced, out.literal_primes);
     let mut prev_letter = false;
-    for (item, braced) in items.iter().zip(braced) {
+    for (i, (item, braced)) in items.iter().zip(braced).enumerate() {
         let letter = !braced && matches!(item, MathNode::Atom(c, _) if c.is_ascii_alphabetic());
         if letter && prev_letter {
             out.push(' ');
         }
         prev_letter = letter;
-        match item {
-            MathNode::Row(inner) if braced && inner.is_empty() => out.push_str("{}"),
+        match (item, prints.as_ref().and_then(|p| p.get(i))) {
+            (MathNode::Row(inner), _) if braced && inner.is_empty() => out.push_str("{}"),
+            (_, Some(print)) if braced => {
+                out.push('{');
+                out.push_str(print);
+                out.push('}');
+            }
+            (_, Some(print)) => out.push_str(print),
             _ if braced => write_group(out, item),
             _ => out.node(item),
         }
@@ -2146,8 +2154,13 @@ fn item_tokens(printed: &str) -> Option<Vec<Token>> {
 /// parser's own lookahead ([`paren_script_match`]) runs from every bare `(`
 /// that starts an item. Paren-script groups always print braced, so any match
 /// it finds is a hazard: the item holding the matching `)` is grouped, which
-/// hides it, and the scan repeats until no `(` matches.
-fn paren_groups(items: &[MathNode], braced: &mut [bool], literal_primes: bool) {
+/// hides it, and the scan repeats until no `(` matches. Returns the print of
+/// each item when the pass ran, so the caller does not print them again.
+fn paren_groups(
+    items: &[MathNode],
+    braced: &mut [bool],
+    literal_primes: bool,
+) -> Option<Vec<String>> {
     let starts = |braced: &[bool]| {
         items
             .iter()
@@ -2155,7 +2168,7 @@ fn paren_groups(items: &[MathNode], braced: &mut [bool], literal_primes: bool) {
             .any(|(item, braced)| !braced && starts_with_open_paren(item))
     };
     if !starts(braced) {
-        return;
+        return None;
     }
     let prints: Vec<String> = items
         .iter()
@@ -2210,7 +2223,7 @@ fn paren_groups(items: &[MathNode], braced: &mut [bool], literal_primes: bool) {
             .and_then(|m| owner.get(m).copied());
         match hit.and_then(|j| braced.get_mut(j)) {
             Some(flag) if !*flag => *flag = true,
-            _ => return,
+            _ => return Some(prints),
         }
     }
 }
