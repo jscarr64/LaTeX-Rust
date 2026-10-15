@@ -271,6 +271,16 @@ const FINDINGS: &[(&str, &str, u8)] = &[
         r"{\begin{vmatrix}{(}\end{vmatrix})'}",
         0,
     ),
+    // `\substack` needs a literal `{`, and `{]}` unwraps to a bare `]` (found
+    // by the targeted token search after fuzz r15).
+    ("roundtrip-canon-substack-bracket", r"\substack{{]}}", 0),
+    // A cell that starts with `\hline` at the start of a row reads back as a
+    // row rule (same search).
+    (
+        "roundtrip-canon-row-hline",
+        r"\begin{matrix}{\hline}x\end{matrix}",
+        0,
+    ),
     // The `\)` check saw the fence-wrapped body `{\(\)}`, but the printer
     // wrote it unwrapped inside `\(…\)` (fuzz).
     ("roundtrip-canon-text-math-fence", r"\text{$\(\)$}", 0),
@@ -369,6 +379,28 @@ fn edge_whitespace_atoms_survive_the_trim() {
         "\u{c}\u{85}%",
         "%\n\u{b}a",
         "\\text{a\u{a0}}%",
+    ] {
+        if let Err(e) = check(src, &options_from_bits(0)) {
+            panic!("{src:?}: {e}");
+        }
+    }
+}
+
+/// Tokens that the parser reads specially at fixed places must be hidden by
+/// the printer there: a lone `[` or `]` in `\substack{…}` (its `{` is
+/// required, and `{]}` unwraps), and `\hline` or `\intertext` at the start of
+/// a row of an environment (a row rule or a text row, not a cell item).
+#[test]
+fn fixed_place_tokens_are_hidden_where_the_parser_reads_them() {
+    for src in [
+        r"\substack{{]}}",
+        r"\substack{{[}}",
+        r"\substack{{]}\\a}",
+        r"\begin{matrix}{\hline}x\end{matrix}",
+        r"\begin{matrix}a\\{\hline}x\end{matrix}",
+        r"\begin{matrix}{\hline}\end{matrix}",
+        r"\begin{matrix}{\intertext{a}}x\end{matrix}",
+        r"\begin{matrix}a&{\hline}x\end{matrix}",
     ] {
         if let Err(e) = check(src, &options_from_bits(0)) {
             panic!("{src:?}: {e}");
