@@ -717,21 +717,64 @@ fn skip_spaces_from(tokens: &[Token], mut i: usize) -> usize {
     i
 }
 
-/// The index of the `]` closing the option whose `[` is at `open`,
-/// skipping brace groups; `None` when it is unclosed.
+/// The index of the `]` closing the option whose `[` is at `open`, skipping
+/// brace groups and the options of nested option commands (`\sqrt[…]` inside
+/// the option owns its own `]`); `None` when it is unclosed.
 fn option_end(tokens: &[Token], open: usize) -> Option<usize> {
     let mut braces = 0usize;
+    let mut nested = 0usize;
     let mut i = open + 1;
     while let Some(tok) = tokens.get(i) {
         match tok {
             Token::BeginGroup => braces += 1,
             Token::EndGroup => braces = braces.checked_sub(1)?,
-            Token::Char(']') if braces == 0 => return Some(i),
+            Token::Command(name) if braces == 0 && takes_option(name) => {
+                let next = skip_spaces_from(tokens, i + 1);
+                if matches!(tokens.get(next), Some(Token::Char('['))) {
+                    nested += 1;
+                    i = next;
+                }
+            }
+            Token::Char(']') if braces == 0 => {
+                if nested == 0 {
+                    return Some(i);
+                }
+                nested -= 1;
+            }
             _ => {}
         }
         i += 1;
     }
     None
+}
+
+/// True when `tokens`, read as the body of a `[…]` option followed by its
+/// closing `]`, would end the option early or not parse: the parser's own
+/// option-body reader must stop exactly at the final `]`. Which `]` an
+/// argument or a nested option command consumes is the parser's business, so
+/// this asks it (spec 5.3, optional argument). The printer groups such a body.
+pub(crate) fn option_ends_early(tokens: &[Token]) -> bool {
+    let mut all = tokens.to_vec();
+    all.push(Token::Char(']'));
+    let end = all.len() - 1;
+    let defaults = ParseOptions::default();
+    let mut parser = Parser {
+        tokens: all,
+        pos: 0,
+        depth: 0,
+        max_depth: usize::MAX,
+        colors: ColorTable::new(),
+        ascii_relations: defaults.ascii_relations,
+        bare_operators: defaults.bare_operators,
+        unicode_symbols: defaults.unicode_symbols,
+        prime_symbol: defaults.prime_symbol,
+        cases_depth: 0,
+        plain_letters_until: 0,
+        text_left: TEXT_LEVELS,
+        in_option: false,
+    };
+    let read = drive::parse_option_body(&mut parser).is_ok();
+    !(read && parser.pos == end)
 }
 
 /// A command whose next token is a delimiter (`\left(`, `\big)`).

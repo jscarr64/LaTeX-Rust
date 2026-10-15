@@ -4,7 +4,7 @@ use crate::color::Color;
 use crate::dim::Dim;
 use crate::parser::group_rules;
 use crate::parser::parse::lexicon::is_superscript_char;
-use crate::parser::parse::{paren_script_match, ParseOptions};
+use crate::parser::parse::{option_ends_early, paren_script_match, ParseOptions};
 use crate::parser::token::{tokenize, Token};
 
 /// TeX math atom class (Appendix G).
@@ -2302,6 +2302,8 @@ fn has_top_level(printed: &str, pattern: &[char]) -> bool {
 fn write_option<'a>(out: &mut LatexBuf<'a>, node: &'a MathNode) {
     out.push('[');
     match node {
+        // `[]` reads as an empty row; `[{}]` would cost one more level.
+        MathNode::Row(items) if items.is_empty() => {}
         MathNode::Atom(']', _) => {
             out.push('{');
             write_group(out, node);
@@ -2311,7 +2313,7 @@ fn write_option<'a>(out: &mut LatexBuf<'a>, node: &'a MathNode) {
             // Print the body once and reuse it: printing it again through
             // `out.node` made nested options cost 2^k.
             let body = node.print_raw(out.literal_primes);
-            if has_top_level_close_bracket(&body) {
+            if item_tokens(&body).is_none_or(|tokens| option_ends_early(&tokens)) {
                 out.push('{');
                 out.push_str(&body);
                 out.push('}');
@@ -2321,23 +2323,6 @@ fn write_option<'a>(out: &mut LatexBuf<'a>, node: &'a MathNode) {
         }
     }
     out.push(']');
-}
-
-/// True when `printed` has an unescaped `]` outside every brace group.
-fn has_top_level_close_bracket(printed: &str) -> bool {
-    let mut braces = 0usize;
-    let mut escaped = false;
-    for c in printed.chars() {
-        match c {
-            _ if escaped => escaped = false,
-            '\\' => escaped = true,
-            '{' => braces += 1,
-            '}' => braces = braces.saturating_sub(1),
-            ']' if braces == 0 => return true,
-            _ => {}
-        }
-    }
-    false
 }
 
 /// An argument right after a command that takes `[…]`: a lone `[` keeps two

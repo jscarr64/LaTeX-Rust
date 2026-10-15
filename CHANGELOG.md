@@ -7,6 +7,14 @@ This release lists every finding and its fix. Nothing in this section is publish
 
 ### Fixed
 
+- **Nested optional arguments reprinted exponentially slowly and too deep.**
+  `\xleftarrow[\xleftarrow[…` printed each option body twice per level, and
+  a `]` that closed a nested option command forced a needless group, so the
+  reprint nested twice as deep as the source and failed at the depth limit.
+  The printer now prints an option body once and asks the parser's own
+  option reader whether the body ends early; an empty option prints as `[]`.
+  Row paren handling and text math bodies also print once. Found by fuzzing.
+
 - **A long prime run could not be reprinted.** Each extra `'` nested the
   superscript one row deeper, and `to_latex` braced every level, so `{[` with
   34 primes parsed but its reprint failed with "input nests deeper than 32

@@ -33,6 +33,14 @@ pub(super) fn parse_top(parser: &mut super::Parser) -> Result<MathNode, ParseErr
     drive(parser, &mut frames)
 }
 
+/// Reads one `[…]` option body: a list that ends at a `]` outside nested
+/// groups and nested options, as the option readers do.
+pub(super) fn parse_option_body(parser: &mut super::Parser) -> Result<MathNode, ParseError> {
+    let mut frames = Vec::new();
+    push(&mut frames, parser, Kind::list(Stop::index()), true)?;
+    drive(parser, &mut frames)
+}
+
 struct Frame {
     counts: bool,
     kind: Kind,

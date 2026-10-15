@@ -458,7 +458,7 @@ Each row says what the reader does and so when a bare `T` is wrong.
 |---|---|---|
 | **command argument** (`\frac`/`\binom` args, accents, `\not`, `\sqrt` body, `\color`-family bodies, `\phantom`, `\cancelto`, over/under args) | `step_arg` drive.rs:462-486. `{` gives a group, `(` gives a **paren group** (`Kind::paren`), anything else gives one nucleus (drive.rs:540-590) | `T` is not exactly one nucleus: more than one token-level item, starts with `(` (it would read `(…)`), starts with `'`, `^`, `_` or a superscript char ("script has no base", drive.rs:550, 593), or is a nucleus followed by its own scripts |
 | **argument right after a `[…]`-taking command** (`\sqrt`, `\xrightarrow`, `\xleftarrow`) | the command peeks for `[` (drive.rs:1340, 1597) | as above, plus `T` starts with `[` |
-| **optional argument `[…]`** | `Kind::list(Stop::index())`, stops at `]` at group level (parse.rs:399, drive.rs:1050-1060) | `T` has `]` at brace level 0. G2 applies too, because parens inside `[…]` are visible to the lookahead (5.1.1) |
+| **optional argument `[…]`** | `Kind::list(Stop::index())`, stops at `]` at group level (parse.rs:399, drive.rs:1050-1060) | the parser, asked directly (`option_ends_early`, which runs `drive::parse_option_body` over `T` plus the closing `]`), does not consume `T` exactly up to that `]`. A static scan is wrong here (`{]}` unwraps to a bare `]`, and a nested option command's own `]` closes its own option). An empty row prints as nothing, because `[]` is an empty row and `[{}]` costs one more level |
 | **script (sub or sup)** | the script reads one argument via the same `step_arg` path (drive.rs:755-800) | same as a command argument |
 | **script base** | the base is the previous nucleus (drive.rs:494-540). A `(` base starts a lookahead (drive.rs:494-497) | `T` is not one nucleus. `T` ends in `)` that matches a `(` inside `T` (that would become a paren-script base instead of the tree's base). `T` itself ends in a prime superscript (`x'` then `^`: the marks join, drive.rs:765-768, push_prime drive.rs:854) |
 | **prime marks** | `'` is script signal 3 (drive.rs:767). A run stays one flat row (drive.rs:854) | a ′ superscript prints as `'` only when the base is not already primed in a way the reader would merge, and only when not `prime_symbol` (`'` reads back as `\prime`). Otherwise `^{′…}` |
@@ -552,7 +552,10 @@ change to the lookahead changes the printer with it.
 - **Deleted helpers:** `open_parens`, `closes_open`, `peel_primes`,
   `ends_with_paren`, `scripted_paren`, `paren_need`,
   `after_delimiter_command`, and the paren half of `option_needs_group`
-  (now `has_top_level_close_bracket`).
+  (the static `]` scan is gone, replaced by `option_ends_early`, which asks the parser).
+- **Cost invariant (5.4):** printing is linear. A subtree is printed once per
+  level, never twice (row paren pass, options, text math each had a 2^k
+  variant, fuzz r11 and r12).
 - **Unchanged:** a command name is still followed by one space
   (`\frac {1}{2}`); the primed-base and prime-mark rules; the whole-print
   fence group; the text-math `$` rule.
