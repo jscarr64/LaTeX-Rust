@@ -41,6 +41,15 @@ Notes:
 - dim-dot: fuzz crash in the 1800 s run on 8742778. A dimension with no digit
   parsed to NaN (present since the parser was written); fixed in d5f097d by
   rejecting it in `parse_tex_dim`.
+- dim-long-a, dim-long-b: 2-hour parse fuzz (r17long on 3120708, r16long).
+  `Dim::to_dec_string` cut a decimal after 24 digits and the printer used it for
+  `\hspace` and `\rule`, so a 25-digit decimal reprinted as another number. Fixed
+  in 8b5fe40 by `Dim::to_tex_string` (exact, checked against the reader). The
+  fuzz assert has `left` = the reparse, `right` = the first parse.
+- dim-mu, dim-whole-edge, dim-pt-edge: found by the new dimension property
+  (`tests/dim_roundtrip.rs`) while fixing dim-long: `1mu` is 1/18 em, a decimal
+  that never ends; a 38-digit whole number printed with `.0` overflows the
+  reader; a `pt` value can have 39 em digits. Same fix, 8b5fe40.
 - canon-big-paren: fuzz crash in the 1800 s run r9 on ca0e515 (a `\big(`
   delimiter paren counted by the lookahead). Fixed by Q1 in 07d2f48; the seed
   was added green (755b235).
@@ -133,6 +142,11 @@ Notes:
 | dim-dot | `\rule{2}{.}` | other | d5f097d | `roundtrip-dim-dot` | 5.3 dimensions |
 | dim-overflow | `{\rule{2}{888888888888888888888888888888888888888}}` | other | 851c7a2 | `roundtrip-dim-overflow` | no (not a grouping cause) |
 | dim-big-eq | `{\rule{2}{2.1662322688380341817}}` | other | 58e3ee9 | `roundtrip-dim-big-eq` | no (not a grouping cause) |
+| dim-long-a | `h{\it{{\rule{2}{2.1662322688380342688380341817}1817}}…` (79 bytes, minimized `\rule{2}{.1662322688380342688380341}`) | printer canonical form | 8b5fe40 | `roundtrip-dim-long-a` (and `-a-min`) | no (number text, not a grouping cause) |
+| dim-long-b | `{\rule{2}{00000.166232268034181866232268034181}}` (minimized: 25 digits) | printer canonical form | 8b5fe40 | `roundtrip-dim-long-b` (and `-b-min`) | no (number text, not a grouping cause) |
+| dim-mu | `\hspace{1mu}` | printer canonical form | 8b5fe40 | `roundtrip-dim-mu` | no (number text; found by the dimension property) |
+| dim-whole-edge | `\hspace{20000000000000000000000000000000000000}` | printer canonical form | 8b5fe40 | `roundtrip-dim-whole-edge` | no (`X.0` overflows the reader; found by the property near the i128 limit) |
+| dim-pt-edge | `\hspace{.00000000000000000000000000000000000056pt}` | printer canonical form | 8b5fe40 | `roundtrip-dim-pt-edge` | no (em text has 39 digits; found by the property near the i128 limit) |
 | depth-option-nest | `\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[]]]b]*]]]?]*]]]]]b]*]]]?]b]*]]]\u{1e}` | depth | a686a51 | `roundtrip-depth-option-nest` | 5.3 optional argument (parser-asked, empty option) |
 
 ## Count per class
@@ -141,20 +155,20 @@ Notes:
 |---|---|
 | preprocess rewrite | 8 |
 | text decode | 2 |
-| printer canonical form | 41 |
+| printer canonical form | 46 |
 | depth | 17 |
 | other | 11 |
-| **total** | **79** |
+| **total** | **84** |
 
 ## Covered by the spec 5 rule
 
-42 of 79 rows are now decided by the spec 5 grouping rule (or its Q1/Q2 parser changes). Per class:
+42 of 84 rows are now decided by the spec 5 grouping rule (or its Q1/Q2 parser changes). Per class:
 
 | class | covered | rows |
 |---|---|---|
 | preprocess rewrite | 0 | 8 |
 | text decode | 0 | 2 |
-| printer canonical form | 23 | 41 |
+| printer canonical form | 23 | 46 |
 | depth | 17 | 17 |
 | other | 2 | 11 |
 
