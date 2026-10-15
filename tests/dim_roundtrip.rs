@@ -131,6 +131,45 @@ fn long_and_mu_dimensions_round_trip() {
     }
 }
 
+/// A sweep with no randomness, over the lengths where the reader's `i128`
+/// runs out: `1` and `9` runs of every length with the point at every place,
+/// and `2^-k` (the decimals with the most digits per bit), in every unit.
+#[test]
+fn sweep_digit_runs_and_powers_of_one_half() {
+    let mut texts = Vec::new();
+    for len in 1..=45usize {
+        for digit in ['1', '9'] {
+            let run: String = std::iter::repeat_n(digit, len).collect();
+            texts.push(run.clone());
+            for at in 0..=len {
+                texts.push(format!("{}.{}", &run[..at], &run[at..]));
+            }
+            texts.push(format!("1{}", "0".repeat(len)));
+        }
+    }
+    let mut five = 1u128;
+    for k in 1..=55usize {
+        five *= 5;
+        let digits = five.to_string();
+        texts.push(format!(
+            "0.{}{digits}",
+            "0".repeat(k.saturating_sub(digits.len()))
+        ));
+    }
+    for text in &texts {
+        for unit in ["", "em", "mu", "pt", "bp"] {
+            for src in [
+                format!("\\hspace{{{text}{unit}}}"),
+                format!("\\rule{{1}}{{-{text}{unit}}}"),
+            ] {
+                if let Err(msg) = check(&src) {
+                    panic!("{msg}");
+                }
+            }
+        }
+    }
+}
+
 fn runner() -> TestRunner {
     let cases = std::env::var("LATEX_RUST_DIM_CASES")
         .ok()
