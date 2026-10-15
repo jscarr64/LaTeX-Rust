@@ -7,6 +7,14 @@ This release lists every finding and its fix. Nothing in this section is publish
 
 ### Fixed
 
+- **A `(` in a matrix cell paired with a `)` in the next cell.** The
+  scripted-paren lookahead ran past `&`, `\\`, `\end` and `\right`, so
+  `\begin{vmatrix}{(}&{)^x}\end{vmatrix}` printed `(&)^x` and the reprint
+  failed with "unexpected token &". The lookahead now stops at any token that
+  ends the list it started in, the rule that already applied to an option's
+  `]`. Parser change: a paren group before `&`, `\\`, `\end` or `\right`
+  never looks beyond it for a script. Found by fuzzing.
+
 - **A print ending in a Unicode whitespace atom lost it on reparse.**
   `preprocess` trims every Unicode whitespace character at the ends of the
   input, but the tokenizer reads U+00A0, U+2007 and the like as atoms, so

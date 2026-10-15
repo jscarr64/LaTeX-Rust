@@ -266,7 +266,7 @@ pub fn parse_with_options(
         cases_depth: 0,
         plain_letters_until: 0,
         text_left: TEXT_LEVELS,
-        in_option: false,
+        stop: Stop::eof(),
     };
     let node = drive::parse_top(&mut p)?;
     p.skip_ws();
@@ -280,7 +280,7 @@ pub fn parse_with_options(
 }
 
 #[derive(Clone, Copy)]
-struct Stop {
+pub(crate) struct Stop {
     end_group: bool,
     amp: bool,
     cr: bool,
@@ -290,7 +290,7 @@ struct Stop {
 }
 
 impl Stop {
-    fn eof() -> Self {
+    pub(crate) fn eof() -> Self {
         Self {
             end_group: false,
             amp: false,
@@ -298,6 +298,20 @@ impl Stop {
             right: false,
             end_env: false,
             rbracket: false,
+        }
+    }
+
+    /// True when `tok` ends a list read with this stop set.
+    pub(crate) fn hits(self, tok: &Token) -> bool {
+        match tok {
+            Token::EndGroup if self.end_group => true,
+            Token::AlignmentTab if self.amp => true,
+            Token::Command(s) if s == "\\" && self.cr => true,
+            Token::Command(s) if s == "cr" && self.cr => true,
+            Token::Command(s) if s == "right" && self.right => true,
+            Token::Command(s) if s == "end" && self.end_env => true,
+            Token::Char(']') if self.rbracket => true,
+            _ => false,
         }
     }
 
@@ -358,9 +372,9 @@ struct Parser {
     plain_letters_until: usize,
     /// Text nesting levels still allowed (starts at [`TEXT_LEVELS`]).
     text_left: usize,
-    /// The list now reading atoms ends at `]` (an optional argument), so the
-    /// paren lookahead stops there (spec 5, Q1).
-    in_option: bool,
+    /// The stop set of the list now reading atoms (`&`, `\\`, `\end`, `\right`,
+    /// an option's `]`): a paren lookahead ends there (spec 5, Q1).
+    stop: Stop,
 }
 
 /// Bounds the native recursion text → inline math → text. Text nesting also
@@ -395,22 +409,13 @@ impl Parser {
     }
 
     fn is_stop(&self, tok: &Token, stop: Stop) -> bool {
-        match tok {
-            Token::EndGroup if stop.end_group => true,
-            Token::AlignmentTab if stop.amp => true,
-            Token::Command(s) if s == "\\" && stop.cr => true,
-            Token::Command(s) if s == "cr" && stop.cr => true,
-            Token::Command(s) if s == "right" && stop.right => true,
-            Token::Command(s) if s == "end" && stop.end_env => true,
-            Token::Char(']') if stop.rbracket => true,
-            _ => false,
-        }
+        stop.hits(tok)
     }
 
     /// True when the `(` at `pos` starts a scripted paren group; see
     /// [`paren_script_match`].
     fn script_follows_parens(&self) -> bool {
-        paren_script_match(&self.tokens, self.pos, self.in_option).is_some()
+        paren_script_match(&self.tokens, self.pos, self.stop).is_some()
     }
 
     /// Lexes the [`Token::TextArg`] after a text command (spec 3.2).
@@ -457,7 +462,7 @@ impl Parser {
             cases_depth: 0,
             plain_letters_until: 0,
             text_left: left,
-            in_option: false,
+            stop: Stop::eof(),
         };
         let result = parse_whole(&mut parser);
         self.colors = parser.colors;
@@ -654,10 +659,11 @@ impl Parser {
 /// balanced groups and stops at an unbalanced `}` (spec 3.3). It also
 /// skips the delimiter after `\left`, `\right`, `\middle` and the `\big`
 /// family, and the `[…]` option of a command that takes one, since those
-/// parens belong to the command (spec 5, Q1). With `in_option` (the `(` is
-/// in a list that a `]` ends), the scan stops at that `]`: an option is a
-/// unit from inside as well as from outside.
-pub(crate) fn paren_script_match(tokens: &[Token], pos: usize, in_option: bool) -> Option<usize> {
+/// parens belong to the command (spec 5, Q1). The scan stops at any token
+/// that ends the list it started in (`stop`: `&`, `\\`, `\end`, `\right`,
+/// an option's `]`), so a `(` in one matrix cell never pairs with a `)` in
+/// the next.
+pub(crate) fn paren_script_match(tokens: &[Token], pos: usize, stop: Stop) -> Option<usize> {
     let mut i = pos;
     let mut depth = 0i32;
     let mut braces = 0usize;
@@ -671,6 +677,7 @@ pub(crate) fn paren_script_match(tokens: &[Token], pos: usize, in_option: bool) 
                 braces -= 1;
             }
             _ if braces > 0 => {}
+            _ if stop.hits(tok) => return None,
             Token::Space => {}
             Token::Command(name) if is_delimiter_command(name) => {
                 i = skip_spaces_from(tokens, i + 1);
@@ -699,7 +706,6 @@ pub(crate) fn paren_script_match(tokens: &[Token], pos: usize, in_option: bool) 
                     return None;
                 }
             }
-            Token::Char(']') if in_option => return None,
             _ => {}
         }
         i += 1;
@@ -780,7 +786,7 @@ pub(crate) fn option_ends_early(mut tokens: Vec<Token>) -> bool {
         cases_depth: 0,
         plain_letters_until: 0,
         text_left: TEXT_LEVELS,
-        in_option: false,
+        stop: Stop::eof(),
     };
     let read = drive::parse_option_body(&mut parser).is_ok();
     !(read && parser.pos == end)

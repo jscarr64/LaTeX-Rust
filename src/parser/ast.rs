@@ -4,7 +4,7 @@ use crate::color::Color;
 use crate::dim::Dim;
 use crate::parser::group_rules;
 use crate::parser::parse::lexicon::is_superscript_char;
-use crate::parser::parse::{option_ends_early, paren_script_match, ParseOptions};
+use crate::parser::parse::{option_ends_early, paren_script_match, ParseOptions, Stop};
 use crate::parser::token::{tokenize, Token};
 
 /// TeX math atom class (Appendix G).
@@ -2232,7 +2232,7 @@ fn paren_groups(
             .zip(braced.iter())
             .zip(&first)
             .filter(|((item, flag), _)| !**flag && starts_with_open_paren(item))
-            .find_map(|(_, pos)| paren_script_match(&tokens, *pos, false))
+            .find_map(|(_, pos)| paren_script_match(&tokens, *pos, Stop::eof()))
             .and_then(|m| owner.get(m).copied());
         let grouped = match hit.and_then(|j| braced.get_mut(j)) {
             Some(flag) if !*flag => {

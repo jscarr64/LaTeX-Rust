@@ -445,7 +445,7 @@ fn step_list(
             Ok(Step::Again)
         }
         _ => {
-            parser.in_option = st.stop.rbracket;
+            parser.stop = st.stop;
             st.phase = ListPhase::WaitAtom;
             Ok(Step::Call(Kind::atom(), false))
         }
