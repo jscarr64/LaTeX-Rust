@@ -2629,8 +2629,8 @@ fn write_space(out: &mut LatexBuf<'_>, kind: &SpaceKind) {
         SpaceKind::Hspace(dim) => {
             write_cmd(out, "hspace");
             out.push('{');
-            out.push_str(&dim.to_dec_string());
-            out.push_str("em}");
+            out.push_str(&dim.to_tex_string());
+            out.push('}');
         }
     }
 }
@@ -2642,8 +2642,8 @@ fn write_strut(out: &mut LatexBuf<'_>, height: &Dim, depth: &Dim) {
     }
     write_cmd(out, "rule");
     out.push_str("{0em}{");
-    out.push_str(&height.to_dec_string());
-    out.push_str("em}");
+    out.push_str(&height.to_tex_string());
+    out.push('}');
 }
 
 fn write_atom(out: &mut LatexBuf<'_>, c: char) {

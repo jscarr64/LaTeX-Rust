@@ -1404,12 +1404,10 @@ fn parse_tex_dim(s: &str) -> Result<Dim, ParseError> {
     }
     let num = Dim::parse(&s[..i]);
     let unit = s[i..].trim();
-    let dim = match unit {
-        "" | "em" => num,
-        "mu" => Dim::from_mu(&num),
-        "pt" | "bp" => num / Dim::from_i64(10),
-        other => return Err(ParseError::Unsupported(format!("dimension unit {other}"))),
-    };
+    // `Dim::in_em` is the one definition of the units (em, mu, pt, bp).
+    let dim = num
+        .in_em(unit)
+        .ok_or_else(|| ParseError::Unsupported(format!("dimension unit {unit}")))?;
     // A number too large for the exact rational is NaN, which prints as
     // `NaNem` and cannot be read back.
     if dim.is_nan() {

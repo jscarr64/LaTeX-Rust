@@ -7,6 +7,22 @@ This release lists every finding and its fix. Nothing in this section is publish
 
 ### Fixed
 
+- **A long or mu dimension did not print back to itself.** `\hspace` and
+  `\rule` printed their `Dim` through `to_dec_string`, which stops after 24
+  decimal digits, so `\rule{2}{.1662322688380342688380341}` (25 digits) reprinted as
+  24 digits and read back as a different number, and `\hspace{1mu}` (1/18 em,
+  a decimal that never ends) printed `0.055555555555555555555555em` (found by the
+  2-hour parse fuzz, `roundtrip-dim-long-a` and `-b`, and by a property over the
+  dimension grammar). The printer now writes the exact value in the first unit
+  (`em`, `mu`, `pt`) whose text the reader turns back into the same `Dim`:
+  `1.0mu`, `0.1662322688380342688380341em`, and a whole number of 38 digits
+  without `.0`. The reader accepts exactly what it did before (an overflowing
+  number is still `ParseError::Malformed("dimension out of range …")`); the
+  unit table is now one definition, `Dim::in_em`. `Dim::to_dec_string` and the
+  SVG output are unchanged. The `to_latex` text of a `Dim` that has no exact
+  decimal in any of those units (only possible from a tree built by hand) is
+  still the 24-digit form.
+
 - **A large `Dim` was not equal to itself.** `Dim::cmp` multiplied the two
   cross products with `checked_mul` and returned `None` (unordered) when that
   overflowed `i128`, so `Dim::parse("2.1662322688380341817")` compared unequal
