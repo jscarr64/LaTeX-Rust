@@ -7,6 +7,13 @@ This release lists every finding and its fix. Nothing in this section is publish
 
 ### Fixed
 
+- **A print ending in a Unicode whitespace atom lost it on reparse.**
+  `preprocess` trims every Unicode whitespace character at the ends of the
+  input, but the tokenizer reads U+00A0, U+2007 and the like as atoms, so
+  `a\u{a0}%` (the comment hides the character from the trim) parsed to two
+  atoms and printed as `a\u{a0}`, which parses to one. `to_latex` now puts
+  such a print in one `{…}` group. Found by fuzzing.
+
 - **A color defined inside text math stays defined.** The text-math
   sub-parser used to work on a copy of the color table, so
   `\text{$\definecolor{a}{named}{red}$}` dropped `a`. The table is now moved

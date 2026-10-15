@@ -352,6 +352,9 @@ fn edge_whitespace_atoms_survive_the_trim() {
         "%\n\u{a0}\u{a0}",
         "a\u{a0}%\n",
         "x^{\u{a0}}%",
+        "a\u{b}%",
+        "\u{c}\u{85}%",
+        "%\n\u{b}a",
         "\\text{a\u{a0}}%",
     ] {
         if let Err(e) = check(src, &options_from_bits(0)) {

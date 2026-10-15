@@ -1386,11 +1386,18 @@ impl MathNode {
         let mut out = self.print_raw(options.prime_symbol);
         // The parser strips `\(…\)` and `\[…\]` fences around the whole
         // input and rejects an unclosed one, so a print that only starts
-        // with `\(` or `\[` is one group.
+        // with `\(` or `\[` is one group. A print that starts or ends with a
+        // whitespace atom the tokenizer does not skip (U+00A0, U+2007, `\x0b`;
+        // a comment hid it from the `preprocess` trim) is one group too, so
+        // the braces are its ends. A space, tab or newline is not an atom:
+        // `<`, `>` and `!` print with a trailing space the tokenizer skips.
         let fenced = ["\\(", "\\["]
             .iter()
             .any(|open| out.starts_with(open) && out.len() > open.len());
-        if fenced {
+        let trimmed = |c: Option<char>| {
+            c.is_some_and(|c| c.is_whitespace() && !matches!(c, ' ' | '\t' | '\n' | '\r'))
+        };
+        if fenced || trimmed(out.chars().next()) || trimmed(out.chars().next_back()) {
             out.insert(0, '{');
             out.push('}');
         }
