@@ -255,6 +255,9 @@ const FINDINGS: &[(&str, &str, u8)] = &[
         "\\xleftarrow[(]))^\u{8}",
         0,
     ),
+    // A figure space (U+2007) before a comment is an atom, but at the end of
+    // the print `preprocess` trims it (fuzz r14).
+    ("roundtrip-canon-edge-space", "\u{8}\u{2007}%", 0),
     // The `\)` check saw the fence-wrapped body `{\(\)}`, but the printer
     // wrote it unwrapped inside `\(…\)` (fuzz).
     ("roundtrip-canon-text-math-fence", r"\text{$\(\)$}", 0),
@@ -332,5 +335,27 @@ fn dimensions_without_a_number_are_rejected() {
     }
     for src in [r"\rule{.5}{1.}", r"\hspace{-.25em}"] {
         assert!(check(src, &options_from_bits(0)).is_ok(), "{src}");
+    }
+}
+
+/// `preprocess` trims every Unicode whitespace character at the ends of the
+/// input, but the tokenizer reads such a character as an atom, so a tree whose
+/// print starts or ends with one (a comment hides it from the trim: `a\u{a0}%`)
+/// lost it on the reparse. The print is now grouped when the trim would touch it.
+#[test]
+fn edge_whitespace_atoms_survive_the_trim() {
+    for src in [
+        "\u{8}\u{2007}%",
+        "a\u{a0}%",
+        "%\n\u{a0}a",
+        "\u{2003}%",
+        "%\n\u{a0}\u{a0}",
+        "a\u{a0}%\n",
+        "x^{\u{a0}}%",
+        "\\text{a\u{a0}}%",
+    ] {
+        if let Err(e) = check(src, &options_from_bits(0)) {
+            panic!("{src:?}: {e}");
+        }
     }
 }
