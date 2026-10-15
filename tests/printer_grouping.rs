@@ -260,3 +260,26 @@ fn nested_options_are_not_regrouped() {
     assert!(depth(&printed) <= depth(&src), "{printed}");
     assert_eq!(parse(&printed).ok().as_ref(), Some(&tree));
 }
+
+/// A paren lookahead belongs to the list it starts in: it stops where that
+/// list ends (`&`, `\\`, `\end`, `\right`, an option's `]`), so a `(` in one
+/// matrix cell never pairs with a `)` in the next (spec 5, Q1 generalized;
+/// fuzz r15).
+#[test]
+fn lookahead_stops_at_the_end_of_its_list() {
+    for src in [
+        r"{\begin{vmatrix}{(}&{)^x}\end{vmatrix}}",
+        r"{\begin{vmatrix}{(}\\{)^x}\end{vmatrix}}",
+        r"{\begin{vmatrix}{(}\end{vmatrix})'}",
+        r"\left({(}\right)^x",
+        r"\begin{cases}{(}&{)'}\end{cases}",
+    ] {
+        let tree = parse(src).unwrap_or_else(|e| panic!("{src}: {e}"));
+        let printed = tree.to_latex();
+        assert_eq!(
+            parse(&printed).as_ref().ok(),
+            Some(&tree),
+            "{src} printed {printed}"
+        );
+    }
+}

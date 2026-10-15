@@ -258,6 +258,19 @@ const FINDINGS: &[(&str, &str, u8)] = &[
     // A figure space (U+2007) before a comment is an atom, but at the end of
     // the print `preprocess` trims it (fuzz r14).
     ("roundtrip-canon-edge-space", "\u{8}\u{2007}%", 0),
+    // A `(` alone in a matrix cell paired with a `)` in the next cell: the
+    // lookahead ran across `&` (fuzz r15).
+    (
+        "roundtrip-canon-cell-paren",
+        r"{\begin{vmatrix}{(}&{)^x}\end{vmatrix}}",
+        0,
+    ),
+    // The same across `\end` (fuzz r15).
+    (
+        "roundtrip-canon-end-paren",
+        r"{\begin{vmatrix}{(}\end{vmatrix})'}",
+        0,
+    ),
     // The `\)` check saw the fence-wrapped body `{\(\)}`, but the printer
     // wrote it unwrapped inside `\(…\)` (fuzz).
     ("roundtrip-canon-text-math-fence", r"\text{$\(\)$}", 0),
