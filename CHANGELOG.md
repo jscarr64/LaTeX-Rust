@@ -7,6 +7,13 @@ This release lists every finding and its fix. Nothing in this section is publish
 
 ### Fixed
 
+- **Two more places the parser reads a token by position.** `\substack{{]}}`
+  printed `\substack {]}`, and `{]}` reads as a bare `]`, so the reprint lost
+  the required `{`; a lone `[` or `]` line now keeps two groups. A cell that
+  starts with `\hline` or `\intertext` at the start of an environment row
+  (`\begin{matrix}{\hline}x\end{matrix}`) read back as a row rule; such an item
+  now prints braced. Found by a random token search after the r15 fuzz round.
+
 - **A `(` in a matrix cell paired with a `)` in the next cell.** The
   scripted-paren lookahead ran past `&`, `\\`, `\end` and `\right`, so
   `\begin{vmatrix}{(}&{)^x}\end{vmatrix}` printed `(&)^x` and the reprint

@@ -1872,11 +1872,18 @@ fn write_node<'a>(out: &mut LatexBuf<'a>, node: &'a MathNode) {
         MathNode::Substack(lines) => {
             write_cmd(out, "substack");
             out.push('{');
-            for (i, line) in lines.iter().enumerate() {
-                if i > 0 {
-                    out.push_str("\\\\");
+            match lines.as_slice() {
+                // The `{` is required, and `{]}` unwraps to a bare `]` (G3),
+                // so a lone bracket keeps two groups.
+                [line @ MathNode::Atom('[' | ']', _)] => write_group(out, line),
+                _ => {
+                    for (i, line) in lines.iter().enumerate() {
+                        if i > 0 {
+                            out.push_str("\\\\");
+                        }
+                        out.node(line);
+                    }
                 }
-                out.node(line);
             }
             out.push('}');
         }
@@ -2103,13 +2110,20 @@ fn write_row<'a>(out: &mut LatexBuf<'a>, items: &'a [MathNode]) {
 /// superscript character would attach to its neighbour. Two bare letters are
 /// split by a space so they do not form an operator word. Then the row paren
 /// pass (spec 5.4) groups any item that would close a scripted paren group.
-fn write_row_items<'a>(out: &mut LatexBuf<'a>, items: &'a [MathNode]) {
+fn write_row_items_at<'a>(out: &mut LatexBuf<'a>, items: &'a [MathNode], row_start: bool) {
     let mut braced: Vec<bool> = items
         .iter()
-        .map(|item| match item {
-            MathNode::Row(_) => true,
-            MathNode::Atom(c, _) => *c == '\'' || is_superscript_char(*c),
-            _ => false,
+        .enumerate()
+        .map(|(i, item)| {
+            if row_start && i == 0 && matches!(item, MathNode::Hline | MathNode::Intertext(_)) {
+                true
+            } else {
+                match item {
+                    MathNode::Row(_) => true,
+                    MathNode::Atom(c, _) => *c == '\'' || is_superscript_char(*c),
+                    _ => false,
+                }
+            }
         })
         .collect();
     // The pass prints every item once; those strings are reused below, so a
@@ -2133,6 +2147,20 @@ fn write_row_items<'a>(out: &mut LatexBuf<'a>, items: &'a [MathNode]) {
             _ if braced => write_group(out, item),
             _ => out.node(item),
         }
+    }
+}
+
+fn write_row_items<'a>(out: &mut LatexBuf<'a>, items: &'a [MathNode]) {
+    write_row_items_at(out, items, false);
+}
+
+/// The first cell of an environment row: the parser reads a leading `\hline` or
+/// `\intertext` as a row rule or a text row, so such an item prints braced.
+fn write_cell<'a>(out: &mut LatexBuf<'a>, cell: &'a MathNode) {
+    match cell {
+        MathNode::Hline | MathNode::Intertext(_) => write_group(out, cell),
+        MathNode::Row(items) if !items.is_empty() => write_row_items_at(out, items, true),
+        _ => out.node(cell),
     }
 }
 
@@ -2430,7 +2458,11 @@ fn write_matrix<'a>(
                     if i > 0 {
                         out.push('&');
                     }
-                    out.node(cell);
+                    if i == 0 {
+                        write_cell(out, cell);
+                    } else {
+                        out.node(cell);
+                    }
                     if i + 1 == cells.len() {
                         write_eq_meta(out, number, labels);
                     }
