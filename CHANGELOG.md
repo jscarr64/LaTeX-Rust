@@ -315,7 +315,10 @@ This release lists every finding and its fix. Nothing in this section is publish
 - **Dimensions with no number.** `\rule{2}{.}` and `\hspace{1.2.3em}` parsed to
   a NaN dimension that printed as `NaNem` and did not read back (fuzz,
   `roundtrip-dim-dot`). A dimension now needs at least one digit and at most
-  one point; anything else is `ParseError::Malformed("invalid dimension …")`.
+  one point; anything else is `ParseError::Malformed("invalid dimension …")`. A number too
+  large for the exact rational (`\rule{2}{888…8}`, 39 digits) is also NaN, and is
+  now `ParseError::Malformed("dimension out of range …")` (fuzz
+  `roundtrip-dim-overflow`).
 
 - **Reprints that did not parse back.** A whole-grammar property
   (`print(parse(print(x))) == print(x)` and `parse(print(t)) == t`, over every

@@ -1346,12 +1346,20 @@ fn parse_tex_dim(s: &str) -> Result<Dim, ParseError> {
     }
     let num = Dim::parse(&s[..i]);
     let unit = s[i..].trim();
-    match unit {
-        "" | "em" => Ok(num),
-        "mu" => Ok(Dim::from_mu(&num)),
-        "pt" | "bp" => Ok(num / Dim::from_i64(10)),
-        other => Err(ParseError::Unsupported(format!("dimension unit {other}"))),
+    let dim = match unit {
+        "" | "em" => num,
+        "mu" => Dim::from_mu(&num),
+        "pt" | "bp" => num / Dim::from_i64(10),
+        other => return Err(ParseError::Unsupported(format!("dimension unit {other}"))),
+    };
+    // A number too large for the exact rational is NaN, which prints as
+    // `NaNem` and cannot be read back.
+    if dim.is_nan() {
+        return Err(ParseError::Malformed(format!(
+            "dimension out of range `{s}`"
+        )));
     }
+    Ok(dim)
 }
 
 fn color_err(e: Error) -> ParseError {
