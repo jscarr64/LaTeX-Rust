@@ -15,24 +15,27 @@ pub(crate) fn apply(tokens: Vec<Token>) -> Vec<Token> {
 }
 
 /// `{ (}`, `{ )}`, `{ ( }`, `{ ) }`, `{[}` and `{]}` become the bare delimiter.
-fn unwrap_delimiters(tokens: Vec<Token>) -> Vec<Token> {
+fn unwrap_delimiters(mut tokens: Vec<Token>) -> Vec<Token> {
     use Token::{BeginGroup as B, Char, EndGroup as E, Space as S};
     let mut out = Vec::with_capacity(tokens.len());
     let mut i = 0;
-    while let Some(rest) = tokens.get(i..) {
-        let (c, len) = match rest {
-            [B, S, Char(c @ ('(' | ')')), E, ..] => (*c, 4),
-            [B, S, Char(c @ ('(' | ')')), S, E, ..] => (*c, 5),
-            [B, Char(c @ ('[' | ']')), E, ..] => (*c, 3),
-            [tok, ..] => {
-                out.push(tok.clone());
-                i += 1;
-                continue;
-            }
-            [] => break,
+    while i < tokens.len() {
+        let found = match tokens.get(i..) {
+            Some([B, S, Char(c @ ('(' | ')')), E, ..]) => Some((*c, 4)),
+            Some([B, S, Char(c @ ('(' | ')')), S, E, ..]) => Some((*c, 5)),
+            Some([B, Char(c @ ('[' | ']')), E, ..]) => Some((*c, 3)),
+            _ => None,
         };
-        out.push(Char(c));
-        i += len;
+        match found {
+            Some((c, len)) => {
+                out.push(Char(c));
+                i += len;
+            }
+            None => {
+                out.extend(tokens.get_mut(i).map(|t| std::mem::replace(t, S)));
+                i += 1;
+            }
+        }
     }
     out
 }
@@ -51,7 +54,7 @@ fn font_command(name: &str) -> Option<&'static str> {
 
 /// `{\rm x}` → `\mathrm{x}` (likewise `bf cal it sf tt`). The group's content,
 /// spaces trimmed, is the argument. An unclosed group is left alone.
-fn font_scopes(tokens: Vec<Token>) -> Vec<Token> {
+fn font_scopes(mut tokens: Vec<Token>) -> Vec<Token> {
     // Which `}` closes each `{`.
     let mut closes = vec![false; tokens.len()];
     let mut matched = vec![false; tokens.len()];
@@ -105,7 +108,11 @@ fn font_scopes(tokens: Vec<Token>) -> Vec<Token> {
                 }
                 out.push(Token::EndGroup);
             }
-            _ => out.push(tok.clone()),
+            _ => out.extend(
+                tokens
+                    .get_mut(i)
+                    .map(|t| std::mem::replace(t, Token::Space)),
+            ),
         }
         i += 1;
     }
