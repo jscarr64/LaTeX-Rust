@@ -407,3 +407,91 @@ fn fixed_place_tokens_are_hidden_where_the_parser_reads_them() {
         }
     }
 }
+
+/// Tokens the parser reads by position or pairing: parens and scripts, list
+/// ends (`&`, `\\`, `\cr`, `\end`, `\right`, `]`), environments, options,
+/// `\substack`, `\hline`, delimiters, comments, and Unicode whitespace.
+const STRUCTURAL: &[&str] = &[
+    "(",
+    ")",
+    "^x",
+    "'",
+    "''",
+    "&",
+    "\\\\",
+    "\\begin{matrix}",
+    "\\end{matrix}",
+    "\\left(",
+    "\\right)",
+    "\\left[",
+    "\\right]",
+    "\\left.",
+    "\\right.",
+    "{",
+    "}",
+    "[",
+    "]",
+    "{(}",
+    "{)}",
+    "{[}",
+    "{]}",
+    "\\sqrt",
+    "\\sqrt[",
+    "\\middle|",
+    "a",
+    "_1",
+    "\\xrightarrow",
+    "\\xleftarrow[",
+    "\\cr",
+    "\\substack{",
+    "\\begin{cases}",
+    "\\end{cases}",
+    "\\begin{array}{c}",
+    "\\end{array}",
+    "\\frac",
+    "\\big(",
+    "\\Big]",
+    "\\over",
+    "\\color{red}",
+    " ",
+    "<",
+    ">",
+    "!",
+    "\\text{a}",
+    "\\text{$x$}",
+    "\\operatorname{a}",
+    "\\mathrm{",
+    "\\tag{",
+    "\\hspace{1em}",
+    "\\,",
+    "\\hline",
+    "\\limits",
+    "\\mathrm",
+    "\\overline",
+    "\\binom",
+    "\\not",
+    "\\choose",
+    "\\begin{aligned}",
+    "\\end{aligned}",
+    "%\n",
+    "\u{a0}",
+    "\\(",
+    "\\)",
+    "\\[",
+    "\\]",
+];
+
+/// Random strings of those tokens: most are rejected, and every one that
+/// parses must print canonically. This found the matrix-cell paren, the
+/// `\substack` bracket, and the row-start `\hline` cases (fuzz r15 and after).
+#[test]
+fn prop_structural_token_strings_print_canonically() {
+    let mut runner = runner();
+    let strategy = proptest::collection::vec(proptest::sample::select(STRUCTURAL), 2..14)
+        .prop_map(|toks| toks.concat());
+    if let Err(e) = runner.run(&strategy, |src| {
+        check(&src, &ParseOptions::default()).map_err(TestCaseError::fail)
+    }) {
+        panic!("{e}");
+    }
+}
