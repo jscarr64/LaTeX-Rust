@@ -1,6 +1,6 @@
 # Contributing
 
-Repository: <https://github.com/jscarr64/LaTeX-Rust>
+Repository: <https://github.com/jscarr64/latex-rust>
 
 LaTeX-Rust ships when the gold suite is complete and green.
 
@@ -34,4 +34,4 @@ a second symbol list.
 
 ## Pull requests
 
-Open issues and pull requests at <https://github.com/jscarr64/LaTeX-Rust>.
+Open issues and pull requests at <https://github.com/jscarr64/latex-rust>.
