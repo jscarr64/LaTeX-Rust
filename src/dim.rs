@@ -465,16 +465,40 @@ impl Dim {
         if self.nan || other.nan {
             return None;
         }
-        // n1/d1 vs n2/d2 => n1*d2 vs n2*d1
-        let left = self.num.checked_mul(other.den)?;
-        let right = other.num.checked_mul(self.den)?;
-        Some(left.cmp(&right))
+        // Exact for every value: no cross products, so nothing overflows.
+        let signs = self.num.signum().cmp(&other.num.signum());
+        if signs != Ordering::Equal || self.num == 0 {
+            return Some(signs);
+        }
+        let (n1, d1) = (self.num.unsigned_abs(), self.den.unsigned_abs());
+        let (n2, d2) = (other.num.unsigned_abs(), other.den.unsigned_abs());
+        Some(if self.num < 0 {
+            cmp_ratio(n2, d2, n1, d1)
+        } else {
+            cmp_ratio(n1, d1, n2, d2)
+        })
     }
 
     /// True when `self` and `other` compare equal.
     #[must_use]
     pub fn eq_dim(&self, other: &Self) -> bool {
         matches!(self.cmp(other), Some(Ordering::Equal))
+    }
+}
+
+/// Compares `n1/d1` with `n2/d2` (denominators positive) without multiplying:
+/// the integer parts first, then the fractional parts by their reciprocals
+/// (the Euclidean algorithm, so it ends in at most about 190 steps).
+fn cmp_ratio(n1: u128, d1: u128, n2: u128, d2: u128) -> Ordering {
+    let (q1, q2) = (n1 / d1, n2 / d2);
+    if q1 != q2 {
+        return q1.cmp(&q2);
+    }
+    match (n1 % d1, n2 % d2) {
+        (0, 0) => Ordering::Equal,
+        (0, _) => Ordering::Less,
+        (_, 0) => Ordering::Greater,
+        (r1, r2) => cmp_ratio(d2, r2, d1, r1),
     }
 }
 

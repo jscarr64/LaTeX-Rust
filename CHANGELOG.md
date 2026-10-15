@@ -7,6 +7,14 @@ This release lists every finding and its fix. Nothing in this section is publish
 
 ### Fixed
 
+- **A large `Dim` was not equal to itself.** `Dim::cmp` multiplied the two
+  cross products with `checked_mul` and returned `None` (unordered) when that
+  overflowed `i128`, so `Dim::parse("2.1662322688380341817")` compared unequal
+  to itself and a tree holding it never equalled its own reparse (found by the
+  2-hour parse fuzz). `cmp` is now exact for every non-NaN pair, with no
+  products: it compares integer parts and then the reciprocals of the
+  remainders, so it returns `None` only for NaN, as its doc says.
+
 - **Two more places the parser reads a token by position.** `\substack{{]}}`
   printed `\substack {]}`, and `{]}` reads as a bare `]`, so the reprint lost
   the required `{`; a lone `[` or `]` line now keeps two groups. A cell that

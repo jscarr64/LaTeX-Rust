@@ -42,3 +42,18 @@ fn the_dim_seeds_round_trip() {
         );
     }
 }
+
+/// The exact comparison agrees with the cross product wherever that fits.
+#[test]
+fn small_dims_compare_like_cross_products() {
+    let vals: Vec<(i64, i64)> = (-9..=9)
+        .flat_map(|n| (1..=9).map(move |d| (n * 7, d * 3)))
+        .collect();
+    for &(n1, d1) in &vals {
+        for &(n2, d2) in &vals {
+            let want = (n1 * d2).cmp(&(n2 * d1));
+            let got = Dim::ratio(n1, d1).cmp(&Dim::ratio(n2, d2));
+            assert_eq!(got, Some(want), "{n1}/{d1} vs {n2}/{d2}");
+        }
+    }
+}
