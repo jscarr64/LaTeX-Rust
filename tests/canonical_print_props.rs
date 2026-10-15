@@ -313,6 +313,23 @@ fn dimensions_without_a_number_are_rejected() {
             "{src} should be rejected"
         );
     }
+    // A number too large for the exact rational is NaN too (fuzz r12).
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/fuzz/corpus/parse/roundtrip-dim-overflow"
+    );
+    let seed = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{path}: {e}"));
+    assert_eq!(seed, r"{\rule{2}{888888888888888888888888888888888888888}}");
+    for src in [
+        seed.as_str(),
+        r"\hspace{99999999999999999999999999999999999999999999em}",
+        r"\hspace{170141183460469231731687303715884105728mu}",
+    ] {
+        assert!(
+            parse_with_options(src, &options_from_bits(0)).is_err(),
+            "{src} should be rejected"
+        );
+    }
     for src in [r"\rule{.5}{1.}", r"\hspace{-.25em}"] {
         assert!(check(src, &options_from_bits(0)).is_ok(), "{src}");
     }

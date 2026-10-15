@@ -92,6 +92,7 @@ const SEEDS: &[&str] = &[
     "roundtrip-depth-cbe83c33",
     "roundtrip-depth-fa46a27f",
     "roundtrip-dim-dot",
+    "roundtrip-dim-overflow",
     "roundtrip-perf-paren-row",
 ];
 
