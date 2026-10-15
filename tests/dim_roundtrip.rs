@@ -84,7 +84,8 @@ const TABLE: &[(&str, &str)] = &[
     ),
     (
         "\\hspace{170141183460469231731687303715884105727em}",
-        "\\hspace{170141183460469231731687303715884105727.0em}",
+        // `.0` after 39 digits would overflow the reader, so the print has none.
+        "\\hspace{170141183460469231731687303715884105727em}",
     ),
     // Trailing zeros past the point do not change the value or the print.
     (
@@ -105,6 +106,11 @@ const TABLE: &[(&str, &str)] = &[
     // pt and bp are tenths of an em here.
     ("\\hspace{3pt}", "\\hspace{0.3em}"),
     ("\\hspace{0.1234567890123456789012345pt}", ""),
+    // 5.6e-39 em: 39 digits, which the reader cannot hold, so the print keeps pt.
+    (
+        "\\hspace{.00000000000000000000000000000000000056pt}",
+        "\\hspace{0.00000000000000000000000000000000000056pt}",
+    ),
     ("\\rule{1bp}{1234567890123456789012345.6789bp}", ""),
 ];
 
@@ -135,14 +141,14 @@ fn runner() -> TestRunner {
     TestRunner::new_with_rng(config, TestRng::from_seed(RngAlgorithm::ChaCha, &[42; 32]))
 }
 
-/// A dimension: optional sign, 1 to 60 digits (zeros are common), a point
+/// A dimension: optional sign, `len` digits (zeros are common), a point
 /// anywhere in them or none, a unit the parser accepts (or none), with or
 /// without a space before the unit.
-fn dim_text() -> impl Strategy<Value = String> {
+fn dim_text(len: std::ops::RangeInclusive<usize>) -> impl Strategy<Value = String> {
     let digit = prop_oneof![3 => Just('0'), 7 => proptest::char::range('0', '9')];
     (
         proptest::sample::select(&["", "+", "-"][..]),
-        proptest::collection::vec(digit, 1..=60),
+        proptest::collection::vec(digit, len),
         any::<bool>(),
         0usize..=60,
         proptest::sample::select(&["", "em", "mu", "pt", "bp", " em", " mu"][..]),
@@ -160,8 +166,8 @@ fn dim_text() -> impl Strategy<Value = String> {
 }
 
 /// `\hspace{d}` and `\rule{w}{d}`, the two places a parse produces a `Dim`.
-fn dim_command() -> impl Strategy<Value = String> {
-    (dim_text(), dim_text(), any::<bool>()).prop_map(|(a, b, hspace)| {
+fn dim_command(len: std::ops::RangeInclusive<usize>) -> impl Strategy<Value = String> {
+    (dim_text(len.clone()), dim_text(len), any::<bool>()).prop_map(|(a, b, hspace)| {
         if hspace {
             format!("\\hspace{{{a}}}")
         } else {
@@ -173,11 +179,66 @@ fn dim_command() -> impl Strategy<Value = String> {
 #[test]
 fn prop_dimension_text_round_trips_and_prints_once() {
     let mut runner = runner();
-    if let Err(e) = runner.run(&dim_command(), |src| {
+    if let Err(e) = runner.run(&dim_command(1..=60), |src| {
         check(&src).map_err(TestCaseError::fail)
     }) {
         panic!("{e}");
     }
+}
+
+/// The same property at the edge of what a `Dim` holds (`i128` is 39 digits,
+/// a point-and-unit scale by 10 or 18 overflows one digit sooner): this is
+/// where `X.0` stopped reading back, and where em stops being the unit.
+#[test]
+fn prop_dimension_text_near_the_i128_limit() {
+    let mut runner = runner();
+    if let Err(e) = runner.run(&dim_command(34..=41), |src| {
+        check(&src).map_err(TestCaseError::fail)
+    }) {
+        panic!("{e}");
+    }
+}
+
+/// The other place a decimal is read into a `Dim`: color components, which
+/// are rounded to a byte (so the tree holds no `Dim`) and print as hex. A long
+/// decimal must give the same color after the round trip, or a typed error.
+#[test]
+fn prop_color_components_with_long_decimals_round_trip() {
+    let part = (
+        proptest::collection::vec(proptest::char::range('0', '9'), 1..=45),
+        0usize..=45,
+    )
+        .prop_map(|(digits, at)| {
+            let all: String = digits.into_iter().collect();
+            let at = at % (all.len() + 1);
+            format!("{}.{}", &all[..at], &all[at..])
+        });
+    let strategy = (
+        proptest::sample::select(&["\\color", "\\textcolor"][..]),
+        proptest::sample::select(&["rgb", "cmyk", "gray"][..]),
+        proptest::collection::vec(part, 4),
+    )
+        .prop_map(|(cmd, model, parts)| {
+            let n = match model {
+                "rgb" => 3,
+                "cmyk" => 4,
+                _ => 1,
+            };
+            format!("{cmd}[{model}]{{{}}}{{x}}", parts[..n].join(","))
+        });
+    let mut runner = runner();
+    let parsed = Cell::new(0u32);
+    let total = Cell::new(0u32);
+    let outcome = runner.run(&strategy, |src| {
+        total.set(total.get() + 1);
+        parsed.set(parsed.get() + u32::from(parse(&src).is_ok()));
+        check(&src).map_err(TestCaseError::fail)
+    });
+    if let Err(e) = outcome {
+        panic!("{e}");
+    }
+    let (parsed, total) = (parsed.get(), total.get());
+    assert!(parsed * 4 > total, "only {parsed} of {total} parsed");
 }
 
 /// The property must not pass because everything is rejected.
@@ -186,7 +247,7 @@ fn most_generated_dimensions_parse() {
     let mut runner = runner();
     let parsed = Cell::new(0u32);
     let total = Cell::new(0u32);
-    let outcome = runner.run(&dim_command(), |src| {
+    let outcome = runner.run(&dim_command(1..=60), |src| {
         total.set(total.get() + 1);
         parsed.set(parsed.get() + u32::from(parse(&src).is_ok()));
         Ok(())

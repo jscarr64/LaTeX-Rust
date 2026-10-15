@@ -108,7 +108,10 @@ const SEEDS: &[&str] = &[
     "roundtrip-dim-long-a-min",
     "roundtrip-dim-long-b",
     "roundtrip-dim-long-b-min",
+    "roundtrip-dim-mu",
+    "roundtrip-dim-pt-edge",
     "roundtrip-dim-overflow",
+    "roundtrip-dim-whole-edge",
     "roundtrip-perf-paren-row",
 ];
 
