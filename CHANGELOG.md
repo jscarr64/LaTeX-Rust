@@ -1,9 +1,13 @@
 # Changelog
 
-## [3.0.0] — unreleased
+## [3.0.1] — 2026-10-15
+
+metadata: repository and homepage URLs use lowercase latex-rust; no code changes.
+
+## [3.0.0] — 2026-10-15
 
 Issues found in one program led to a forensic audit of our other crates.
-This release lists every finding and its fix. Nothing in this section is published.
+This release lists every finding and its fix. Published to crates.io on 2026-10-15.
 
 ### Fixed
 
