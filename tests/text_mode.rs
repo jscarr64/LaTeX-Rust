@@ -64,6 +64,7 @@ const SEEDS: &[&str] = &[
     "roundtrip-g9-1410dba0",
     "roundtrip-canon-big-paren",
     "roundtrip-canon-edge-space",
+    "roundtrip-canon-edge-space-b",
     "roundtrip-canon-fence-open",
     "roundtrip-canon-option-bracket",
     "roundtrip-canon-option-inner-paren",
