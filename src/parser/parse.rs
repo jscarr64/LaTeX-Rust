@@ -424,26 +424,30 @@ impl Parser {
                 return Err(ParseError::Malformed("expected '{'".into()));
             }
         };
-        let levels = self
-            .max_depth
-            .saturating_sub(self.depth)
-            .min(self.text_left);
-        let too_deep = if self.max_depth.saturating_sub(self.depth) <= self.text_left {
-            ParseError::Malformed(format!("input nests deeper than {} levels", self.max_depth))
-        } else {
-            ParseError::Malformed(format!("text nests deeper than {TEXT_LEVELS} levels"))
+        let max_depth = self.max_depth;
+        let nested_by_input = max_depth.saturating_sub(self.depth) <= self.text_left;
+        let levels = max_depth.saturating_sub(self.depth).min(self.text_left);
+        let too_deep = move || {
+            if nested_by_input {
+                ParseError::Malformed(format!("input nests deeper than {max_depth} levels"))
+            } else {
+                ParseError::Malformed(format!("text nests deeper than {TEXT_LEVELS} levels"))
+            }
         };
         let mut math = |src: &str, left: usize| self.sub_parse(src, left);
         lex_body(&raw, levels, &too_deep, &mut math)
     }
 
     /// Parses inline math from a text body with `left` levels to spare.
-    fn sub_parse(&self, src: &str, left: usize) -> Result<MathNode, ParseError> {
+    ///
+    /// The sub-parser takes the color table and hands it back, so a color
+    /// defined inside text math stays defined (like `\definecolor` in TeX).
+    fn sub_parse(&mut self, src: &str, left: usize) -> Result<MathNode, ParseError> {
         let tokens = group_rules::apply(tokenize(src)?);
         let mut parser = Parser {
             tokens,
             pos: 0,
-            colors: self.colors.clone(),
+            colors: std::mem::replace(&mut self.colors, ColorTable::empty()),
             depth: self.max_depth.saturating_sub(left),
             max_depth: self.max_depth,
             ascii_relations: self.ascii_relations,
@@ -455,15 +459,9 @@ impl Parser {
             text_left: left,
             in_option: false,
         };
-        let result = drive::parse_top(&mut parser)?;
-        parser.skip_ws();
-        if parser.pos < parser.tokens.len() {
-            let tok = &parser.tokens[parser.pos];
-            return Err(ParseError::Malformed(format!(
-                "unexpected leftover token {tok}"
-            )));
-        }
-        Ok(result)
+        let result = parse_whole(&mut parser);
+        self.colors = parser.colors;
+        result
     }
 
     fn parse_text(&mut self, style: TextStyle) -> Result<MathNode, ParseError> {
@@ -746,6 +744,18 @@ fn option_end(tokens: &[Token], open: usize) -> Option<usize> {
         i += 1;
     }
     None
+}
+
+/// Parses all of `parser`'s tokens as one math list; leftover tokens are an error.
+fn parse_whole(parser: &mut Parser) -> Result<MathNode, ParseError> {
+    let result = drive::parse_top(parser)?;
+    parser.skip_ws();
+    if let Some(tok) = parser.tokens.get(parser.pos) {
+        return Err(ParseError::Malformed(format!(
+            "unexpected leftover token {tok}"
+        )));
+    }
+    Ok(result)
 }
 
 /// True when `tokens`, read as the body of a `[…]` option followed by its

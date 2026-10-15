@@ -42,11 +42,11 @@ fn char_at(raw: &str, i: usize) -> Option<char> {
 ///
 /// `levels` is how many nesting levels are still allowed: each `{…}` group,
 /// nested text command, and inline math uses one; going past it returns
-/// `too_deep`. `math` parses inline math source with the levels left.
+/// `too_deep()`, which builds the error on demand. `math` parses inline math source with the levels left.
 pub(crate) fn lex_body(
     raw: &str,
     levels: usize,
-    too_deep: &ParseError,
+    too_deep: &dyn Fn() -> ParseError,
     math: &mut dyn FnMut(&str, usize) -> Result<MathNode, ParseError>,
 ) -> Result<TextRun, ParseError> {
     let mut f = Frames::default();
@@ -72,7 +72,7 @@ pub(crate) fn lex_body(
             }
             '{' => {
                 if f.stack.len() >= levels {
-                    return Err(too_deep.clone());
+                    return Err(too_deep());
                 }
                 f.stack.push((None, TextRun::default()));
                 i += 1;
@@ -113,7 +113,7 @@ pub(crate) fn lex_body(
                     }
                     Ctl::Open(style) => {
                         if f.stack.len() >= levels {
-                            return Err(too_deep.clone());
+                            return Err(too_deep());
                         }
                         f.stack.push((Some(style), TextRun::default()));
                         i = next;
@@ -160,7 +160,7 @@ fn push_math(
     start: usize,
     close: Close,
     levels: usize,
-    too_deep: &ParseError,
+    too_deep: &dyn Fn() -> ParseError,
     math: &mut dyn FnMut(&str, usize) -> Result<MathNode, ParseError>,
     f: &mut Frames,
 ) -> Result<usize, ParseError> {
@@ -168,7 +168,7 @@ fn push_math(
         return Err(ParseError::Malformed("unmatched math shift in text".into()));
     };
     if f.stack.len() >= levels {
-        return Err(too_deep.clone());
+        return Err(too_deep());
     }
     let node = math(src, levels - f.stack.len() - 1)?;
     f.cur().push(TextItem::Math(Box::new(node)));
@@ -265,7 +265,7 @@ mod tests {
     use super::*;
 
     fn lex(raw: &str) -> Result<TextRun, ParseError> {
-        let deep = ParseError::Malformed("deep".into());
+        let deep = || ParseError::Malformed("deep".into());
         lex_body(raw, 4, &deep, &mut |src, _| {
             Ok(MathNode::Symbol(src.into()))
         })

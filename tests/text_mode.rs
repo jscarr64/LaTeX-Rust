@@ -271,3 +271,19 @@ fn paren_lookahead_skips_groups() {
         round_trip(input);
     }
 }
+
+/// The text-math sub-parser takes the color table and hands it back: names
+/// defined before are visible inside, and a name defined inside stays defined.
+#[test]
+fn colors_move_through_text_math() {
+    let (_, table) =
+        latex_rust::parse_with_colors(r"\definecolor{aa}{named}{red}\text{$\color{aa}x$}")
+            .expect("a color defined before text math is visible inside it");
+    assert!(table.get("aa").is_ok());
+    let (_, table) = latex_rust::parse_with_colors(
+        r"\text{$\definecolor{zz}{named}{red}\color{zz}x$ and \(y\)}",
+    )
+    .expect("a color defined inside text math is visible there");
+    assert!(table.get("zz").is_ok());
+    assert!(latex_rust::parse_with_colors(r"\text{$\color{nope}x$}").is_err());
+}
