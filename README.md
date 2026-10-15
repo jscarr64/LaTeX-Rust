@@ -1,23 +1,20 @@
 # LaTeX-Rust
 
-> **Please upgrade to latex-rust 2.1.1.** Versions 1.0.0 through 1.0.4 abort
-> the process with a stack overflow when given deeply nested input, which
-> matters if you render LaTeX from untrusted sources. 1.0.5 fixes that for 1.x
-> with no API changes (`cargo update -p latex-rust`). 2.0.0 has the same fixes
-> plus breaking API changes; see the
-> [2.0.0 release notes](https://github.com/jscarr64/LaTeX-Rust/releases/tag/v2.0.0).
-> 1.0.5 and 2.0.1 also fix the egui backend, which failed with "glyph
-> tessellation" on some glyphs (for example `\partial_t u`). 2.1.0 keeps those
-> fixes and corrects TeX and OpenType MATH layout, so some formulas draw
-> differently from 2.0.1. 2.1.1 keeps that layout and corrects the dvips name
-> `TealBlue` to the upstream CMYK value.
+> **3.0.0 is a breaking release.** MSRV is Rust 1.99, `ttf-parser` is gone
+> (RUSTSEC-2026-0192), `MathNode` and `ParseError` are `non_exhaustive`,
+> `Fraction` carries a `FracStyle`, prime runs are flat, and optional `egui`
+> is 0.36.2. Text mode has its own lexer (`MathNode::Text` holds a
+> `TextRun`; see [documents/TEXT_MODE_SPEC.md](documents/TEXT_MODE_SPEC.md)):
+> `\text{\{\ )}` and `\text{$x$}` round-trip, and `\\` or unknown commands
+> in text are typed errors. See [CHANGELOG.md](CHANGELOG.md) for each change and its
+> migration. 3.0.0 is not yet published; the current crates.io release is 2.1.1.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE-MIT)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE-APACHE)
 
 Repository: <https://github.com/jscarr64/LaTeX-Rust>
 
-Pure Rust LaTeX math renderer. No JavaScript. No webview. No runtime dependencies.
+Pure Rust LaTeX math renderer. No JavaScript. No webview. No JavaScript runtime.
 
 It parses LaTeX math into a typed AST, lays the AST out with a TeX-faithful box
 model whose dimensions are exact rationals (`Dim`; no hardware `f32`/`f64` in the
@@ -58,7 +55,7 @@ Inventory: [capabilities](documents/CAPABILITIES.md). Patches: [CONTRIBUTING.md]
 
 ```toml
 [dependencies]
-latex-rust = "2.1"
+latex-rust = "3.0"
 ```
 
 ```rust
@@ -76,7 +73,9 @@ assert!(svg.contains("<svg"));
 Layout math is exact rationals in this crate. It does not depend on a numeric
 library.
 
-MSRV is **1.76** (matches optional `egui` 0.28).
+MSRV is **1.99** (`rust-version = "1.99"`). `rust-toolchain.toml` pins that channel, with clippy and
+rustfmt. Optional `egui` and `epaint` are 0.36.2 and stay off unless the
+`egui` feature is on.
 
 ## Usage
 
@@ -92,13 +91,8 @@ let svg = latex_to_svg(r"e^{i\pi}+1=0", &font, &SvgOptions::new()).unwrap();
 ### PNG
 
 Enable with `features = ["png"]`. `tiny-skia` rasterizes the same `MathBox` tree
-as the SVG backend. SIMD is selected at runtime:
-
-- On x86_64 with AVX2 — tiny-skia runs at peak performance automatically
-- On Apple Silicon — tiny-skia uses the ARM NEON path, also fast
-- No user configuration needed
-- No compile flags required
-- Works correctly on every supported architecture
+as the SVG backend. `tiny-skia` picks its own CPU path; no configuration is
+needed.
 
 Without the feature, `latex_to_png` / `render_png` return `Err(Unsupported)`.
 
@@ -167,14 +161,17 @@ expression is on the order of the layout+SVG rows above after the face is loaded
 
 ## Fonts
 
-The crate embeds **STIX Two Math** 2.13 (SIL OFL 1.1) and loads metrics through
-`ttf-parser` using integer font units converted to `Dim`. Glyph outlines become
-SVG `<path>` elements (and PNG/egui meshes when those features are on).
+The crate embeds **STIX Two Math** 2.13 (SIL OFL 1.1). Horizontal metrics and
+outlines come from `skrifa` in integer font units converted to `Dim`. The
+OpenType MATH table is read in this crate. Glyph outlines become SVG `<path>`
+elements (and PNG/egui meshes when those features are on). The optional
+`egui` 0.36.2 feature uses `epaint` 0.36.2, which reads fonts with
+`skrifa`. `ttf-parser` is not in the tree.
 
 ## Notes
 
-2.1.1 is the current release. It keeps the 2.1.0 layout. `TealBlue` now uses
-the upstream dvipsnames CMYK value, and `data/dvipsnames.tsv` carries its LPPL
+3.0.0 is the current version (unreleased). Layout rules are the 2.1.x rules;
+some parse trees change (see CHANGELOG.md). Since 2.1.1, `TealBlue` uses the upstream dvipsnames CMYK value, and `data/dvipsnames.tsv` carries its LPPL
 notice. baselogic contributed the TeX and OpenType MATH layout work in pull
 request 13. His commits are in the history under his name. They cover delimiter
 sizing with a physical `\delimitershortfall`, fraction width without
@@ -203,14 +200,6 @@ STIX Two Math remains under the SIL Open Font License 1.1. See `NOTICE`.
 
 This crate was developed with help from AI assistants by SpaceXAI, Anthropic,
 OpenAI, Google, and Meta.
-
-## Known issues
-
-`ttf-parser` 0.25 is unmaintained (RUSTSEC-2026-0192). `MathFont::face` and the
-re-exported `ttf_parser` types are public API, and layout needs that crate's
-MATH table and outlines. `skrifa` / `read-fonts` is the maintained successor
-and can now read MATH. Its types differ from `ttf_parser::Face`, so swapping
-parsers is a breaking change and stays deferred. This is the only open item.
 
 ## License
 

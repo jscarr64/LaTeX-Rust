@@ -480,7 +480,7 @@ Each milestone ends with a full gold suite pass before the next begins.
 
 | Crate | Purpose | Optional |
 |---|---|---|
-| `ttf-parser` | TrueType glyph extraction | No |
+| `skrifa` | TrueType/CFF glyph extraction | No |
 | `tiny-skia` | PNG rasterization | Yes (feature = "png") |
 | `egui` | egui primitive emission | Yes (feature = "egui") |
 

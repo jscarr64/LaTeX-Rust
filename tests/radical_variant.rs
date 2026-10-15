@@ -16,17 +16,17 @@ fn selected_radical_glyph(font: &MathFont, target: &Dim, scale: &Dim) -> u16 {
         let span = &(&metrics.height + &metrics.depth) * scale;
         match span.cmp(target) {
             Some(Ordering::Equal | Ordering::Greater) => {
-                let tighter = best_fitting.as_ref().map_or(true, |(_, best_span)| {
-                    span.cmp(best_span) == Some(Ordering::Less)
-                });
+                let tighter = best_fitting
+                    .as_ref()
+                    .is_none_or(|(_, best_span)| span.cmp(best_span) == Some(Ordering::Less));
                 if tighter {
                     best_fitting = Some((glyph_id, span));
                 }
             }
             Some(Ordering::Less) => {
-                let taller = tallest_short.as_ref().map_or(true, |(_, best_span)| {
-                    span.cmp(best_span) == Some(Ordering::Greater)
-                });
+                let taller = tallest_short
+                    .as_ref()
+                    .is_none_or(|(_, best_span)| span.cmp(best_span) == Some(Ordering::Greater));
                 if taller {
                     tallest_short = Some((glyph_id, span));
                 }

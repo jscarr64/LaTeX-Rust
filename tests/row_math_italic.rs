@@ -8,6 +8,7 @@ fn layout_width(source: &str, font: &MathFont) -> Dim {
     layout(&ast, font, MathStyle::Text)
         .expect("layout row-math-italic case")
         .width
+        .clone()
 }
 
 fn variable_advance_with_italic(ch: char, font: &MathFont) -> Dim {

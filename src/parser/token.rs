@@ -29,6 +29,8 @@ pub enum Token {
     DisplayShift,
     /// A space character (kept for `\text`; skipped in math lists).
     Space,
+    /// Raw body of a text-mode command (`\text`, `\mbox`, `\intertext`), braces excluded.
+    TextArg(String),
 }
 
 impl fmt::Display for Token {
@@ -44,6 +46,7 @@ impl fmt::Display for Token {
             Self::MathShift => f.write_str("$"),
             Self::DisplayShift => f.write_str("$$"),
             Self::Space => f.write_str("space"),
+            Self::TextArg(s) => write!(f, "text:{s}"),
         }
     }
 }
@@ -102,7 +105,7 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, ParseError> {
         match c {
             '%' => skip_line(&mut chars),
             ' ' => out.push(Token::Space),
-            '\t' | '\n' | '\r' => {}
+            '\t' | '\n' | '\r' | '\u{b}' | '\u{c}' => {}
             '{' => out.push(Token::BeginGroup),
             '}' => out.push(Token::EndGroup),
             '^' => out.push(Token::Superscript),
@@ -116,11 +119,65 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, ParseError> {
                     out.push(Token::MathShift);
                 }
             }
-            '\\' => out.push(command(&mut chars)?),
+            '\\' => {
+                let token = command(&mut chars)?;
+                let text = matches!(&token, Token::Command(name)
+                    if name == "text" || name == "mbox" || name == "intertext");
+                out.push(token);
+                if text && chars.peek() == Some(&'{') {
+                    chars.next();
+                    out.push(Token::TextArg(text_arg(&mut chars)?));
+                }
+            }
             other => out.push(Token::Char(other)),
         }
     }
     Ok(out)
+}
+
+/// Reads a text-mode body up to its matching `}` (consumed, not included)
+/// and returns it unchanged. `\` hides the next char from the brace count,
+/// and a `%` comment runs to the end of the line, as in the text lexer.
+fn text_arg(chars: &mut Peekable<Chars<'_>>) -> Result<String, ParseError> {
+    let mut result = String::new();
+    let mut brace_depth = 1;
+    while brace_depth > 0 {
+        match chars.next() {
+            Some('{') => {
+                brace_depth += 1;
+                result.push('{');
+            }
+            Some('}') => {
+                brace_depth -= 1;
+                if brace_depth > 0 {
+                    result.push('}');
+                }
+            }
+            Some('\\') => {
+                let Some(next) = chars.next() else {
+                    return Err(ParseError::TrailingBackslash);
+                };
+                result.push('\\');
+                result.push(next);
+            }
+            Some('%') => {
+                result.push('%');
+                loop {
+                    match chars.next() {
+                        Some('\n') => {
+                            result.push('\n');
+                            break;
+                        }
+                        None => return Err(ParseError::Malformed("unmatched '{'".into())),
+                        Some(c) => result.push(c),
+                    }
+                }
+            }
+            None => return Err(ParseError::Malformed("unmatched '{'".into())),
+            Some(c) => result.push(c),
+        }
+    }
+    Ok(result)
 }
 
 fn skip_line(chars: &mut Peekable<Chars<'_>>) {

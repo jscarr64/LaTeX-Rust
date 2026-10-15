@@ -114,6 +114,14 @@ impl ColorTable {
         builtin().clone()
     }
 
+    /// A table with no names, as a cheap placeholder while the real table is
+    /// moved elsewhere.
+    pub(crate) fn empty() -> Self {
+        Self {
+            named: BTreeMap::new(),
+        }
+    }
+
     /// Number of registered names.
     #[must_use]
     pub fn len(&self) -> usize {

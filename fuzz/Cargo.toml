@@ -1,0 +1,27 @@
+[package]
+name = "latex-rust-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "=0.4.7"
+latex-rust = { path = ".." }
+
+[[bin]]
+name = "parse"
+path = "fuzz_targets/parse.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "preprocess"
+path = "fuzz_targets/preprocess.rs"
+test = false
+doc = false
+
+[profile.release]
+debug = 1

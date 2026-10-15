@@ -1,0 +1,229 @@
+# Accumath emission contract. expect is the tree 3.0.0 must build.
+# forbid is the 2.1.1 tree from the prefix bug. The runner rejects a
+# gold that still matches forbid, so expect cannot be "fixed" by copying
+# today's output. Later steps append rows. This file starts with the
+# \over-family rows for the preprocess fix.
+
+[[gold]]
+name = "overline-in-frac"
+kind = "ast"
+input = "\\frac{\\overline{x}}{2}"
+expect = "(frac (accent overline (atom Ord \"x\")) (atom Ord \"2\"))"
+# 2.1.1: fraction of empty over the letters l i n e x, over 2.
+forbid = "(frac (frac (row) (row (atom Ord \"l\") (atom Ord \"i\") (atom Ord \"n\") (atom Ord \"e\") (atom Ord \"x\"))) (atom Ord \"2\"))"
+
+[[gold]]
+name = "overline-in-sqrt"
+kind = "ast"
+input = "\\sqrt{\\overline{x}}"
+expect = "(sqrt (accent overline (atom Ord \"x\")))"
+forbid = "(sqrt (frac (row) (row (atom Ord \"l\") (atom Ord \"i\") (atom Ord \"n\") (atom Ord \"e\") (atom Ord \"x\"))))"
+
+[[gold]]
+name = "overline-in-sub"
+kind = "ast"
+input = "x_{\\overline{y}}"
+expect = "(sub (atom Ord \"x\") (accent overline (atom Ord \"y\")))"
+forbid = "(sub (atom Ord \"x\") (frac (row) (row (atom Ord \"l\") (atom Ord \"i\") (atom Ord \"n\") (atom Ord \"e\") (atom Ord \"y\"))))"
+
+[[gold]]
+name = "overline-in-sup"
+kind = "ast"
+input = "x^{\\overline{y}}"
+expect = "(sup (atom Ord \"x\") (accent overline (atom Ord \"y\")))"
+forbid = "(sup (atom Ord \"x\") (frac (row) (row (atom Ord \"l\") (atom Ord \"i\") (atom Ord \"n\") (atom Ord \"e\") (atom Ord \"y\"))))"
+
+[[gold]]
+name = "overline-in-group"
+kind = "ast"
+input = "{a+\\overline{b}}"
+expect = "(row (atom Ord \"a\") (atom Bin \"+\") (accent overline (atom Ord \"b\")))"
+forbid = "(frac (row (atom Ord \"a\") (atom Bin \"+\")) (row (atom Ord \"l\") (atom Ord \"i\") (atom Ord \"n\") (atom Ord \"e\") (atom Ord \"b\")))"
+
+[[gold]]
+name = "overset-in-group"
+kind = "ast"
+input = "{\\overset{a}{b}}"
+expect = "(overunder (atom Ord \"b\") (atom Ord \"a\") _)"
+forbid = "(frac (row) (row (atom Ord \"s\") (atom Ord \"e\") (atom Ord \"t\") (atom Ord \"a\") (atom Ord \"b\")))"
+
+[[gold]]
+name = "overrightarrow-in-frac"
+kind = "ast"
+input = "\\frac{\\overrightarrow{AB}}{2}"
+expect = "(frac (accent overrightarrow (row (atom Ord \"A\") (atom Ord \"B\"))) (atom Ord \"2\"))"
+forbid = "(frac (frac (row) (row (atom Ord \"r\") (atom Ord \"i\") (atom Ord \"g\") (atom Ord \"h\") (atom Ord \"t\") (atom Ord \"a\") (atom Ord \"r\") (atom Ord \"r\") (atom Ord \"o\") (atom Ord \"w\") (row (atom Ord \"A\") (atom Ord \"B\")))) (atom Ord \"2\"))"
+
+[[gold]]
+name = "overbrace-in-group"
+kind = "ast"
+input = "{\\overbrace{x}}"
+expect = "(accent overbrace (atom Ord \"x\"))"
+forbid = "(frac (row) (row (atom Ord \"b\") (atom Ord \"r\") (atom Ord \"a\") (atom Ord \"c\") (atom Ord \"e\") (atom Ord \"x\")))"
+
+[[gold]]
+name = "overline-bare"
+kind = "ast"
+input = "\\overline{z}"
+expect = "(accent overline (atom Ord \"z\"))"
+
+[[gold]]
+name = "overline-in-left"
+kind = "ast"
+input = "\\left(\\overline{x}\\right)"
+expect = "(delim ( (accent overline (atom Ord \"x\")) ))"
+
+[[gold]]
+name = "overline-in-parens"
+kind = "ast"
+input = "(\\overline{x})"
+expect = "(row (atom Open \"(\") (accent overline (atom Ord \"x\")) (atom Close \")\"))"
+
+[[gold]]
+name = "hat-in-frac"
+kind = "ast"
+input = "\\frac{\\hat{x}}{2}"
+expect = "(frac (accent hat (atom Ord \"x\")) (atom Ord \"2\"))"
+
+[[gold]]
+name = "hat-in-sqrt"
+kind = "ast"
+input = "\\sqrt{\\hat{x}}"
+expect = "(sqrt (accent hat (atom Ord \"x\")))"
+
+[[gold]]
+name = "underline-in-group"
+kind = "ast"
+input = "{\\underline{x}}"
+expect = "(accent underline (atom Ord \"x\"))"
+
+# Primes. f'^2 is the square of primed f. A run of primes is one flat row.
+
+[[gold]]
+name = "prime-one"
+kind = "ast"
+input = "f'"
+expect = "(sup (atom Ord \"f\") (atom Ord \"′\"))"
+
+[[gold]]
+name = "prime-two"
+kind = "ast"
+input = "f''"
+expect = "(sup (atom Ord \"f\") (row (atom Ord \"′\") (atom Ord \"′\")))"
+
+[[gold]]
+name = "prime-three"
+kind = "ast"
+input = "f'''"
+expect = "(sup (atom Ord \"f\") (row (atom Ord \"′\") (atom Ord \"′\") (atom Ord \"′\")))"
+
+[[gold]]
+name = "prime-symbol"
+kind = "ast"
+input = "f^{\\prime}"
+expect = "(sup (atom Ord \"f\") (symbol prime))"
+
+[[gold]]
+name = "prime-symbol-two"
+kind = "ast"
+input = "f^{\\prime\\prime}"
+expect = "(sup (atom Ord \"f\") (row (symbol prime) (symbol prime)))"
+
+[[gold]]
+name = "prime-grouped-square"
+kind = "ast"
+input = "{f'}^2"
+expect = "(sup (sup (atom Ord \"f\") (atom Ord \"′\")) (atom Ord \"2\"))"
+
+[[gold]]
+name = "prime-then-square"
+kind = "ast"
+input = "f'^2"
+expect = "(sup (sup (atom Ord \"f\") (atom Ord \"′\")) (atom Ord \"2\"))"
+forbid = "(sup (atom Ord \"f\") (row (atom Ord \"′\") (atom Ord \"2\")))"
+
+[[gold]]
+name = "prime-then-call"
+kind = "ast"
+input = "f'(x)"
+expect = "(row (sup (atom Ord \"f\") (atom Ord \"′\")) (atom Open \"(\") (atom Ord \"x\") (atom Close \")\"))"
+
+[[gold]]
+name = "prime-on-paren-call"
+kind = "ast"
+input = "(f(x))'"
+expect = "(sup (row (atom Open \"(\") (atom Ord \"f\") (atom Open \"(\") (atom Ord \"x\") (atom Close \")\") (atom Close \")\")) (atom Ord \"′\"))"
+forbid = "(row (atom Open \"(\") (atom Ord \"f\") (atom Open \"(\") (atom Ord \"x\") (atom Close \")\") (sup (atom Close \")\") (atom Ord \"′\")))"
+
+[[gold]]
+name = "prime-on-left-call"
+kind = "ast"
+input = "\\left(f(x)\\right)'"
+expect = "(sup (delim ( (row (atom Ord \"f\") (atom Open \"(\") (atom Ord \"x\") (atom Close \")\")) )) (atom Ord \"′\"))"
+
+# Powers. A parenthesis row is one nucleus. -b^{n} and a/b^{n} keep the power on b.
+
+[[gold]]
+name = "neg-power"
+kind = "ast"
+input = "-b^{n}"
+expect = "(row (atom Bin \"-\") (sup (atom Ord \"b\") (atom Ord \"n\")))"
+
+[[gold]]
+name = "grouped-neg-power"
+kind = "ast"
+input = "{(-b)}^{n}"
+expect = "(sup (row (atom Open \"(\") (atom Bin \"-\") (atom Ord \"b\") (atom Close \")\")) (atom Ord \"n\"))"
+
+[[gold]]
+name = "left-neg-power"
+kind = "ast"
+input = "\\left(-b\\right)^{n}"
+expect = "(sup (delim ( (row (atom Bin \"-\") (atom Ord \"b\")) )) (atom Ord \"n\"))"
+
+[[gold]]
+name = "paren-neg-power"
+kind = "ast"
+input = "(-b)^{n}"
+expect = "(sup (row (atom Open \"(\") (atom Bin \"-\") (atom Ord \"b\") (atom Close \")\")) (atom Ord \"n\"))"
+forbid = "(row (atom Open \"(\") (atom Bin \"-\") (atom Ord \"b\") (sup (atom Close \")\") (atom Ord \"n\")))"
+
+[[gold]]
+name = "paren-slash-power"
+kind = "ast"
+input = "(a/b)^{n}"
+expect = "(sup (row (atom Open \"(\") (atom Ord \"a\") (atom Ord \"/\") (atom Ord \"b\") (atom Close \")\")) (atom Ord \"n\"))"
+forbid = "(row (atom Open \"(\") (atom Ord \"a\") (atom Ord \"/\") (atom Ord \"b\") (sup (atom Close \")\") (atom Ord \"n\")))"
+
+[[gold]]
+name = "paren-frac-power"
+kind = "ast"
+input = "(\\frac{a}{b})^{n}"
+expect = "(sup (row (atom Open \"(\") (frac (atom Ord \"a\") (atom Ord \"b\")) (atom Close \")\")) (atom Ord \"n\"))"
+forbid = "(row (atom Open \"(\") (frac (atom Ord \"a\") (atom Ord \"b\")) (sup (atom Close \")\") (atom Ord \"n\")))"
+
+[[gold]]
+name = "paren-two-x-sq"
+kind = "ast"
+input = "(2x)^{2}"
+expect = "(sup (row (atom Open \"(\") (atom Ord \"2\") (atom Ord \"x\") (atom Close \")\")) (atom Ord \"2\"))"
+forbid = "(row (atom Open \"(\") (atom Ord \"2\") (atom Ord \"x\") (sup (atom Close \")\") (atom Ord \"2\")))"
+
+[[gold]]
+name = "exp-neg-braced"
+kind = "ast"
+input = "x^{-b}"
+expect = "(sup (atom Ord \"x\") (row (atom Bin \"-\") (atom Ord \"b\")))"
+
+[[gold]]
+name = "exp-neg-paren"
+kind = "ast"
+input = "x^(-b)"
+expect = "(sup (atom Ord \"x\") (row (atom Open \"(\") (atom Bin \"-\") (atom Ord \"b\") (atom Close \")\")))"
+forbid = "(row (sup (atom Ord \"x\") (atom Open \"(\")) (atom Bin \"-\") (atom Ord \"b\") (atom Close \")\"))"
+
+[[gold]]
+name = "slash-power"
+kind = "ast"
+input = "a/b^{n}"
+expect = "(row (atom Ord \"a\") (atom Ord \"/\") (sup (atom Ord \"b\") (atom Ord \"n\")))"

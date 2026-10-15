@@ -1,0 +1,8 @@
+target
+artifacts
+corpus/*
+!corpus/parse/
+corpus/parse/*
+!corpus/parse/control-space-comment
+!corpus/parse/prime-run-34
+!corpus/parse/roundtrip-*

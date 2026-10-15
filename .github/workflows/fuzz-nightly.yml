@@ -1,0 +1,32 @@
+name: fuzz-nightly
+
+on:
+  schedule:
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+
+jobs:
+  nightly:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - name: release tests
+        run: cargo test --release
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: cargo-fuzz
+        run: cargo install cargo-fuzz --version 0.12.0 --locked
+      - name: parse
+        run: cargo +nightly fuzz run parse -- -max_total_time=960
+      - name: preprocess
+        run: cargo +nightly fuzz run preprocess -- -max_total_time=120
+      - name: upload fuzz corpus and artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-nightly-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            fuzz/corpus
+            fuzz/artifacts
+          if-no-files-found: ignore
+          retention-days: 14

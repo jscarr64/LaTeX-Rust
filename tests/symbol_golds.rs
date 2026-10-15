@@ -156,9 +156,9 @@ fn symbol_golds() {
                 assert!(svg.contains("<path"), "{}: no path", rec.name);
                 if !rec.class.is_empty() {
                     let ast = parse(&rec.input).unwrap();
-                    if let MathNode::Symbol(name) = ast {
+                    if let MathNode::Symbol(name) = &ast {
                         assert_eq!(
-                            class_name(symbol_atom_kind(&name)),
+                            class_name(symbol_atom_kind(name)),
                             rec.class,
                             "{}",
                             rec.name

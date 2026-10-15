@@ -155,6 +155,16 @@ pub fn render_svg(tree: &MathBox, font: &MathFont, options: &SvgOptions) -> Resu
     Ok(out)
 }
 
+enum SvgTask<'a> {
+    Draw {
+        bx: &'a MathBox,
+        origin_x: Dim,
+        parent_baseline: Dim,
+        fill: Color,
+    },
+    CloseGroup,
+}
+
 #[allow(clippy::too_many_arguments)]
 fn emit(
     bx: &MathBox,
@@ -166,6 +176,50 @@ fn emit(
     fill: Color,
     cache: &mut HashMap<u16, String>,
     out: &mut String,
+) -> Result<(), Error> {
+    let mut stack = vec![SvgTask::Draw {
+        bx,
+        origin_x: origin_x.clone(),
+        parent_baseline: parent_baseline.clone(),
+        fill,
+    }];
+    while let Some(task) = stack.pop() {
+        match task {
+            SvgTask::CloseGroup => out.push_str("</g>\n"),
+            SvgTask::Draw {
+                bx,
+                origin_x,
+                parent_baseline,
+                fill,
+            } => emit_one(
+                bx,
+                font,
+                em_pt,
+                fu_pt,
+                &origin_x,
+                &parent_baseline,
+                fill,
+                cache,
+                out,
+                &mut stack,
+            )?,
+        }
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn emit_one<'a>(
+    bx: &'a MathBox,
+    font: &MathFont,
+    em_pt: &Dim,
+    fu_pt: &Dim,
+    origin_x: &Dim,
+    parent_baseline: &Dim,
+    fill: Color,
+    cache: &mut HashMap<u16, String>,
+    out: &mut String,
+    stack: &mut Vec<SvgTask<'a>>,
 ) -> Result<(), Error> {
     let baseline = parent_baseline - &(bx.shift.clone() * em_pt);
     match &bx.content {
@@ -215,9 +269,18 @@ fn emit(
         }
         BoxContent::HList(kids) => {
             let mut x = origin_x.clone();
+            let mut placed = Vec::with_capacity(kids.len());
             for k in kids {
-                emit(k, font, em_pt, fu_pt, &x, &baseline, fill, cache, out)?;
+                placed.push((k, x.clone()));
                 x = &x + &(k.width.clone() * em_pt);
+            }
+            for (k, x) in placed.into_iter().rev() {
+                stack.push(SvgTask::Draw {
+                    bx: k,
+                    origin_x: x,
+                    parent_baseline: baseline.clone(),
+                    fill,
+                });
             }
             Ok(())
         }
@@ -225,30 +288,32 @@ fn emit(
             if kids.is_empty() {
                 return Ok(());
             }
-            emit(
-                &kids[0], font, em_pt, fu_pt, origin_x, &baseline, fill, cache, out,
-            )?;
+            let mut placed = Vec::with_capacity(kids.len());
+            placed.push((&kids[0], baseline.clone()));
             let mut y_below = kids[0].depth.clone() * em_pt;
             for k in kids.iter().skip(1) {
                 let child_base = &baseline + &y_below + &(k.height.clone() * em_pt);
-                emit(
-                    k,
-                    font,
-                    em_pt,
-                    fu_pt,
-                    origin_x,
-                    &child_base,
-                    fill,
-                    cache,
-                    out,
-                )?;
+                placed.push((k, child_base));
                 y_below = &y_below + &((&k.height + &k.depth) * em_pt);
+            }
+            for (k, child_base) in placed.into_iter().rev() {
+                stack.push(SvgTask::Draw {
+                    bx: k,
+                    origin_x: origin_x.clone(),
+                    parent_baseline: child_base,
+                    fill,
+                });
             }
             Ok(())
         }
         BoxContent::Overlap(kids) => {
-            for k in kids {
-                emit(k, font, em_pt, fu_pt, origin_x, &baseline, fill, cache, out)?;
+            for k in kids.iter().rev() {
+                stack.push(SvgTask::Draw {
+                    bx: k,
+                    origin_x: origin_x.clone(),
+                    parent_baseline: baseline.clone(),
+                    fill,
+                });
             }
             Ok(())
         }
@@ -258,10 +323,13 @@ fn emit(
                 hex = c.css_hex()
             ));
             out.push('\n');
-            emit(
-                inner, font, em_pt, fu_pt, origin_x, &baseline, *c, cache, out,
-            )?;
-            out.push_str("</g>\n");
+            stack.push(SvgTask::CloseGroup);
+            stack.push(SvgTask::Draw {
+                bx: inner,
+                origin_x: origin_x.clone(),
+                parent_baseline: baseline,
+                fill: *c,
+            });
             Ok(())
         }
         BoxContent::BackColor(c, inner) => {
@@ -277,9 +345,12 @@ fn emit(
                 c.css_hex()
             ));
             out.push('\n');
-            emit(
-                inner, font, em_pt, fu_pt, origin_x, &baseline, fill, cache, out,
-            )?;
+            stack.push(SvgTask::Draw {
+                bx: inner,
+                origin_x: origin_x.clone(),
+                parent_baseline: baseline,
+                fill,
+            });
             Ok(())
         }
         BoxContent::Line {
@@ -332,9 +403,12 @@ fn emit(
                 ));
                 out.push('\n');
             }
-            emit(
-                inner, font, em_pt, fu_pt, origin_x, &baseline, fill, cache, out,
-            )?;
+            stack.push(SvgTask::Draw {
+                bx: inner,
+                origin_x: origin_x.clone(),
+                parent_baseline: baseline,
+                fill,
+            });
             Ok(())
         }
     }

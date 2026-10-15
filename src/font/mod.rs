@@ -1,7 +1,14 @@
 //! OpenType math font metrics. Integer font units → [`Dim`](crate::Dim).
 
-use ttf_parser::Face;
+mod math;
 
+use skrifa::outline::{DrawSettings, OutlinePen};
+use skrifa::prelude::*;
+use skrifa::raw::tables::gsub::SubstitutionSubtables;
+use skrifa::raw::TableProvider;
+use skrifa::MetadataProvider;
+
+use self::math::MathTable;
 use crate::dim::Dim;
 use crate::error::{Error, FontError};
 
@@ -56,6 +63,10 @@ struct ScriptAlternateEntry {
 
 /// Loaded math face.
 ///
+/// Outlines and horizontal metrics come from [`skrifa`]. The MATH table is
+/// read in this crate: the `skrifa` 0.39 line this toolchain can build does
+/// not expose it.
+///
 /// # Examples
 ///
 /// ```
@@ -66,10 +77,13 @@ struct ScriptAlternateEntry {
 /// ```
 pub struct MathFont {
     raw: &'static [u8],
-    face: Face<'static>,
+    face: FontRef<'static>,
     units_per_em: u16,
     ascender_fu: i16,
     descender_fu: i16,
+    x_height_fu: Option<i16>,
+    glyph_count: u16,
+    math: Option<MathTable>,
     script_alternates: Vec<ScriptAlternateEntry>,
 }
 
@@ -90,31 +104,29 @@ impl MathFont {
         Self::from_bytes(STIX_TWO_MATH_OTF)
     }
 
-    /// Parse OpenType bytes. Lifetime is `'static` for the embedded font only;
-    /// this constructor requires a static buffer so the face can be rebuilt.
+    /// Parse OpenType bytes. The buffer must be `'static` so the face can
+    /// borrow it for the life of this value.
     pub fn from_bytes(raw: &'static [u8]) -> Result<Self, Error> {
-        let face = Face::parse(raw, 0).map_err(|_| FontError::InvalidFace)?;
-        let units_per_em = face.units_per_em();
+        let face = FontRef::new(raw).map_err(|_| FontError::InvalidFace)?;
+        let units_per_em = face
+            .head()
+            .map_err(|_| FontError::InvalidFace)?
+            .units_per_em();
         if units_per_em == 0 {
             return Err(FontError::InvalidFace.into());
         }
-        let ascender_fu = face.ascender();
-        let descender_fu = face.descender();
-
-        let mut script_alternates = Vec::new();
-        for glyph_id in 0..face.number_of_glyphs() {
-            let alternates = [
-                ssty_alternate_glyph_id(&face, glyph_id, 1),
-                ssty_alternate_glyph_id(&face, glyph_id, 2),
-            ];
-
-            if alternates.iter().any(Option::is_some) {
-                script_alternates.push(ScriptAlternateEntry {
-                    glyph_id,
-                    alternates,
-                });
-            }
-        }
+        let hhea = face.hhea().map_err(|_| FontError::InvalidFace)?;
+        let ascender_fu = hhea.ascender().to_i16();
+        let descender_fu = hhea.descender().to_i16();
+        let x_height_fu = face.os2().ok().and_then(|os2| os2.sx_height());
+        let glyph_count = face
+            .maxp()
+            .map_err(|_| FontError::InvalidFace)?
+            .num_glyphs();
+        let math = face
+            .table_data(Tag::new(b"MATH"))
+            .and_then(|data| MathTable::parse(data.as_bytes()));
+        let script_alternates = load_script_alternates(&face);
 
         Ok(Self {
             raw,
@@ -122,33 +134,15 @@ impl MathFont {
             units_per_em,
             ascender_fu,
             descender_fu,
+            x_height_fu,
+            glyph_count,
+            math,
             script_alternates,
         })
     }
 
-    /// The parsed OpenType face.
-    ///
-    /// An external render backend needs glyph outlines and bounding boxes,
-    /// which this crate does not otherwise expose. Reaching the face here
-    /// rather than re-parsing [`Self::bytes`] guarantees that the glyph ids in
-    /// [`BoxContent::Glyph`](crate::BoxContent::Glyph) are resolved against the
-    /// same face, parsed by the same version of `ttf-parser`, that produced
-    /// them. The crate re-exports [`ttf_parser`] so that a
-    /// consumer can name this type without pinning the version itself.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use latex_rust::{ttf_parser, MathFont};
-    ///
-    /// let font = MathFont::stix_two_math().expect("STIX Two Math");
-    /// let metrics = font.glyph('x').expect("x");
-    /// let id = ttf_parser::GlyphId(metrics.glyph_id);
-    /// assert!(font.face().glyph_bounding_box(id).is_some());
-    /// ```
-    #[must_use]
-    pub fn face(&self) -> &Face<'static> {
-        &self.face
+    pub(crate) fn math_constants(&self) -> Option<math::MathConstants> {
+        self.math.as_ref().and_then(MathTable::constants)
     }
 
     pub(crate) fn script_alternate_glyph_id(&self, glyph_id: u16, script_level: u8) -> Option<u16> {
@@ -203,162 +197,93 @@ impl MathFont {
         Dim::from_font_units(-d, self.units_per_em)
     }
 
+    /// Number of glyphs in `maxp`.
+    #[must_use]
+    pub fn glyph_count(&self) -> u16 {
+        self.glyph_count
+    }
+
+    /// OS/2 x-height in font units, when the table version records one.
+    #[must_use]
+    pub fn x_height_fu(&self) -> Option<i16> {
+        self.x_height_fu
+    }
+
     /// Metrics for `ch`, or [`FontError::MissingGlyph`].
     pub fn glyph(&self, ch: char) -> Result<GlyphMetrics, Error> {
-        let face = self.face();
-        let gid = face.glyph_index(ch).ok_or(FontError::MissingGlyph { ch })?;
-        let advance_fu = face
-            .glyph_hor_advance(gid)
+        let gid = self
+            .face
+            .charmap()
+            .map(ch)
             .ok_or(FontError::MissingGlyph { ch })?;
-        let mut height_fu = 0i64;
-        let mut depth_fu = 0i64;
-        if let Some(bbox) = face.glyph_bounding_box(gid) {
-            height_fu = i64::from(bbox.y_max).max(0);
-            depth_fu = i64::from(-bbox.y_min).max(0);
-        }
-        let upem = self.units_per_em;
-        Ok(GlyphMetrics {
-            ch,
-            glyph_id: gid.0,
-            advance_fu,
-            advance: Dim::from_font_units(i64::from(advance_fu), upem),
-            height: Dim::from_font_units(height_fu, upem),
-            depth: Dim::from_font_units(depth_fu, upem),
-        })
+        self.metrics_for(ch, gid.to_u32())
     }
 
     /// Metrics for OpenType glyph id `gid`, tagged with `ch` for the box payload.
     pub fn glyph_id(&self, ch: char, gid: u16) -> Result<GlyphMetrics, Error> {
-        let face = self.face();
-        let gid = ttf_parser::GlyphId(gid);
-        let advance_fu = face
-            .glyph_hor_advance(gid)
-            .ok_or(FontError::MissingGlyph { ch })?;
-        let mut height_fu = 0i64;
-        let mut depth_fu = 0i64;
-        if let Some(bbox) = face.glyph_bounding_box(gid) {
-            height_fu = i64::from(bbox.y_max).max(0);
-            depth_fu = i64::from(-bbox.y_min).max(0);
-        }
-        let upem = self.units_per_em;
-        Ok(GlyphMetrics {
-            ch,
-            glyph_id: gid.0,
-            advance_fu,
-            advance: Dim::from_font_units(i64::from(advance_fu), upem),
-            height: Dim::from_font_units(height_fu, upem),
-            depth: Dim::from_font_units(depth_fu, upem),
-        })
+        self.metrics_for(ch, u32::from(gid))
+    }
+
+    /// Draw `glyph_id` in font units. `false` when the face has no outline.
+    pub(crate) fn draw_glyph(&self, glyph_id: u16, pen: &mut impl OutlinePen) -> bool {
+        let Some(outline) = self
+            .face
+            .outline_glyphs()
+            .get(GlyphId::new(u32::from(glyph_id)))
+        else {
+            return false;
+        };
+        let settings = DrawSettings::unhinted(Size::unscaled(), LocationRef::default());
+        outline.draw(settings, pen).is_ok()
     }
 
     /// MATH italic correction for `glyph_id`, or zero.
     pub fn italic_correction(&self, glyph_id: u16) -> Dim {
-        let face = self.face();
-        let Some(math) = face.tables().math else {
+        let Some(value) = self.math.as_ref().and_then(|math| math.italic(glyph_id)) else {
             return Dim::zero();
         };
-        let Some(info) = math.glyph_info else {
-            return Dim::zero();
-        };
-        let Some(table) = info.italic_corrections else {
-            return Dim::zero();
-        };
-        match table.get(ttf_parser::GlyphId(glyph_id)) {
-            Some(v) => Dim::from_font_units(i64::from(v.value), self.units_per_em),
-            None => Dim::zero(),
-        }
+        Dim::from_font_units(i64::from(value), self.units_per_em)
     }
 
     /// MATH top-accent attachment (em from glyph left), if present.
     pub fn top_accent_attachment(&self, glyph_id: u16) -> Option<Dim> {
-        let face = self.face();
-        let math = face.tables().math?;
-        let info = math.glyph_info?;
-        let table = info.top_accent_attachments?;
-        let v = table.get(ttf_parser::GlyphId(glyph_id))?;
-        Some(Dim::from_font_units(i64::from(v.value), self.units_per_em))
+        let value = self.math.as_ref()?.top_accent(glyph_id)?;
+        Some(Dim::from_font_units(i64::from(value), self.units_per_em))
     }
 
     /// Horizontal glyph-assembly parts: `(gid, start_connector, end_connector, advance, extender)`.
     /// Lengths are font units.
     pub fn horizontal_assembly_parts(&self, glyph_id: u16) -> Vec<(u16, u16, u16, u16, bool)> {
-        let mut out = Vec::new();
-        let face = self.face();
-        let Some(math) = face.tables().math else {
-            return out;
-        };
-        let Some(variants) = math.variants else {
-            return out;
-        };
-        let Some(cons) = variants
-            .horizontal_constructions
-            .get(ttf_parser::GlyphId(glyph_id))
+        let Some(found) = self
+            .math
+            .as_ref()
+            .and_then(|math| math.construction(glyph_id, true))
         else {
-            return out;
+            return Vec::new();
         };
-        let Some(assembly) = cons.assembly else {
-            return out;
-        };
-        for i in 0..assembly.parts.len() {
-            if let Some(p) = assembly.parts.get(i) {
-                out.push((
-                    p.glyph_id.0,
-                    p.start_connector_length,
-                    p.end_connector_length,
-                    p.full_advance,
-                    p.part_flags.extender(),
-                ));
-            }
-        }
-        out
+        found
+            .parts
+            .into_iter()
+            .map(|part| {
+                (
+                    part.glyph_id,
+                    part.start_connector,
+                    part.end_connector,
+                    part.full_advance,
+                    part.extender,
+                )
+            })
+            .collect()
     }
 
     /// Horizontal MATH variants of `glyph_id`, including the base glyph first.
     pub fn horizontal_variants(&self, glyph_id: u16) -> Vec<u16> {
-        let mut out = vec![glyph_id];
-        let face = self.face();
-        let Some(math) = face.tables().math else {
-            return out;
-        };
-        let Some(variants) = math.variants else {
-            return out;
-        };
-        let Some(cons) = variants
-            .horizontal_constructions
-            .get(ttf_parser::GlyphId(glyph_id))
-        else {
-            return out;
-        };
-        for i in 0..cons.variants.len() {
-            if let Some(v) = cons.variants.get(i) {
-                out.push(v.variant_glyph.0);
-            }
-        }
-        out
+        self.variants(glyph_id, true)
     }
 
     /// Vertical MATH variants of `glyph_id`, including the base glyph first.
     pub fn vertical_variants(&self, glyph_id: u16) -> Vec<u16> {
-        let mut out = vec![glyph_id];
-        let face = self.face();
-        let Some(math) = face.tables().math else {
-            return out;
-        };
-        let Some(variants) = math.variants else {
-            return out;
-        };
-        let Some(cons) = variants
-            .vertical_constructions
-            .get(ttf_parser::GlyphId(glyph_id))
-        else {
-            return out;
-        };
-        for i in 0..cons.variants.len() {
-            if let Some(v) = cons.variants.get(i) {
-                out.push(v.variant_glyph.0);
-            }
-        }
-        out
+        self.variants(glyph_id, false)
     }
 
     /// SHA-256 hex of the raw face bytes.
@@ -371,54 +296,154 @@ impl MathFont {
         }
         s
     }
-}
 
-fn ssty_alternate_glyph_id(face: &Face<'_>, glyph_id: u16, script_level: u8) -> Option<u16> {
-    let alternate_index = match script_level {
-        1 => 0,
-        2 => 1,
-        _ => return None,
-    };
-
-    let gsub = face.tables().gsub?;
-    let feature = gsub.features.find(ttf_parser::Tag::from_bytes(b"ssty"))?;
-
-    for lookup_index in feature.lookup_indices {
-        let Some(lookup) = gsub.lookups.get(lookup_index) else {
-            continue;
-        };
-
-        for subtable in lookup
-            .subtables
-            .into_iter::<ttf_parser::gsub::SubstitutionSubtable<'_>>()
+    fn variants(&self, glyph_id: u16, horizontal: bool) -> Vec<u16> {
+        let mut out = vec![glyph_id];
+        if let Some(found) = self
+            .math
+            .as_ref()
+            .and_then(|math| math.construction(glyph_id, horizontal))
         {
-            let ttf_parser::gsub::SubstitutionSubtable::Alternate(alternate) = subtable else {
-                continue;
-            };
+            out.extend(found.variants);
+        }
+        out
+    }
 
-            let Some(coverage_index) = alternate.coverage.get(ttf_parser::GlyphId(glyph_id)) else {
-                continue;
-            };
+    fn metrics_for(&self, ch: char, gid: u32) -> Result<GlyphMetrics, Error> {
+        let gid_u16 = u16::try_from(gid).map_err(|_| FontError::MissingGlyph { ch })?;
+        if gid_u16 >= self.glyph_count {
+            return Err(FontError::MissingGlyph { ch }.into());
+        }
+        let advance_fu = self
+            .advance_fu(gid_u16)
+            .ok_or(FontError::MissingGlyph { ch })?;
+        let (height_fu, depth_fu) = self.ink_extents(gid_u16);
+        let upem = self.units_per_em;
+        Ok(GlyphMetrics {
+            ch,
+            glyph_id: gid_u16,
+            advance_fu,
+            advance: Dim::from_font_units(i64::from(advance_fu), upem),
+            height: Dim::from_font_units(height_fu, upem),
+            depth: Dim::from_font_units(depth_fu, upem),
+        })
+    }
 
-            let Some(set) = alternate.alternate_sets.get(coverage_index) else {
-                continue;
-            };
-
-            if let Some(selected) = set.alternates.get(alternate_index) {
-                return Some(selected.0);
-            }
+    fn advance_fu(&self, gid: u16) -> Option<u16> {
+        let hmtx = self.face.hmtx().ok()?;
+        let metrics = hmtx.h_metrics();
+        if metrics.is_empty() {
+            return None;
+        }
+        if usize::from(gid) < metrics.len() {
+            Some(metrics[usize::from(gid)].advance())
+        } else if gid < self.glyph_count {
+            metrics.last().map(|metric| metric.advance())
+        } else {
+            None
         }
     }
 
-    None
+    fn ink_extents(&self, gid: u16) -> (i64, i64) {
+        let metrics = self
+            .face
+            .glyph_metrics(Size::unscaled(), LocationRef::default());
+        let Some(bounds) = metrics.bounds(GlyphId::new(u32::from(gid))) else {
+            return (0, 0);
+        };
+        let height = trunc_i64(bounds.y_max).max(0);
+        let depth = (-trunc_i64(bounds.y_min)).max(0);
+        (height, depth)
+    }
+}
+
+fn trunc_i64(v: f32) -> i64 {
+    if !v.is_finite() {
+        0
+    } else {
+        v as i64
+    }
+}
+
+fn load_script_alternates(font: &FontRef<'static>) -> Vec<ScriptAlternateEntry> {
+    let Ok(gsub) = font.gsub() else {
+        return Vec::new();
+    };
+    let Ok(features) = gsub.feature_list() else {
+        return Vec::new();
+    };
+    let Ok(lookups) = gsub.lookup_list() else {
+        return Vec::new();
+    };
+    let mut entries = Vec::new();
+    for rec in features.feature_records() {
+        if rec.feature_tag() != Tag::new(b"ssty") {
+            continue;
+        }
+        let Ok(feature) = rec.feature(features.offset_data()) else {
+            continue;
+        };
+        for idx in feature.lookup_list_indices() {
+            let Ok(lookup) = lookups.lookups().get(usize::from(idx.get())) else {
+                continue;
+            };
+            let Ok(subtables) = lookup.subtables() else {
+                continue;
+            };
+            let SubstitutionSubtables::Alternate(tables) = subtables else {
+                continue;
+            };
+            for table in tables.iter().flatten() {
+                let Ok(coverage) = table.coverage() else {
+                    continue;
+                };
+                let sets = table.alternate_sets();
+                for glyph in coverage.iter() {
+                    let Some(index) = coverage.get(glyph) else {
+                        continue;
+                    };
+                    let Ok(set) = sets.get(usize::from(index)) else {
+                        continue;
+                    };
+                    let ids = set.alternate_glyph_ids();
+                    let alternates = [
+                        ids.first().map(|id| id.get().to_u16()),
+                        ids.get(1).map(|id| id.get().to_u16()),
+                    ];
+                    if alternates.iter().all(Option::is_none) {
+                        continue;
+                    }
+                    insert_alternate(&mut entries, glyph.to_u16(), alternates);
+                }
+            }
+        }
+    }
+    entries
+}
+
+fn insert_alternate(
+    entries: &mut Vec<ScriptAlternateEntry>,
+    glyph_id: u16,
+    alternates: [Option<u16>; 2],
+) {
+    match entries.binary_search_by_key(&glyph_id, |entry| entry.glyph_id) {
+        Ok(_) => {}
+        Err(index) => entries.insert(
+            index,
+            ScriptAlternateEntry {
+                glyph_id,
+                alternates,
+            },
+        ),
+    }
 }
 
 fn hex_byte(b: u8) -> String {
     const H: &[u8; 16] = b"0123456789abcdef";
-    let hi = H[(b >> 4) as usize];
-    let lo = H[(b & 0xf) as usize];
+    let hi = H[usize::from(b >> 4)];
+    let lo = H[usize::from(b & 0xf)];
     let mut out = String::with_capacity(2);
-    out.push(hi as char);
-    out.push(lo as char);
+    out.push(char::from(hi));
+    out.push(char::from(lo));
     out
 }

@@ -154,62 +154,90 @@ impl NumberingState {
     }
 }
 
+enum Collect<'a> {
+    Node(&'a MathNode),
+    NumberMatrix(MatrixStyle, &'a [crate::parser::EnvRow]),
+}
+
 fn collect_node(node: &MathNode, st: &mut NumberingState) {
+    let mut stack = vec![Collect::Node(node)];
+    while let Some(task) = stack.pop() {
+        match task {
+            Collect::NumberMatrix(style, rows) => number_matrix(style, rows, st),
+            Collect::Node(node) => push_collect(node, &mut stack),
+        }
+    }
+}
+
+fn push_collect<'a>(node: &'a MathNode, stack: &mut Vec<Collect<'a>>) {
     match node {
-        MathNode::Matrix(style, _, rows) => collect_matrix(*style, rows, st),
-        MathNode::Row(v) | MathNode::Substack(v) => {
-            for n in v {
-                collect_node(n, st);
+        MathNode::Matrix(style, _, rows) => {
+            stack.push(Collect::NumberMatrix(*style, rows));
+            for row in rows.iter().rev() {
+                match row {
+                    EnvRow::Cells { cells, .. } => {
+                        for cell in cells.iter().rev() {
+                            stack.push(Collect::Node(cell));
+                        }
+                    }
+                    EnvRow::Intertext(body) => stack.push(Collect::Node(body)),
+                    EnvRow::Hline => {}
+                }
             }
         }
-        MathNode::Fraction(a, b)
+        MathNode::Row(v) | MathNode::Substack(v) => {
+            for child in v.iter().rev() {
+                stack.push(Collect::Node(child));
+            }
+        }
+        MathNode::Fraction(_, a, b)
         | MathNode::Superscript(a, b)
         | MathNode::Subscript(a, b)
         | MathNode::CancelTo(a, b) => {
-            collect_node(a, st);
-            collect_node(b, st);
+            stack.push(Collect::Node(b));
+            stack.push(Collect::Node(a));
         }
         MathNode::SubSup(a, b, c) => {
-            collect_node(a, st);
-            collect_node(b, st);
-            collect_node(c, st);
+            stack.push(Collect::Node(c));
+            stack.push(Collect::Node(b));
+            stack.push(Collect::Node(a));
         }
-        MathNode::Radical(deg, r) => {
-            if let Some(d) = deg {
-                collect_node(d, st);
+        MathNode::Radical(deg, body) => {
+            stack.push(Collect::Node(body));
+            if let Some(deg) = deg {
+                stack.push(Collect::Node(deg));
             }
-            collect_node(r, st);
         }
-        MathNode::Delimited(_, b, _)
-        | MathNode::Accent(b, _)
-        | MathNode::Color(_, b)
-        | MathNode::TextColor(_, b)
-        | MathNode::ColorBox(_, b)
-        | MathNode::Phantom(_, b)
-        | MathNode::Intertext(b)
-        | MathNode::Tag { body: b, .. } => collect_node(b, st),
-        MathNode::FColorBox(_, _, b) => collect_node(b, st),
+        MathNode::Delimited(_, body, _)
+        | MathNode::Accent(body, _)
+        | MathNode::Color(_, body)
+        | MathNode::TextColor(_, body)
+        | MathNode::ColorBox(_, body)
+        | MathNode::Phantom(_, body)
+        | MathNode::Intertext(body)
+        | MathNode::Tag { body, .. }
+        | MathNode::FColorBox(_, _, body) => stack.push(Collect::Node(body)),
         MathNode::Sum(lo, hi) | MathNode::Product(lo, hi) | MathNode::Integral(_, lo, hi) => {
-            if let Some(n) = lo {
-                collect_node(n, st);
+            if let Some(hi) = hi {
+                stack.push(Collect::Node(hi));
             }
-            if let Some(n) = hi {
-                collect_node(n, st);
+            if let Some(lo) = lo {
+                stack.push(Collect::Node(lo));
             }
         }
         MathNode::Limit(lo) => {
-            if let Some(n) = lo {
-                collect_node(n, st);
+            if let Some(lo) = lo {
+                stack.push(Collect::Node(lo));
             }
         }
-        MathNode::OverUnder(b, over, under) => {
-            collect_node(b, st);
-            if let Some(n) = over {
-                collect_node(n, st);
+        MathNode::OverUnder(base, over, under) => {
+            if let Some(under) = under {
+                stack.push(Collect::Node(under));
             }
-            if let Some(n) = under {
-                collect_node(n, st);
+            if let Some(over) = over {
+                stack.push(Collect::Node(over));
             }
+            stack.push(Collect::Node(base));
         }
         MathNode::Atom(_, _)
         | MathNode::SizedDelim(_, _, _)
@@ -225,18 +253,7 @@ fn collect_node(node: &MathNode, st: &mut NumberingState) {
     }
 }
 
-fn collect_matrix(style: MatrixStyle, rows: &[EnvRow], st: &mut NumberingState) {
-    for row in rows {
-        match row {
-            EnvRow::Cells { cells, .. } => {
-                for c in cells {
-                    collect_node(c, st);
-                }
-            }
-            EnvRow::Intertext(n) => collect_node(n, st),
-            EnvRow::Hline => {}
-        }
-    }
+fn number_matrix(style: MatrixStyle, rows: &[EnvRow], st: &mut NumberingState) {
     if style.numbers_rows() {
         for row in rows {
             match row {
@@ -288,14 +305,23 @@ fn assign(number: &EqNumber, st: &mut NumberingState) -> Option<String> {
 }
 
 fn node_plain(n: &MathNode) -> String {
-    match n {
-        MathNode::Atom(c, _) => c.to_string(),
-        MathNode::Text(s, _) => s.clone(),
-        MathNode::Symbol(name) => name.clone(),
-        MathNode::Row(v) => v.iter().map(node_plain).collect(),
-        MathNode::Tag { body, .. } => node_plain(body),
-        other => other.gold(),
+    let mut stack = vec![n];
+    let mut out = String::new();
+    while let Some(n) = stack.pop() {
+        match n {
+            MathNode::Atom(c, _) => out.push(*c),
+            MathNode::Text(s, _) => out.push_str(&s.to_plain_string()),
+            MathNode::Symbol(name) => out.push_str(name),
+            MathNode::Row(v) => {
+                for child in v.iter().rev() {
+                    stack.push(child);
+                }
+            }
+            MathNode::Tag { body, .. } => stack.push(body),
+            other => out.push_str(&other.gold()),
+        }
     }
+    out
 }
 
 fn to_roman(mut n: usize) -> String {

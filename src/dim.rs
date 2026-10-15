@@ -21,6 +21,11 @@ fn gcd_u(mut a: u128, mut b: u128) -> u128 {
     a
 }
 
+/// The dimension units the reader accepts and the printer writes, with how
+/// many of each make one em (`pt` is a tenth of an em here, `mu` is 1/18).
+/// `bp` reads as `pt` and no unit as `em`, see [`Dim::in_em`].
+const UNITS: [(&str, i128); 3] = [("em", 1), ("mu", 18), ("pt", 10)];
+
 /// TeX-style dimension: width, height, depth, italic correction, mu.
 ///
 /// One unit is one em at the current math style unless a method says otherwise.
@@ -292,6 +297,59 @@ impl Dim {
         format_rational(self.num, self.den)
     }
 
+    /// The number `self`, read in `unit`, as em: the one definition of the
+    /// dimension units, used by the reader and by the printer's check of what it
+    /// writes. `""` is `em`, `bp` is `pt`; `None` for any other unit.
+    pub(crate) fn in_em(self, unit: &str) -> Option<Self> {
+        let unit = match unit {
+            "" => "em",
+            "bp" => "pt",
+            other => other,
+        };
+        let (_, per_em) = UNITS.iter().find(|(name, _)| *name == unit)?;
+        Some(self / Self::from_i64(i64::try_from(*per_em).ok()?))
+    }
+
+    /// The number and unit the printer writes in `\hspace{..}` and `\rule{..}{..}`
+    /// (`0.25em`, `1.5mu`), so that the text reads back as this exact `Dim`.
+    ///
+    /// Every value a parse can make is exact in the unit it was read in: a
+    /// finite decimal in em, in mu (1/18 em) when em would never end, or in pt
+    /// when em has more digits than the reader holds. Each candidate is checked
+    /// against the reader before it is used (`X.0` of a 38-digit whole number
+    /// overflows the reader, `X` does not). A value that no text reaches (1/3,
+    /// say) falls back to the 24-digit text of [`Self::to_dec_string`], which
+    /// is lossy.
+    #[must_use]
+    pub(crate) fn to_tex_string(&self) -> String {
+        if self.nan {
+            return "NaNem".to_string();
+        }
+        for (unit, per_em) in UNITS {
+            let Some((text, done)) = scaled_decimal(self.num, self.den, per_em) else {
+                continue;
+            };
+            if !done {
+                continue;
+            }
+            let bare = text.strip_suffix(".0").unwrap_or(&text);
+            for text in [text.as_str(), bare] {
+                if self.reads_back(text, unit) {
+                    return format!("{text}{unit}");
+                }
+            }
+        }
+        // No parse makes this value; the text is the lossy decimal.
+        format!("{}em", self.to_dec_string())
+    }
+
+    /// True when the reader turns `text`, in `unit`, into exactly `self`.
+    fn reads_back(&self, text: &str, unit: &str) -> bool {
+        Self::parse(text)
+            .in_em(unit)
+            .is_some_and(|read| read.eq_dim(self))
+    }
+
     /// Compact decimal for SVG attributes.
     #[must_use]
     pub fn to_svg_string(&self) -> String {
@@ -465,10 +523,18 @@ impl Dim {
         if self.nan || other.nan {
             return None;
         }
-        // n1/d1 vs n2/d2 => n1*d2 vs n2*d1
-        let left = self.num.checked_mul(other.den)?;
-        let right = other.num.checked_mul(self.den)?;
-        Some(left.cmp(&right))
+        // Exact for every value: no cross products, so nothing overflows.
+        let signs = self.num.signum().cmp(&other.num.signum());
+        if signs != Ordering::Equal || self.num == 0 {
+            return Some(signs);
+        }
+        let (n1, d1) = (self.num.unsigned_abs(), self.den.unsigned_abs());
+        let (n2, d2) = (other.num.unsigned_abs(), other.den.unsigned_abs());
+        Some(if self.num < 0 {
+            cmp_ratio(n2, d2, n1, d1)
+        } else {
+            cmp_ratio(n1, d1, n2, d2)
+        })
     }
 
     /// True when `self` and `other` compare equal.
@@ -478,9 +544,25 @@ impl Dim {
     }
 }
 
-fn format_rational(num: i128, den: i128) -> String {
+/// Compares `n1/d1` with `n2/d2` (denominators positive) without multiplying:
+/// the integer parts first, then the fractional parts by their reciprocals
+/// (the Euclidean algorithm, so it ends in at most about 190 steps).
+fn cmp_ratio(n1: u128, d1: u128, n2: u128, d2: u128) -> Ordering {
+    let (q1, q2) = (n1 / d1, n2 / d2);
+    if q1 != q2 {
+        return q1.cmp(&q2);
+    }
+    match (n1 % d1, n2 % d2) {
+        (0, 0) => Ordering::Equal,
+        (0, _) => Ordering::Less,
+        (_, 0) => Ordering::Greater,
+        (r1, r2) => cmp_ratio(d2, r2, d1, r1),
+    }
+}
+
+fn expand_decimal(num: i128, den: i128, cap: usize) -> (String, bool) {
     if num == 0 {
-        return "0.0".into();
+        return ("0.0".into(), true);
     }
     let neg = num < 0;
     let mut n = num.unsigned_abs();
@@ -494,12 +576,12 @@ fn format_rational(num: i128, den: i128) -> String {
     if n == 0 {
         s.push_str(&ip.to_string());
         s.push_str(".0");
-        return s;
+        return (s, true);
     }
     s.push_str(&ip.to_string());
     s.push('.');
-    // Long division, cap 24 digits (plenty for font-unit rationals).
-    for _ in 0..24 {
+    // Long division, cap at `cap` digits.
+    for _ in 0..cap {
         if n == 0 {
             break;
         }
@@ -520,7 +602,23 @@ fn format_rational(num: i128, den: i128) -> String {
     while s.ends_with('0') && !s.ends_with(".0") {
         s.pop();
     }
-    s
+    (s, n == 0)
+}
+
+fn format_rational(num: i128, den: i128) -> String {
+    expand_decimal(num, den, 24).0
+}
+
+/// The decimal expansion of `per_em * num / den` (the value in a unit that is
+/// `per_em` to the em), and whether it is complete; `None` on overflow. The
+/// fraction is reduced by `gcd(per_em, den)` first, so only a numerator that
+/// really needs more than 127 bits overflows.
+fn scaled_decimal(num: i128, den: i128, per_em: i128) -> Option<(String, bool)> {
+    let g = gcd_u(per_em.unsigned_abs(), den.unsigned_abs());
+    let g = i128::try_from(g).ok()?;
+    let n = num.checked_mul(per_em / g)?;
+    let d = den / g;
+    Some(expand_decimal(n, d, 130))
 }
 
 impl PartialEq for Dim {
