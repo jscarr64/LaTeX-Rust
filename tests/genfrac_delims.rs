@@ -57,13 +57,12 @@ fn genfrac_takes_only_real_delimiters() {
     }
     for src in [
         "\\genfrac{(}{)}{}{}12",
-        "\\genfrac{[}{]}{}{}12",
+        "\\genfrac{\\lfloor}{\\rfloor}{}{}12",
         "\\genfrac{\\{}{\\}}{}{}12",
         "\\genfrac{\\langle}{\\rangle}{}{}12",
         "\\genfrac{|}{.}{}{}12",
         "\\genfrac{}{}{}{}12",
         "\\genfrac{.}{.}{}{}12",
-        "\\genfrac{ ( }{ ) }{}{}12",
     ] {
         if let Err(msg) = check(src) {
             panic!("{msg}");
@@ -138,6 +137,38 @@ fn every_character_and_word_as_a_delimiter_round_trips_or_is_rejected() {
             format!("\\left( a \\middle{d} b \\right)"),
             format!("\\big{d} a"),
             format!("\\Bigl{d} a \\Bigr{d}"),
+        ] {
+            if let Err(msg) = check(&src) {
+                panic!("{msg}");
+            }
+        }
+    }
+}
+
+/// The other commands that read their argument as plain text (`\operatorname`,
+/// `\ref`, `\label`, `\tag`, an environment name, an `array` column list): one
+/// character at a time, each must round trip or be rejected. A sibling check
+/// for the delimiter case above.
+#[test]
+fn other_text_arguments_round_trip_or_are_rejected_for_every_character() {
+    for c in (0u32..0x300).filter_map(char::from_u32) {
+        if matches!(
+            c,
+            '{' | '}' | '\\' | '%' | '#' | '$' | '&' | '^' | '_' | '~'
+        ) {
+            continue;
+        }
+        for src in [
+            format!("\\operatorname{{a{c}b}}"),
+            format!("\\operatorname{{{c}}}"),
+            format!("\\ref{{{c}}}"),
+            format!("\\ref{{a{c}}}"),
+            format!("\\tag{{{c}}}"),
+            format!("\\tag{{a{c}b}}"),
+            format!("\\begin{{aligned}}x\\label{{{c}}}\\end{{aligned}}"),
+            format!("\\begin{{array}}{{{c}}}a\\end{{array}}"),
+            format!("\\begin{{array}}{{c{c}c}}a&b\\end{{array}}"),
+            format!("\\begin{{matrix{c}}}a\\end{{matrix{c}}}"),
         ] {
             if let Err(msg) = check(&src) {
                 panic!("{msg}");

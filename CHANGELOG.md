@@ -7,6 +7,15 @@ This release lists every finding and its fix. Nothing in this section is publish
 
 ### Fixed
 
+- **`\genfrac` took any character as a delimiter.** `\genfrac{}{a}{}{}|a`
+  parsed to a right delimiter `a`, printed `\left .\frac {|}{a}\right a`, and
+  `\right a` does not parse (found by the 2-hour parse fuzz,
+  `roundtrip-genfrac-delim`). `\genfrac` now accepts the delimiters `\left`
+  and `\right` accept (one definition, shared) and returns
+  `ParseError::Malformed` for any other character or word, and a `{` or `}`
+  (from `\{` and `\}`) is the brace delimiter. Code that relied on
+  `\genfrac{a}{b}{}{}` as a way to write a letter delimiter now gets an error.
+
 - **A long or mu dimension did not print back to itself.** `\hspace` and
   `\rule` printed their `Dim` through `to_dec_string`, which stops after 24
   decimal digits, so `\rule{2}{.1662322688380342688380341}` (25 digits) reprinted as

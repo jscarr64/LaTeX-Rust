@@ -490,20 +490,16 @@ impl Parser {
         self.skip_ws();
         match self.bump() {
             Some(Token::Char('.')) => Ok(Delimiter::Empty),
-            Some(Token::Char(c)) if matches!(c, '(' | ')' | '[' | ']' | '|' | '/' | '<' | '>') => {
-                Ok(Delimiter::Char(c))
+            Some(Token::Char(c)) if is_delimiter_char(c) => Ok(Delimiter::Char(c)),
+            Some(Token::Command(n)) => {
+                if n.as_str() == "." {
+                    Ok(Delimiter::Empty)
+                } else if is_delimiter_name(n.as_str()) {
+                    Ok(Delimiter::Named(n))
+                } else {
+                    Err(ParseError::Malformed(format!("unknown delimiter \\{n}")))
+                }
             }
-            Some(Token::Command(n)) => match n.as_str() {
-                "." => Ok(Delimiter::Empty),
-                "{" | "}" | "|" => Ok(Delimiter::Named(n)),
-                "langle" | "rangle" | "lfloor" | "rfloor" | "lceil" | "rceil" | "lvert"
-                | "rvert" | "lVert" | "rVert" | "vert" | "Vert" | "uparrow" | "downarrow"
-                | "Uparrow" | "Downarrow" | "updownarrow" | "Updownarrow" | "backslash"
-                | "lgroup" | "rgroup" | "lmoustache" | "rmoustache" => Ok(Delimiter::Named(n)),
-                other => Err(ParseError::Malformed(format!(
-                    "unknown delimiter \\{other}"
-                ))),
-            },
             Some(other) => Err(ParseError::Malformed(format!(
                 "expected delimiter, found {other}"
             ))),
@@ -1364,17 +1360,65 @@ fn atom_kind(c: char) -> AtomKind {
     }
 }
 
+fn is_delimiter_char(c: char) -> bool {
+    matches!(c, '(' | ')' | '[' | ']' | '|' | '/' | '<' | '>')
+}
+
+fn is_delimiter_name(name: &str) -> bool {
+    matches!(
+        name,
+        "{" | "}"
+            | "|"
+            | "langle"
+            | "rangle"
+            | "lfloor"
+            | "rfloor"
+            | "lceil"
+            | "rceil"
+            | "lvert"
+            | "rvert"
+            | "lVert"
+            | "rVert"
+            | "vert"
+            | "Vert"
+            | "uparrow"
+            | "downarrow"
+            | "Uparrow"
+            | "Downarrow"
+            | "updownarrow"
+            | "Updownarrow"
+            | "backslash"
+            | "lgroup"
+            | "rgroup"
+            | "lmoustache"
+            | "rmoustache"
+    )
+}
+
 fn delim_from_text(s: &str) -> Result<Delimiter, ParseError> {
     let s = s.trim();
-    if s.is_empty() || s == "." {
+    if s.is_empty() || s == "." || s == "\\." {
         return Ok(Delimiter::Empty);
     }
-    if s.chars().count() == 1 {
-        let c = s.chars().next().unwrap();
-        return Ok(Delimiter::Char(c));
+    let mut chars = s.chars();
+    if let (Some(c), None) = (chars.next(), chars.next()) {
+        if is_delimiter_char(c) {
+            return Ok(Delimiter::Char(c));
+        }
+        // The group text of `\{` is `{`: the brace delimiter, as in `\left\{`.
+        if matches!(c, '{' | '}') {
+            return Ok(Delimiter::Named(c.to_string()));
+        }
+        return Err(ParseError::Malformed(format!(
+            "expected delimiter, found char:{c}"
+        )));
     }
     let name = s.strip_prefix('\\').unwrap_or(s);
-    Ok(Delimiter::Named(name.to_string()))
+    if is_delimiter_name(name) {
+        Ok(Delimiter::Named(name.to_string()))
+    } else {
+        Err(ParseError::Malformed(format!("unknown delimiter \\{name}")))
+    }
 }
 
 fn parse_tex_dim(s: &str) -> Result<Dim, ParseError> {
