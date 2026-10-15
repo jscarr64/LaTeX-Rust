@@ -28,6 +28,8 @@ fn unknown(name: &str) -> ParseError {
 const SEEDS: &[&str] = &[
     "control-space-comment",
     "prime-run-34",
+    "roundtrip-genfrac-delim",
+    "roundtrip-genfrac-delim-orig",
     "roundtrip-g1-41ad61cb",
     "roundtrip-g1-a83b1d95",
     "roundtrip-g1-b71856d2",
