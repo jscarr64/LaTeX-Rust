@@ -212,3 +212,23 @@ fn the_slow_seed_prints_fast() {
     );
     assert_eq!(parse(&printed).ok().as_ref(), Some(&tree));
 }
+
+/// `write_option` printed its body twice (once to look for a `]`, once to
+/// write it), so options nested k deep cost 2^k (fuzz r12 crash
+/// `2e21867b…`, 5.9 s for 2.4 KB).
+#[test]
+fn nested_options_print_in_linear_time() {
+    let start = std::time::Instant::now();
+    for k in [8usize, 16, 24, 64] {
+        let src = "\\xleftarrow[".repeat(k) + "x" + &"]{a}".repeat(k);
+        let (tree, _) = parse_with_options(&src, &ParseOptions::new().with_max_depth(512))
+            .unwrap_or_else(|e| panic!("k={k}: {e}"));
+        let printed = tree.to_latex();
+        assert!(printed.len() >= 4 * k, "k={k}");
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(2),
+            "k={k}: {:?}",
+            start.elapsed()
+        );
+    }
+}
