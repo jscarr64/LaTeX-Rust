@@ -232,3 +232,31 @@ fn nested_options_print_in_linear_time() {
         );
     }
 }
+
+/// A `]` that closes a nested option command belongs to that command, so it
+/// does not force a group around the body. The old check grouped every level
+/// and nested 2x deeper than the source (fuzz r12 crash `2e21867b…`, seed
+/// `roundtrip-depth-option-nest`).
+#[test]
+fn nested_options_are_not_regrouped() {
+    for k in [1usize, 2, 3, 8, 15] {
+        let src = "\\xleftarrow[".repeat(k) + "x" + &"]y".repeat(k);
+        let tree = parse(&src).unwrap_or_else(|e| panic!("k={k}: {e}"));
+        let printed = tree.to_latex();
+        assert_eq!(
+            parse(&printed).ok().as_ref(),
+            Some(&tree),
+            "k={k} {printed}"
+        );
+        assert!(depth(&printed) <= depth(&src), "k={k}: {printed}");
+    }
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/fuzz/corpus/parse/roundtrip-depth-option-nest"
+    );
+    let src = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{path}: {e}"));
+    let tree = parse(&src).unwrap_or_else(|e| panic!("{e}"));
+    let printed = tree.to_latex();
+    assert!(depth(&printed) <= depth(&src), "{printed}");
+    assert_eq!(parse(&printed).ok().as_ref(), Some(&tree));
+}
