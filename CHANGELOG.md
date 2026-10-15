@@ -7,6 +7,14 @@ This release lists every finding and its fix. Nothing in this section is publish
 
 ### Fixed
 
+- **A color defined inside text math stays defined.** The text-math
+  sub-parser used to work on a copy of the color table, so
+  `\text{$\definecolor{a}{named}{red}$}` dropped `a`. The table is now moved
+  into the sub-parser and handed back (`\definecolor` is global in TeX), which
+  removes the copy. The same change removes the other token and error copies
+  the grouping rewrite had added (no-clone policy): the lib's `.clone(` count
+  is back to its 292 lines.
+
 - **Nested optional arguments reprinted exponentially slowly and too deep.**
   `\xleftarrow[\xleftarrow[…` printed each option body twice per level, and
   a `]` that closed a nested option command forced a needless group, so the
