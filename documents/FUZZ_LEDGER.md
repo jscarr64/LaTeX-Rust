@@ -132,6 +132,7 @@ Notes:
 | perf-paren-row | `hm{mbiggCCCCCCCCCC(((((((((1((((((([[[[[[[[[[V[[[[\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}hm{mbiggCCCCCCCCCC(((((((((\u{0}\u{0}\u{0}\u{0}\u{0}hm{mbiggCCCCCCCCCC(((((((((2((((((([[[[[[[[[[[[[\u{0}[dd{\lim\u{1}\u{0}\u{0}\u{2}_x}{K}c{\lim_x}imr\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}[dd{\sum_x}{[\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}hm{mbiggCCCCCCCCCC(((((((((\u{0}\u{0}\u{0}\u{0}\u{0}hm{mbiggCCCCCCCCCC(((((((((2((((((([[[[[[[[[[[[[\u{0}[dd{\lim\u{1}\u{0}\u{0}\u{2}_x}{K}c{\lim_x}imr\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{2}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}[dd{\sum_x}{[\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}[dd{\sum_x}{K}c{\lim_xrm_x}ots[[[[[[[\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}CCCCCC(((((((((1((((((([[[[[[[[[[V[[[[\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}hm{mbiggCCCCCCCCCC(((((((((\u{0}\u{0}\u{0}\u{0}\u{0}hm{mbig\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}[dd{\sum_x}{K}c{\lim_xrm_x}ots[[[[[[[\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}CCCCCC(((((((((1((((((([[[[[[[[[[V[[((((((((\u{0}\u{0}\u{0}\u{0}\u{0}hm{mbiggCCCCCCCCCC(((((((((2((((((([[[[[[[[[[[[[\u{0}[dd{\lim\u{1}\u{0}\u{0}\u{2}_x}{K}c{\lim_x}imr\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}[[\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}hm{mbiggCCCCCCCCCC(((((((((\u{0}\u{0}\u{0}\u{0}\u{0}hm{mbiggCCCCCCCCCC({(((((((2((((((([[[[[[[[[[[[[\u{0}[dd{\lim\u{1}\u{0}\u{0}\u{2}_x}{K}c{\lim_x}imrm_x}ots[[[[[[[\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}[dd{\sum_x}{K}c{\lim_xrm_x}ots[[[[[[[\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}gCCZ\u{9}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}(((((((((\u{0}\u{0}\u{0}\u{0}\u{0}hm{mbiggCCCCCCCCCC(((((((((1((((((([[[[[[[[[[[[[\u{0}[dd{\lim\u{1}\u{0}\u{0}\u{2}_x}{K}c{\lim_x}imrm_x}ots[[[[[[[\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}K\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}[dd{\sum_x}{K}c{\lim_xrm_x}ots[[[[[[[\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}[dd{\sum_x}{K}c{\lim_x}imrm_x}ots[[[[[[[[[[[[ddots[[[[+[[[[[[[[[neq[[[[{K}[[[[[[[[[[[[[[[[[[\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}}imrm_x}ots[[[[[[[[[[[[ddots[[[[+[[[[[[[[[neq[[[[{K}[[[[[[[[[[[[[[dd{\sum_x}{K}c{\lim_x}imrm_x}ots[[[[[[[[[[[[ddots[[[[+[[[[[[\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}[dd{\sum_x}{K}c{\lim_x}imrm_x}ots[[[[[[[[[[[[ddots[[[[+[[[[[[[[[neq[[[[{K}[[[[[[[[[[[[[[[[[[\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}}imrm_x}ots[[[[[[[[[[[[ddots[[[[+[[[[[[[[[neq[[[[{K}[[[[[[[[[[[[[[dd{\sum_x}{K}s{\lim_x}imrm_x}ots[[[[[[[[[[[[ddots[[[[+[[[[[[[[[neq[[[[{K}[[[[[[[[[[[[[[[[[[\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}}imrm_x}ots[[[[[[[[[[[[ddots[[[[+[[[[[[[[[ne[q[[[{K}[[[[[[[[[[[[[[[[[[\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}[dd{\lim\u{1}\u{0}\u{0}\u{2}_x}{K}c{\lim_x}imrm_x}ots[[[[[[[[[[[\u{1b}pddots[[[[+[[[[[[[[[neq[[[[{K}[[[cohoo[CCC/ }ox{!h}` | other | 19f4a72 | `roundtrip-perf-paren-row` | 5.4 row paren pass (cost) |
 | dim-dot | `\rule{2}{.}` | other | d5f097d | `roundtrip-dim-dot` | 5.3 dimensions |
 | dim-overflow | `{\rule{2}{888888888888888888888888888888888888888}}` | other | 851c7a2 | `roundtrip-dim-overflow` | no (not a grouping cause) |
+| dim-big-eq | `{\rule{2}{2.1662322688380341817}}` | other | 58e3ee9 | `roundtrip-dim-big-eq` | no (not a grouping cause) |
 | depth-option-nest | `\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[]]]b]*]]]?]*]]]]]b]*]]]?]b]*]]]\u{1e}` | depth | a686a51 | `roundtrip-depth-option-nest` | 5.3 optional argument (parser-asked, empty option) |
 
 ## Count per class
@@ -142,12 +143,12 @@ Notes:
 | text decode | 2 |
 | printer canonical form | 41 |
 | depth | 17 |
-| other | 10 |
-| **total** | **78** |
+| other | 11 |
+| **total** | **79** |
 
 ## Covered by the spec 5 rule
 
-42 of 78 rows are now decided by the spec 5 grouping rule (or its Q1/Q2 parser changes). Per class:
+42 of 79 rows are now decided by the spec 5 grouping rule (or its Q1/Q2 parser changes). Per class:
 
 | class | covered | rows |
 |---|---|---|
@@ -155,10 +156,6 @@ Notes:
 | text decode | 0 | 2 |
 | printer canonical form | 23 | 41 |
 | depth | 17 | 17 |
-| other | 2 | 10 |
+| other | 2 | 11 |
 
 The printer rows not covered (G1, G4) are text-run escapes and the styled-text wrap: content rules, not grouping.
-
-Note: `canon-substack-bracket` and `canon-row-hline` were not found by libFuzzer
-but by a random search over structural tokens run in-process right after fuzz
-r15 (now the property `prop_structural_token_strings_print_canonically`).
