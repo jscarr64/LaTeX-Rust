@@ -2307,10 +2307,18 @@ fn write_option<'a>(out: &mut LatexBuf<'a>, node: &'a MathNode) {
             write_group(out, node);
             out.push('}');
         }
-        _ if has_top_level_close_bracket(&node.print_raw(out.literal_primes)) => {
-            write_group(out, node);
+        _ => {
+            // Print the body once and reuse it: printing it again through
+            // `out.node` made nested options cost 2^k.
+            let body = node.print_raw(out.literal_primes);
+            if has_top_level_close_bracket(&body) {
+                out.push('{');
+                out.push_str(&body);
+                out.push('}');
+            } else {
+                out.push_str(&body);
+            }
         }
-        _ => out.node(node),
     }
     out.push(']');
 }
@@ -2746,17 +2754,19 @@ fn print_run<'a>(out: &mut LatexBuf<'a>, run: &'a TextRun) {
                     // uses `$…$`, or one group when it also has a `$`.
                     let body = node.print_raw(out.literal_primes);
                     let close = has_top_level(&body, &['\\', ')']);
+                    // The body is printed once (`out.node` again would cost
+                    // 2^k for text nested in math nested in text).
                     if close && !has_top_level(&body, &['$']) {
                         out.push('$');
-                        out.node(node);
+                        out.push_str(&body);
                         out.push('$');
                     } else if close {
                         out.push_str(r"\({");
-                        out.node(node);
+                        out.push_str(&body);
                         out.push_str(r"}\)");
                     } else {
                         out.push_str(r"\(");
-                        out.node(node);
+                        out.push_str(&body);
                         out.push_str(r"\)");
                     }
                 }
