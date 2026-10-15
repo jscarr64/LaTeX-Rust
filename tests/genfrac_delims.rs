@@ -176,3 +176,49 @@ fn other_text_arguments_round_trip_or_are_rejected_for_every_character() {
         }
     }
 }
+
+/// Array column lists and color arguments, the last two places that read plain
+/// text into the tree: every list of up to four characters over the column
+/// letters and their neighbors, and every single character as a color name or
+/// color spec, round trips or is rejected.
+#[test]
+fn colspecs_and_color_arguments_round_trip_or_are_rejected() {
+    let alphabet: Vec<char> = "lcr| \t@p*".chars().collect();
+    let mut specs = vec![String::new()];
+    let mut layer = vec![String::new()];
+    for _ in 0..4 {
+        let mut next = Vec::new();
+        for base in &layer {
+            for &c in &alphabet {
+                next.push(format!("{base}{c}"));
+            }
+        }
+        specs.extend(next.iter().cloned());
+        layer = next;
+    }
+    for spec in &specs {
+        let src = format!("\\begin{{array}}{{{spec}}}a&b\\\\c&d\\end{{array}}");
+        if let Err(msg) = check(&src) {
+            panic!("{msg}");
+        }
+    }
+    for c in (0u32..0x300).filter_map(char::from_u32) {
+        if matches!(
+            c,
+            '{' | '}' | '\\' | '%' | '#' | '$' | '&' | '^' | '_' | '~'
+        ) {
+            continue;
+        }
+        for src in [
+            format!("\\textcolor{{{c}}}{{x}}"),
+            format!("\\color{{{c}}}x"),
+            format!("\\textcolor[HTML]{{{c}{c}{c}{c}{c}{c}}}{{x}}"),
+            format!("\\textcolor[rgb]{{{c},{c},{c}}}{{x}}"),
+            format!("\\colorbox{{{c}}}{{x}}"),
+        ] {
+            if let Err(msg) = check(&src) {
+                panic!("{msg}");
+            }
+        }
+    }
+}
