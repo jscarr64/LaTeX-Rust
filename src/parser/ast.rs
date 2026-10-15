@@ -2190,7 +2190,12 @@ fn paren_groups(
         let mut owner = Vec::new();
         let mut first = Vec::with_capacity(items.len());
         let mut prev_letter = false;
-        for (i, ((item, toks), flag)) in items.iter().zip(&item_toks).zip(braced.iter()).enumerate()
+        let mut spans: Vec<(usize, usize)> = Vec::with_capacity(items.len());
+        for (i, ((item, toks), flag)) in items
+            .iter()
+            .zip(item_toks.iter_mut())
+            .zip(braced.iter())
+            .enumerate()
         {
             let letter = !flag && matches!(item, MathNode::Atom(c, _) if c.is_ascii_alphabetic());
             if letter && prev_letter {
@@ -2207,7 +2212,8 @@ fn paren_groups(
                 .take_while(|t| matches!(t, Token::Space))
                 .count();
             first.push(tokens.len() + skip);
-            tokens.extend(toks.iter().cloned());
+            spans.push((tokens.len(), toks.len()));
+            tokens.append(toks);
             owner.resize(tokens.len(), i);
             if *flag {
                 tokens.push(Token::EndGroup);
@@ -2221,9 +2227,20 @@ fn paren_groups(
             .filter(|((item, flag), _)| !**flag && starts_with_open_paren(item))
             .find_map(|(_, pos)| paren_script_match(&tokens, *pos, false))
             .and_then(|m| owner.get(m).copied());
-        match hit.and_then(|j| braced.get_mut(j)) {
-            Some(flag) if !*flag => *flag = true,
-            _ => return Some(prints),
+        let grouped = match hit.and_then(|j| braced.get_mut(j)) {
+            Some(flag) if !*flag => {
+                *flag = true;
+                true
+            }
+            _ => false,
+        };
+        if !grouped {
+            return Some(prints);
+        }
+        for ((start, len), toks) in spans.into_iter().rev().zip(item_toks.iter_mut().rev()) {
+            let mut piece = tokens.split_off(start);
+            piece.truncate(len);
+            *toks = piece;
         }
     }
 }
@@ -2313,7 +2330,7 @@ fn write_option<'a>(out: &mut LatexBuf<'a>, node: &'a MathNode) {
             // Print the body once and reuse it: printing it again through
             // `out.node` made nested options cost 2^k.
             let body = node.print_raw(out.literal_primes);
-            if item_tokens(&body).is_none_or(|tokens| option_ends_early(&tokens)) {
+            if item_tokens(&body).is_none_or(option_ends_early) {
                 out.push('{');
                 out.push_str(&body);
                 out.push('}');

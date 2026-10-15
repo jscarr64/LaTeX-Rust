@@ -763,13 +763,12 @@ fn parse_whole(parser: &mut Parser) -> Result<MathNode, ParseError> {
 /// option-body reader must stop exactly at the final `]`. Which `]` an
 /// argument or a nested option command consumes is the parser's business, so
 /// this asks it (spec 5.3, optional argument). The printer groups such a body.
-pub(crate) fn option_ends_early(tokens: &[Token]) -> bool {
-    let mut all = tokens.to_vec();
-    all.push(Token::Char(']'));
-    let end = all.len() - 1;
+pub(crate) fn option_ends_early(mut tokens: Vec<Token>) -> bool {
+    tokens.push(Token::Char(']'));
+    let end = tokens.len() - 1;
     let defaults = ParseOptions::default();
     let mut parser = Parser {
-        tokens: all,
+        tokens,
         pos: 0,
         depth: 0,
         max_depth: usize::MAX,
