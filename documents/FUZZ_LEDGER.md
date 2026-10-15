@@ -50,6 +50,10 @@ Notes:
   (`tests/dim_roundtrip.rs`) while fixing dim-long: `1mu` is 1/18 em, a decimal
   that never ends; a 38-digit whole number printed with `.0` overflows the
   reader; a `pt` value can have 39 em digits. Same fix, 8b5fe40.
+- genfrac-delim: 2-hour parse fuzz r18long on f50983f (not a printer finding).
+  `delim_from_text` took any one character or word as a `\genfrac` delimiter,
+  the printer wrote it as `\left`/`\right`, and those do not read it. Fixed in
+  e8228c6 by sharing the delimiter definition with `parse_delimiter`.
 - canon-big-paren: fuzz crash in the 1800 s run r9 on ca0e515 (a `\big(`
   delimiter paren counted by the lookahead). Fixed by Q1 in 07d2f48; the seed
   was added green (755b235).
@@ -147,6 +151,7 @@ Notes:
 | dim-mu | `\hspace{1mu}` | printer canonical form | 8b5fe40 | `roundtrip-dim-mu` | no (number text; found by the dimension property) |
 | dim-whole-edge | `\hspace{20000000000000000000000000000000000000}` | printer canonical form | 8b5fe40 | `roundtrip-dim-whole-edge` | no (`X.0` overflows the reader; found by the property near the i128 limit) |
 | dim-pt-edge | `\hspace{.00000000000000000000000000000000000056pt}` | printer canonical form | 8b5fe40 | `roundtrip-dim-pt-edge` | no (em text has 39 digits; found by the property near the i128 limit) |
+| genfrac-delim | `{{\genfrac{}{a}{}{}|a}}` | other | e8228c6 | `roundtrip-genfrac-delim` (and `-orig`) | no (the reader took any character as a delimiter; not a grouping cause) |
 | depth-option-nest | `\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[\xleftarrow[]]]b]*]]]?]*]]]]]b]*]]]?]b]*]]]\u{1e}` | depth | a686a51 | `roundtrip-depth-option-nest` | 5.3 optional argument (parser-asked, empty option) |
 
 ## Count per class
@@ -157,12 +162,12 @@ Notes:
 | text decode | 2 |
 | printer canonical form | 46 |
 | depth | 17 |
-| other | 11 |
-| **total** | **84** |
+| other | 12 |
+| **total** | **85** |
 
 ## Covered by the spec 5 rule
 
-42 of 84 rows are now decided by the spec 5 grouping rule (or its Q1/Q2 parser changes). Per class:
+42 of 85 rows are now decided by the spec 5 grouping rule (or its Q1/Q2 parser changes). Per class:
 
 | class | covered | rows |
 |---|---|---|
@@ -170,6 +175,6 @@ Notes:
 | text decode | 0 | 2 |
 | printer canonical form | 23 | 46 |
 | depth | 17 | 17 |
-| other | 2 | 11 |
+| other | 2 | 12 |
 
 The printer rows not covered (G1, G4) are text-run escapes and the styled-text wrap: content rules, not grouping.
