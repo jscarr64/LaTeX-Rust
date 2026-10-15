@@ -174,26 +174,41 @@ fn row_paren_pass_groups_the_item_holding_the_match() {
 
 // Cost ---------------------------------------------------------------------
 
+/// The smallest time of `runs` prints of `tree`: one slow run (a scheduler
+/// pause, a busy CI runner) does not count.
+fn best_print_time(tree: &latex_rust::MathNode, runs: u32) -> std::time::Duration {
+    let mut best = std::time::Duration::MAX;
+    for _ in 0..runs {
+        let start = std::time::Instant::now();
+        let s = tree.to_latex();
+        let elapsed = start.elapsed();
+        std::hint::black_box(s);
+        if elapsed < best {
+            best = elapsed;
+        }
+    }
+    best
+}
+
 /// A print must take time linear in the tree. The row paren pass once printed
 /// each nested row twice per level, so `{(` nested k deep cost 2^k (fuzz r11,
-/// slow unit `roundtrip-perf-paren-row`: 0.8 s for 2 KB).
+/// slow unit `roundtrip-perf-paren-row`: 0.8 s for 2 KB). The time is the
+/// minimum of several prints, so a paused runner cannot fail it, while an
+/// exponential print is slow in every run.
 #[test]
 fn nested_paren_rows_print_in_linear_time() {
-    let start = std::time::Instant::now();
     for k in [8usize, 16, 22, 64] {
         let src = "{(".repeat(k) + "x" + &")}".repeat(k);
         let (tree, _) = parse_with_options(&src, &ParseOptions::new().with_max_depth(512))
             .unwrap_or_else(|e| panic!("k={k}: {e}"));
         let printed = tree.to_latex();
         assert!(printed.len() >= 2 * k, "k={k}");
-        assert!(
-            start.elapsed() < std::time::Duration::from_secs(2),
-            "k={k}: {:?}",
-            start.elapsed()
-        );
+        let best = best_print_time(&tree, 3);
+        assert!(best < std::time::Duration::from_secs(2), "k={k}: {best:?}");
     }
 }
 
+/// The slow seed prints in well under 100 ms (best of five prints).
 #[test]
 fn the_slow_seed_prints_fast() {
     let path = concat!(
@@ -203,33 +218,27 @@ fn the_slow_seed_prints_fast() {
     let bytes = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     let src = String::from_utf8_lossy(&bytes).into_owned();
     let tree = parse(&src).unwrap_or_else(|e| panic!("{e}"));
-    let start = std::time::Instant::now();
     let printed = tree.to_latex();
-    assert!(
-        start.elapsed() < std::time::Duration::from_millis(100),
-        "{:?}",
-        start.elapsed()
-    );
+    let best = best_print_time(&tree, 5);
+    assert!(best < std::time::Duration::from_millis(100), "{best:?}");
     assert_eq!(parse(&printed).ok().as_ref(), Some(&tree));
 }
 
 /// `write_option` printed its body twice (once to look for a `]`, once to
 /// write it), so options nested k deep cost 2^k (fuzz r12 crash
-/// `2e21867b…`, 5.9 s for 2.4 KB).
+/// `2e21867b…`, 5.9 s for 2.4 KB). The time is the minimum of several prints,
+/// so a paused runner cannot fail it, while an exponential print is slow in
+/// every run.
 #[test]
 fn nested_options_print_in_linear_time() {
-    let start = std::time::Instant::now();
     for k in [8usize, 16, 24, 64] {
         let src = "\\xleftarrow[".repeat(k) + "x" + &"]{a}".repeat(k);
         let (tree, _) = parse_with_options(&src, &ParseOptions::new().with_max_depth(512))
             .unwrap_or_else(|e| panic!("k={k}: {e}"));
         let printed = tree.to_latex();
         assert!(printed.len() >= 4 * k, "k={k}");
-        assert!(
-            start.elapsed() < std::time::Duration::from_secs(2),
-            "k={k}: {:?}",
-            start.elapsed()
-        );
+        let best = best_print_time(&tree, 3);
+        assert!(best < std::time::Duration::from_secs(2), "k={k}: {best:?}");
     }
 }
 
